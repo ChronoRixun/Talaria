@@ -1,20 +1,28 @@
 import SwiftUI
 
 // MARK: - Design Tokens
-// All visual constants for the app. No magic numbers in view code.
-// Customize the brand section for each app. The system section rarely changes.
+// All visual constants for HermesMobile. No magic numbers in view code.
+// Warm cream/beige palette with Liquid Glass throughout.
 
 enum Design {
 
-    // MARK: - Brand (customize per app)
+    // MARK: - Brand
 
     enum Brand {
-        static let accent: Color = .blue
-        static let accentGradient = LinearGradient(
-            colors: [.blue, .blue.opacity(0.8)],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+        static let accent = Color("BrandAccent", bundle: nil)
+        static let warmCream = Color(red: 0.98, green: 0.97, blue: 0.95)
+        static let warmBeige = Color(red: 0.96, green: 0.94, blue: 0.90)
+        static let warmGold = Color(red: 0.82, green: 0.68, blue: 0.42)
+        static let hermesCharcoal = Color(red: 0.25, green: 0.23, blue: 0.21)
+        static let hermesBrown = Color(red: 0.40, green: 0.35, blue: 0.28)
+
+        // Light mode background
+        static let backgroundPrimary = Color(red: 0.98, green: 0.97, blue: 0.94)
+        static let backgroundSecondary = Color(red: 0.96, green: 0.94, blue: 0.91)
+
+        // Dark mode background (warm dark, not pure black)
+        static let darkBackground = Color(red: 0.12, green: 0.11, blue: 0.10)
+        static let darkSurface = Color(red: 0.18, green: 0.16, blue: 0.14)
     }
 
     // MARK: - Spacing (4pt base grid)
@@ -48,12 +56,14 @@ enum Design {
     enum Typography {
         static let heroTitle: Font = .largeTitle.bold()
         static let screenTitle: Font = .title.bold()
+        static let screenTitle2: Font = .title2.bold()
         static let sectionTitle: Font = .title3.bold()
         static let headline: Font = .headline
         static let body: Font = .body
         static let callout: Font = .callout
         static let footnote: Font = .footnote
         static let caption: Font = .caption
+        static let caption2: Font = .caption2
     }
 
     // MARK: - Animation
@@ -63,12 +73,15 @@ enum Design {
         static let standard: Animation = .spring(response: 0.35, dampingFraction: 0.75)
         static let expressive: Animation = .spring(response: 0.5, dampingFraction: 0.7)
         static let gentle: Animation = .spring(response: 0.6, dampingFraction: 0.85)
+        static let pulse: Animation = .easeInOut(duration: 1.2).repeatForever(autoreverses: true)
+        static let breathe: Animation = .easeInOut(duration: 2.0).repeatForever(autoreverses: true)
     }
 
     // MARK: - Size
 
     enum Size {
         static let minTapTarget: CGFloat = 44
+        static let iconTiny: CGFloat = 10
         static let iconSmall: CGFloat = 16
         static let iconMedium: CGFloat = 24
         static let iconLarge: CGFloat = 32
@@ -83,5 +96,8 @@ enum Design {
         static let heroHeight: CGFloat = 300
         static let cardMinHeight: CGFloat = 160
         static let badgeSize: CGFloat = 22
+        static let inputBarHeight: CGFloat = 52
+        static let voiceOrbSize: CGFloat = 200
+        static let glassCircleButton: CGFloat = 40
     }
 }

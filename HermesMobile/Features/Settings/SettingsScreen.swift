@@ -1,0 +1,230 @@
+import SwiftUI
+
+struct SettingsScreen: View {
+    @Environment(AppSessionStore.self) private var sessionStore
+    @Environment(SettingsStore.self) private var settingsStore
+    @Environment(TabRouter.self) private var router
+
+    var body: some View {
+        ZStack {
+            Design.Brand.backgroundPrimary
+                .ignoresSafeArea()
+
+            ScrollView {
+                VStack(spacing: Design.Spacing.lg) {
+                    profileSection
+                    connectionSection
+                    environmentSection
+                    notificationsSection
+                    privacySection
+                    aboutSection
+                }
+                .padding(.horizontal, Design.Spacing.md)
+                .padding(.vertical, Design.Spacing.sm)
+            }
+            .scrollEdgeEffectStyle(.soft, for: .top)
+        }
+        .navigationTitle("Settings")
+    }
+
+    // MARK: - Profile
+
+    private var profileSection: some View {
+        SettingsSectionView(title: "Profile") {
+            HStack(spacing: Design.Spacing.md) {
+                Text(settingsStore.settings.avatarInitials)
+                    .font(.system(size: Design.Size.iconMedium, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Design.Brand.warmGold)
+                    .frame(width: Design.Size.avatarMedium, height: Design.Size.avatarMedium)
+                    .clipShape(Circle())
+                    .glassEffect(.regular, in: Circle())
+
+                VStack(alignment: .leading, spacing: Design.Spacing.xxxs) {
+                    Text(settingsStore.settings.userName)
+                        .font(Design.Typography.headline)
+                    Text("Personal assistant profile")
+                        .font(Design.Typography.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+            }
+        }
+    }
+
+    // MARK: - Connection
+
+    private var connectionSection: some View {
+        @Bindable var settingsStore = settingsStore
+
+        return SettingsSectionView(title: "Connection") {
+            VStack(spacing: Design.Spacing.sm) {
+                settingsRow(
+                    icon: sessionStore.state.connectionStatus.displayIcon,
+                    iconColor: sessionStore.state.connectionStatus.displayColor,
+                    title: "Hermes Server",
+                    subtitle: sessionStore.state.connectionStatus.displayLabel
+                )
+
+                settingsRow(
+                    icon: sessionStore.state.syncStatus.displayIcon,
+                    iconColor: sessionStore.state.syncStatus.displayColor,
+                    title: "Sync Status",
+                    subtitle: sessionStore.state.syncStatus.displayLabel
+                )
+
+                settingsRow(
+                    icon: sessionStore.state.deviceRegistered ? "iphone.gen3" : "iphone.slash",
+                    iconColor: sessionStore.state.deviceRegistered ? .green : .secondary,
+                    title: "Device Registration",
+                    subtitle: sessionStore.state.deviceRegistered ? "Registered" : "Pending"
+                )
+
+                settingsRow(
+                    icon: sessionStore.state.pushTokenRegistered ? "bell.badge.fill" : "bell.slash",
+                    iconColor: sessionStore.state.pushTokenRegistered ? .green : .secondary,
+                    title: "Push Registration",
+                    subtitle: sessionStore.state.pushTokenRegistered ? "Registered" : "Not Registered"
+                )
+
+                settingsRow(
+                    icon: "clock.arrow.circlepath",
+                    iconColor: .secondary,
+                    title: "Last Sync",
+                    subtitle: sessionStore.state.lastSyncAt?.formatted(date: .abbreviated, time: .shortened) ?? "Never"
+                )
+
+                Toggle(isOn: $settingsStore.settings.autoConnectOnLaunch) {
+                    Label("Auto-Connect on Launch", systemImage: "bolt.fill")
+                        .font(Design.Typography.callout)
+                }
+                .tint(Design.Brand.warmGold)
+            }
+        }
+    }
+
+    // MARK: - Environment
+
+    private var environmentSection: some View {
+        SettingsSectionView(title: "Environment") {
+            VStack(spacing: Design.Spacing.sm) {
+                ForEach(AppEnvironment.allCases, id: \.self) { env in
+                    Button {
+                        withAnimation(Design.Motion.quickResponse) {
+                            settingsStore.settings.environment = env
+                        }
+                    } label: {
+                        HStack {
+                            Text(env.displayLabel)
+                                .font(Design.Typography.callout)
+                                .foregroundStyle(.primary)
+
+                            Spacer()
+
+                            if settingsStore.settings.environment == env {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(Design.Brand.warmGold)
+                                    .transition(.scale.combined(with: .opacity))
+                            }
+                        }
+                        .frame(minHeight: Design.Size.minTapTarget)
+                    }
+                }
+
+                settingsRow(
+                    icon: "server.rack",
+                    iconColor: .secondary,
+                    title: "Backend Endpoint",
+                    subtitle: sessionStore.state.backendEndpoint
+                )
+            }
+        }
+    }
+
+    // MARK: - Notifications
+
+    private var notificationsSection: some View {
+        @Bindable var settingsStore = settingsStore
+
+        return SettingsSectionView(title: "Notifications") {
+            VStack(spacing: Design.Spacing.sm) {
+                Toggle(isOn: $settingsStore.settings.notificationsEnabled) {
+                    Label("Push Notifications", systemImage: "bell.fill")
+                        .font(Design.Typography.callout)
+                }
+                .tint(Design.Brand.warmGold)
+
+                Toggle(isOn: $settingsStore.settings.hapticFeedbackEnabled) {
+                    Label("Haptic Feedback", systemImage: "hand.tap.fill")
+                        .font(Design.Typography.callout)
+                }
+                .tint(Design.Brand.warmGold)
+            }
+        }
+    }
+
+    // MARK: - Privacy
+
+    private var privacySection: some View {
+        @Bindable var settingsStore = settingsStore
+
+        return SettingsSectionView(title: "Privacy") {
+            VStack(spacing: Design.Spacing.sm) {
+                Toggle(isOn: $settingsStore.settings.analyticsEnabled) {
+                    Label("Usage Analytics", systemImage: "chart.bar.fill")
+                        .font(Design.Typography.callout)
+                }
+                .tint(Design.Brand.warmGold)
+
+                Button {
+                    router.navigate(to: .permissions)
+                } label: {
+                    HStack {
+                        Label("Permissions", systemImage: "lock.shield.fill")
+                            .font(Design.Typography.callout)
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(Design.Typography.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .frame(minHeight: Design.Size.minTapTarget)
+                }
+            }
+        }
+    }
+
+    // MARK: - About
+
+    private var aboutSection: some View {
+        SettingsSectionView(title: "About") {
+            VStack(spacing: Design.Spacing.sm) {
+                settingsRow(icon: "info.circle", iconColor: .secondary, title: "Version", subtitle: "1.0.0 (1)")
+                settingsRow(icon: "doc.text", iconColor: .secondary, title: "Terms of Service", subtitle: nil)
+                settingsRow(icon: "hand.raised", iconColor: .secondary, title: "Privacy Policy", subtitle: nil)
+            }
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func settingsRow(icon: String, iconColor: Color, title: String, subtitle: String?) -> some View {
+        HStack(spacing: Design.Spacing.sm) {
+            Image(systemName: icon)
+                .foregroundStyle(iconColor)
+                .frame(width: Design.Size.iconMedium)
+
+            Text(title)
+                .font(Design.Typography.callout)
+
+            Spacer()
+
+            if let subtitle {
+                Text(subtitle)
+                    .font(Design.Typography.callout)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(minHeight: Design.Size.minTapTarget)
+    }
+}

@@ -34,3 +34,12 @@ credentials.json
 
 # Claude
 .claude/task-output/
+
+# Python / relay
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+*.db

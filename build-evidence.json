@@ -1,0 +1,92 @@
+{
+  "appName": "HermesMobile",
+  "pipelineVersion": "2.0",
+  "startedAt": "2026-03-31T00:00:00Z",
+  "orchestrationStatus": "degraded",
+  "degradedReasons": [
+    "XcodeBuildMCP unavailable — used raw xcodebuild",
+    "Phase 4 visual testing skipped — simulator preflight failure prevents app launch",
+    "Codex code review skipped — no second-model review",
+    "Phase 3 built in single wave — no parallel orchestration",
+    "Fewer than 6 skill references loaded"
+  ],
+  "phases": {
+    "1": {
+      "status": "complete",
+      "artifacts": ["blueprint.md", "plan.md"],
+      "visualIdentityMap": true,
+      "screenCount": 6,
+      "modelCount": 13
+    },
+    "2": {
+      "status": "complete",
+      "artifacts": [
+        "Core/Design.swift",
+        "Core/Router.swift",
+        "Core/Extensions/View+Glass.swift",
+        "AppEntry.swift",
+        "ContentView.swift",
+        "Models/Message.swift",
+        "Models/Conversation.swift",
+        "Models/MessageSender.swift",
+        "Models/MessageStatus.swift",
+        "Models/VoiceState.swift",
+        "Models/PermissionType.swift",
+        "Models/PermissionStatus.swift",
+        "Models/InboxItem.swift",
+        "Models/InboxItemType.swift",
+        "Models/ConnectionStatus.swift",
+        "Models/UserSettings.swift",
+        "Models/SyncStatus.swift",
+        "Models/DeviceCapability.swift",
+        "Services/Protocols/*",
+        "Services/Mocks/*",
+        "Components/DemoData.swift"
+      ],
+      "buildResult": "pass",
+      "xcodeBuildMCPVerified": false,
+      "placeholderTestsRejected": true
+    },
+    "3": {
+      "status": "complete",
+      "screensBuilt": [
+        "Features/Chat/ChatScreen.swift",
+        "Features/Chat/MessageBubble.swift",
+        "Features/Chat/ChatInputBar.swift",
+        "Features/Chat/HermesAvatar.swift",
+        "Features/Talk/TalkModeScreen.swift",
+        "Features/Talk/VoiceOrb.swift",
+        "Features/Talk/TranscriptView.swift",
+        "Features/Inbox/InboxScreen.swift",
+        "Features/Inbox/InboxItemRow.swift",
+        "Features/Inbox/InboxItemDetailSheet.swift",
+        "Features/Settings/SettingsScreen.swift",
+        "Features/Settings/SettingsSectionView.swift",
+        "Features/Permissions/PermissionsScreen.swift",
+        "Features/Permissions/PermissionCard.swift",
+        "Features/Capture/CaptureScreen.swift",
+        "Components/GlassCircleButton.swift",
+        "Components/StatusIndicator.swift"
+      ],
+      "wavesCompleted": 1,
+      "codexDelegations": 0,
+      "codexDelegationResults": [],
+      "buildResult": "pass"
+    },
+    "4": {
+      "status": "complete",
+      "codexReview": { "issuesFound": 0, "issuesResolved": 0, "skipped": true },
+      "visualTest": { "screensChecked": 0, "issuesFound": 0, "issuesFixed": 0 },
+      "checklists": { "violationsFound": 5, "violationsFixed": 5 },
+      "regressionCheck": { "autoFixturesRun": 6, "visualFixturesDeferred": 2, "misses": 0, "missDetails": [] },
+      "buildResult": "pass",
+      "testResult": "simulator-failure"
+    },
+    "5": {
+      "status": "complete",
+      "artifacts": ["app-description.md", "summary.md"],
+      "finalBuildResult": "pass",
+      "orchestrationStatus": "degraded"
+    }
+  }
+}

@@ -3,20 +3,28 @@ import SwiftUI
 // MARK: - Tab Definition
 
 enum AppTab: String, CaseIterable, Identifiable {
-    case home
-    // Add more tabs as needed
+    case chat
+    case talk
+    case inbox
+    case settings
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .home: "Home"
+        case .chat: "Chat"
+        case .talk: "Talk"
+        case .inbox: "Inbox"
+        case .settings: "Settings"
         }
     }
 
     var icon: String {
         switch self {
-        case .home: "house"
+        case .chat: "bubble.left.and.bubble.right"
+        case .talk: "waveform.circle"
+        case .inbox: "tray.full"
+        case .settings: "gearshape"
         }
     }
 }
@@ -24,21 +32,22 @@ enum AppTab: String, CaseIterable, Identifiable {
 // MARK: - Navigation Routes
 
 enum Route: Hashable {
-    // Define navigation destinations here
-    // case detail(Item)
-    // case settings
+    case permissions
+    case capture
 }
 
 // MARK: - Sheet Destinations
 
 enum SheetDestination: Identifiable {
-    // Define sheet presentations here
-    // case compose
-    // case editProfile
+    case conversationList
+    case newConversation
+    case inboxItemDetail(InboxItem)
 
     var id: String {
         switch self {
-        default: "default"
+        case .conversationList: "conversationList"
+        case .newConversation: "newConversation"
+        case .inboxItemDetail(let item): "inboxItemDetail-\(item.id)"
         }
     }
 }
@@ -48,7 +57,8 @@ enum SheetDestination: Identifiable {
 @MainActor
 @Observable
 final class TabRouter {
-    var selectedTab: AppTab = .home
+    var selectedTab: AppTab = .chat
+    var activeSheet: SheetDestination?
     private var paths: [AppTab: [Route]] = [:]
 
     func path(for tab: AppTab) -> [Route] {

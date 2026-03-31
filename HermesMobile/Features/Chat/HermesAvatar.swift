@@ -1,0 +1,15 @@
+import SwiftUI
+
+struct HermesAvatar: View {
+    var size: CGFloat = Design.Size.avatarSmall
+
+    var body: some View {
+        Text("H")
+            .font(.system(size: size * 0.45, weight: .semibold, design: .rounded))
+            .foregroundStyle(Design.Brand.warmGold)
+            .frame(width: size, height: size)
+            .clipShape(Circle())
+            .glassEffect(.regular, in: Circle())
+            .accessibilityLabel("Hermes")
+    }
+}

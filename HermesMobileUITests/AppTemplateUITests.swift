@@ -11,8 +11,11 @@ final class HermesMobileUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
 
-        // Verify all tabs are accessible
-        // Agents should expand this with app-specific tab names
+        // Verify all four tabs exist
+        XCTAssertTrue(app.tabBars.buttons["Chat"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.tabBars.buttons["Talk"].exists)
+        XCTAssertTrue(app.tabBars.buttons["Inbox"].exists)
+        XCTAssertTrue(app.tabBars.buttons["Settings"].exists)
     }
 
     @MainActor

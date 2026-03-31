@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>HermesMobile</string>
+	<string>Hermes</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -20,6 +20,16 @@
 	<string>1.0.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Hermes uses the camera to capture photos and documents for analysis.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Hermes reads your health data to offer personalized wellness insights.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Hermes uses your location to provide contextual recommendations and nearby suggestions.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Hermes uses the microphone for voice conversations in Talk Mode.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Hermes accesses your photo library to help organize and search your photos.</string>
 	<key>UILaunchScreen</key>
 	<dict/>
 </dict>
