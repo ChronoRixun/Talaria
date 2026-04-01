@@ -5,6 +5,7 @@ struct Message: Codable, Identifiable, Hashable, Sendable {
     let sender: MessageSender
     let content: String
     let timestamp: Date
+    let jobID: UUID?
     var status: MessageStatus
 
     init(
@@ -12,12 +13,14 @@ struct Message: Codable, Identifiable, Hashable, Sendable {
         sender: MessageSender,
         content: String,
         timestamp: Date = .now,
+        jobID: UUID? = nil,
         status: MessageStatus = .sent
     ) {
         self.id = id
         self.sender = sender
         self.content = content
         self.timestamp = timestamp
+        self.jobID = jobID
         self.status = status
     }
 }

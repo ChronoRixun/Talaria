@@ -55,6 +55,8 @@ struct MainTabView: View {
             PermissionsScreen()
         case .capture:
             CaptureScreen()
+        case .connectHost:
+            ConnectHermesHostScreen()
         }
     }
 

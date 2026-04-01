@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 struct DeviceRegistrationRequest: Codable, Hashable, Sendable {
     let installationID: UUID
@@ -9,4 +10,25 @@ struct DeviceRegistrationRequest: Codable, Hashable, Sendable {
     let deviceModel: String
     let systemVersion: String
     let environment: AppEnvironment
+}
+
+extension DeviceRegistrationRequest {
+    static func current(
+        installationID: UUID,
+        environment: AppEnvironment
+    ) -> DeviceRegistrationRequest {
+        let device = UIDevice.current
+        let bundle = Bundle.main
+
+        return DeviceRegistrationRequest(
+            installationID: installationID,
+            deviceName: device.name,
+            appVersion: bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0.0",
+            buildNumber: bundle.object(forInfoDictionaryKey: kCFBundleVersionKey as String) as? String ?? "1",
+            bundleID: bundle.bundleIdentifier ?? "com.appfactory.HermesMobile",
+            deviceModel: device.model,
+            systemVersion: device.systemVersion,
+            environment: environment
+        )
+    }
 }

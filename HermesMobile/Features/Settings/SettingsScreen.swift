@@ -2,6 +2,8 @@ import SwiftUI
 
 struct SettingsScreen: View {
     @Environment(AppSessionStore.self) private var sessionStore
+    @Environment(HermesHostStore.self) private var hostStore
+    @Environment(PairingStore.self) private var pairingStore
     @Environment(SettingsStore.self) private var settingsStore
     @Environment(TabRouter.self) private var router
 
@@ -14,7 +16,9 @@ struct SettingsScreen: View {
                 VStack(spacing: Design.Spacing.lg) {
                     profileSection
                     connectionSection
-                    environmentSection
+                    if settingsStore.availableEnvironments.count > 1 {
+                        environmentSection
+                    }
                     notificationsSection
                     privacySection
                     aboutSection
@@ -25,6 +29,9 @@ struct SettingsScreen: View {
             .scrollEdgeEffectStyle(.soft, for: .top)
         }
         .navigationTitle("Settings")
+        .task {
+            await hostStore.refresh()
+        }
     }
 
     // MARK: - Profile
@@ -94,6 +101,65 @@ struct SettingsScreen: View {
                     subtitle: sessionStore.state.lastSyncAt?.formatted(date: .abbreviated, time: .shortened) ?? "Never"
                 )
 
+                if let pairedRelay = pairingStore.pairedRelayConfiguration {
+                    settingsRow(
+                        icon: "server.rack",
+                        iconColor: .secondary,
+                        title: "Relay Host",
+                        subtitle: pairedRelay.hostDisplayName
+                    )
+
+                    settingsRow(
+                        icon: "person.crop.circle",
+                        iconColor: .secondary,
+                        title: "Connected Account",
+                        subtitle: sessionStore.state.displayName ?? "Unknown"
+                    )
+
+                    settingsRow(
+                        icon: hostStore.isHostOnline ? "desktopcomputer" : "desktopcomputer.trianglebadge.exclamationmark",
+                        iconColor: hostStore.isHostOnline ? .green : .orange,
+                        title: "Hermes Host",
+                        subtitle: hostStore.currentHost?.resolvedDisplayName ?? "Not Connected"
+                    )
+
+                    if let host = hostStore.currentHost {
+                        settingsRow(
+                            icon: "clock.arrow.circlepath",
+                            iconColor: .secondary,
+                            title: "Host Last Seen",
+                            subtitle: host.lastSeenAt?.formatted(date: .abbreviated, time: .shortened) ?? "Unknown"
+                        )
+                    }
+
+                    Button {
+                        router.navigate(to: .connectHost, in: .settings)
+                    } label: {
+                        HStack {
+                            Label(hostStore.currentHost == nil ? "Connect Hermes Host" : "Manage Hermes Host", systemImage: "desktopcomputer.and.arrow.down")
+                                .font(Design.Typography.callout)
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(Design.Typography.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                        .frame(minHeight: Design.Size.minTapTarget)
+                    }
+
+                    Button {
+                        Task { await pairingStore.disconnect() }
+                    } label: {
+                        HStack {
+                            Label("Disconnect Hermes", systemImage: "rectangle.portrait.and.arrow.right")
+                                .font(Design.Typography.callout)
+                                .foregroundStyle(.red)
+                            Spacer()
+                        }
+                        .frame(minHeight: Design.Size.minTapTarget)
+                    }
+                }
+
                 Toggle(isOn: $settingsStore.settings.autoConnectOnLaunch) {
                     Label("Auto-Connect on Launch", systemImage: "bolt.fill")
                         .font(Design.Typography.callout)
@@ -108,7 +174,7 @@ struct SettingsScreen: View {
     private var environmentSection: some View {
         SettingsSectionView(title: "Environment") {
             VStack(spacing: Design.Spacing.sm) {
-                ForEach(AppEnvironment.allCases, id: \.self) { env in
+                ForEach(settingsStore.availableEnvironments, id: \.self) { env in
                     Button {
                         withAnimation(Design.Motion.quickResponse) {
                             settingsStore.settings.environment = env

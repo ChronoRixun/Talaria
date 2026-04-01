@@ -47,6 +47,31 @@ class DeviceRegisterRequest(BaseModel):
     client: ClientInfo
 
 
+class PairingRedeemRequest(BaseModel):
+    inviteToken: str = Field(min_length=1)
+    displayName: str = Field(min_length=1, max_length=120)
+    device: DeviceInfo
+    client: ClientInfo
+
+
+class HostEnrollmentCodeCreateRequest(BaseModel):
+    displayName: str | None = Field(default=None, max_length=120)
+
+
+class HostConnectorInfo(BaseModel):
+    platform: str
+    hostname: str
+    connectorVersion: str
+    hermesCommand: str
+    hermesVersion: str | None = None
+
+
+class HostRedeemRequest(BaseModel):
+    enrollmentToken: str = Field(min_length=1)
+    displayName: str | None = Field(default=None, max_length=120)
+    connector: HostConnectorInfo
+
+
 class RefreshRequest(BaseModel):
     refreshToken: str
 

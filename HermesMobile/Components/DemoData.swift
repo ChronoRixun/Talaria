@@ -162,7 +162,7 @@ nonisolated enum DemoData {
         notificationsEnabled: true,
         hapticFeedbackEnabled: true,
         analyticsEnabled: false,
-        environment: .development,
+        environment: AppEnvironmentPolicy.currentBuild.defaultEnvironment,
         autoConnectOnLaunch: true
     )
 }

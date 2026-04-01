@@ -9,6 +9,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def normalize_database_url(database_url: str) -> str:
+    if database_url.startswith("postgresql://"):
+        return database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+    if database_url.startswith("postgres://"):
+        return database_url.replace("postgres://", "postgresql+psycopg://", 1)
+    return database_url
+
+
 @dataclass(frozen=True)
 class Settings:
     service_name: str = "hermes-mobile-relay"
@@ -19,6 +27,8 @@ class Settings:
     internal_api_key: str = "replace-me"
     access_token_ttl_seconds: int = 3600
     refresh_token_ttl_seconds: int = 60 * 60 * 24 * 30
+    pairing_code_ttl_seconds: int = 900
+    host_enrollment_code_ttl_seconds: int = 900
     default_user_display_name: str = "Hermes User"
     hermes_adapter: str = "mock"
     hermes_command: str = "hermes"
@@ -26,17 +36,24 @@ class Settings:
     hermes_provider: str | None = None
     hermes_model: str | None = None
     hermes_toolsets: str | None = None
+    hermes_source: str = "tool"
     hermes_history_limit: int = 20
+    connector_sync_wait_seconds: int = 25
+    connector_job_lease_seconds: int = 180
+    connector_heartbeat_timeout_seconds: int = 30
+    connector_idle_poll_interval_seconds: float = 1.0
 
     @classmethod
     def from_env(cls) -> "Settings":
         return cls(
             environment=os.getenv("RELAY_ENVIRONMENT", "development"),
             public_base_url=os.getenv("PUBLIC_BASE_URL", "http://127.0.0.1:8000/v1"),
-            database_url=os.getenv("DATABASE_URL", "sqlite:///./relay.db"),
+            database_url=normalize_database_url(os.getenv("DATABASE_URL", "sqlite:///./relay.db")),
             internal_api_key=os.getenv("INTERNAL_API_KEY", "replace-me"),
             access_token_ttl_seconds=int(os.getenv("ACCESS_TOKEN_TTL_SECONDS", "3600")),
             refresh_token_ttl_seconds=int(os.getenv("REFRESH_TOKEN_TTL_SECONDS", str(60 * 60 * 24 * 30))),
+            pairing_code_ttl_seconds=int(os.getenv("PAIRING_CODE_TTL_SECONDS", "900")),
+            host_enrollment_code_ttl_seconds=int(os.getenv("HOST_ENROLLMENT_CODE_TTL_SECONDS", "900")),
             default_user_display_name=os.getenv("DEFAULT_USER_DISPLAY_NAME", "Hermes User"),
             hermes_adapter=os.getenv("HERMES_ADAPTER", "mock"),
             hermes_command=os.getenv("HERMES_COMMAND", "hermes"),
@@ -44,5 +61,10 @@ class Settings:
             hermes_provider=os.getenv("HERMES_PROVIDER") or None,
             hermes_model=os.getenv("HERMES_MODEL") or None,
             hermes_toolsets=os.getenv("HERMES_TOOLSETS") or None,
+            hermes_source=os.getenv("HERMES_SOURCE", "tool"),
             hermes_history_limit=int(os.getenv("HERMES_HISTORY_LIMIT", "20")),
+            connector_sync_wait_seconds=int(os.getenv("CONNECTOR_SYNC_WAIT_SECONDS", "25")),
+            connector_job_lease_seconds=int(os.getenv("CONNECTOR_JOB_LEASE_SECONDS", "180")),
+            connector_heartbeat_timeout_seconds=int(os.getenv("CONNECTOR_HEARTBEAT_TIMEOUT_SECONDS", "30")),
+            connector_idle_poll_interval_seconds=float(os.getenv("CONNECTOR_IDLE_POLL_INTERVAL_SECONDS", "1.0")),
         )

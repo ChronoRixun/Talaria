@@ -12,15 +12,21 @@ final class ResilientHermesClient: HermesClientProtocol {
 
     private let primary: any HermesClientProtocol
     private let fallback: any HermesClientProtocol
+    private let allowsFallback: @MainActor () -> Bool
 
-    init(primary: any HermesClientProtocol, fallback: any HermesClientProtocol) {
+    init(
+        primary: any HermesClientProtocol,
+        fallback: any HermesClientProtocol,
+        allowsFallback: @escaping @MainActor () -> Bool = { true }
+    ) {
         self.primary = primary
         self.fallback = fallback
+        self.allowsFallback = allowsFallback
     }
 
     func connect() async {
         await primary.connect()
-        if primary.connectionStatus == .error {
+        if allowsFallback() && primary.connectionStatus == .error {
             await fallback.connect()
         }
     }
@@ -32,7 +38,7 @@ final class ResilientHermesClient: HermesClientProtocol {
 
     func send(message: String) async -> Message {
         let response = await primary.send(message: message)
-        if response.status == .failed {
+        if allowsFallback() && response.status == .failed {
             return await fallback.send(message: message)
         }
         return response
@@ -40,7 +46,7 @@ final class ResilientHermesClient: HermesClientProtocol {
 
     func loadConversation() async -> Conversation {
         let conversation = await primary.loadConversation()
-        if primary.connectionStatus == .error {
+        if allowsFallback() && primary.connectionStatus == .error {
             return await fallback.loadConversation()
         }
         return conversation

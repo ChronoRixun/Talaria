@@ -8,7 +8,7 @@ final class MockSessionBootstrapService: SessionBootstrapServiceProtocol {
         connectionStatus: .connected,
         syncStatus: .synced,
         isMockMode: true,
-        backendEndpoint: AppEnvironment.development.baseURLString,
+        backendEndpoint: AppEnvironmentPolicy.currentBuild.defaultEnvironment.baseURLString,
         lastSyncAt: .now,
         pushTokenRegistered: false
     )
@@ -45,4 +45,6 @@ final class MockSessionBootstrapService: SessionBootstrapServiceProtocol {
             expiresAt: .now.addingTimeInterval(3600)
         )
     }
+
+    func revokeCurrentSession(accessToken: String?) async throws {}
 }

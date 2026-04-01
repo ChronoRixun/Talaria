@@ -1,0 +1,35 @@
+# Update `app` and `PUBLIC_BASE_URL` together if you choose a different Fly app name.
+app = "hermes-mobile-relay-dylan"
+primary_region = "iad"
+kill_signal = "SIGINT"
+kill_timeout = "30s"
+
+[env]
+RELAY_ENVIRONMENT = "production"
+PUBLIC_BASE_URL = "https://hermes-mobile-relay-dylan.fly.dev/v1"
+HERMES_ADAPTER = "mock"
+
+[http_service]
+internal_port = 8000
+force_https = true
+auto_start_machines = true
+auto_stop_machines = "stop"
+min_machines_running = 0
+
+  [http_service.concurrency]
+  type = "requests"
+  soft_limit = 20
+  hard_limit = 25
+
+  [[http_service.checks]]
+  interval = "15s"
+  timeout = "2s"
+  grace_period = "10s"
+  method = "GET"
+  path = "/v1/health"
+  protocol = "http"
+
+[[vm]]
+cpu_kind = "shared"
+cpus = 1
+memory = "512mb"

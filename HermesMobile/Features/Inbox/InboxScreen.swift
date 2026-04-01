@@ -17,7 +17,6 @@ struct InboxScreen: View {
         }
         .navigationTitle("Inbox")
         .toolbar { toolbarContent }
-        .task { await inboxStore.loadInbox() }
     }
 
     // MARK: - List

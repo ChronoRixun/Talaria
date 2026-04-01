@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from app.config import Settings
+from app.hermes_adapter import HermesChatResult
 from app.main import create_app
 
 
@@ -145,3 +146,38 @@ def test_chat_roundtrip_uses_relay_conversation(tmp_path):
         )
         assert updated_conversation.status_code == 200
         assert len(updated_conversation.json()["data"]["conversation"]["messages"]) == 2
+
+
+def test_chat_roundtrip_persists_hermes_session_id_for_resume(tmp_path):
+    class StubHermesAdapter:
+        def __init__(self) -> None:
+            self.calls: list[str | None] = []
+
+        def send_message(self, *, latest_user_message, history, session_id=None):
+            self.calls.append(session_id)
+            if session_id is None:
+                return HermesChatResult(text="First reply", session_id="session-123")
+            return HermesChatResult(text="Second reply", session_id=session_id)
+
+    stub_adapter = StubHermesAdapter()
+
+    with build_client(tmp_path) as client:
+        client.app.state.hermes_adapter = stub_adapter
+        register_data = register_device(client)
+        access_token = register_data["auth"]["accessToken"]
+
+        first_response = client.post(
+            "/v1/messages",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"text": "Hello Hermes"},
+        )
+        assert first_response.status_code == 200
+
+        second_response = client.post(
+            "/v1/messages",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"text": "Follow up"},
+        )
+        assert second_response.status_code == 200
+
+        assert stub_adapter.calls == [None, "session-123"]

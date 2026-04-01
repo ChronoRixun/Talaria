@@ -1,5 +1,33 @@
 import Foundation
 
+struct AppEnvironmentPolicy: Equatable, Sendable {
+    let allowsEnvironmentOverrides: Bool
+
+    var availableEnvironments: [AppEnvironment] {
+        allowsEnvironmentOverrides ? AppEnvironment.allCases : [.production]
+    }
+
+    var defaultEnvironment: AppEnvironment {
+        allowsEnvironmentOverrides ? .development : .production
+    }
+
+    func sanitize(_ settings: UserSettings) -> UserSettings {
+        var sanitized = settings
+        if !availableEnvironments.contains(sanitized.environment) {
+            sanitized.environment = defaultEnvironment
+        }
+        return sanitized
+    }
+
+    static let currentBuild: AppEnvironmentPolicy = {
+        #if DEBUG
+        AppEnvironmentPolicy(allowsEnvironmentOverrides: true)
+        #else
+        AppEnvironmentPolicy(allowsEnvironmentOverrides: false)
+        #endif
+    }()
+}
+
 struct UserSettings: Codable, Hashable, Sendable {
     var userName: String
     var avatarInitials: String
@@ -15,7 +43,7 @@ struct UserSettings: Codable, Hashable, Sendable {
         notificationsEnabled: Bool = true,
         hapticFeedbackEnabled: Bool = true,
         analyticsEnabled: Bool = false,
-        environment: AppEnvironment = .production,
+        environment: AppEnvironment = AppEnvironmentPolicy.currentBuild.defaultEnvironment,
         autoConnectOnLaunch: Bool = true
     ) {
         self.userName = userName
@@ -25,6 +53,10 @@ struct UserSettings: Codable, Hashable, Sendable {
         self.analyticsEnabled = analyticsEnabled
         self.environment = environment
         self.autoConnectOnLaunch = autoConnectOnLaunch
+    }
+
+    func applyingEnvironmentPolicy(_ policy: AppEnvironmentPolicy = .currentBuild) -> UserSettings {
+        policy.sanitize(self)
     }
 }
 

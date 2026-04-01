@@ -1,16 +1,32 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
+from urllib.parse import urlparse, urlunparse
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from .config import Settings
-from .hermes_adapter import HermesAdapter, HermesConversationMessage
-from .models import AuditLog, AuthSession, Conversation, Device, InboxAction, InboxItem, Message, PushRegistration, User, utcnow
-from .security import hash_token, issue_tokens, normalize_datetime
+from .hermes_adapter import HermesAdapter, HermesChatResult, HermesConversationMessage
+from .models import (
+    AuditLog,
+    AuthSession,
+    Conversation,
+    Device,
+    HermesHost,
+    HostEnrollmentInvite,
+    InboxAction,
+    InboxItem,
+    Message,
+    MessageJob,
+    PairingInvite,
+    PushRegistration,
+    User,
+    utcnow,
+)
+from .security import generate_token, hash_token, issue_tokens, normalize_datetime
 
 
 def ensure_default_user(db: Session, settings: Settings) -> User:
@@ -21,6 +37,36 @@ def ensure_default_user(db: Session, settings: Settings) -> User:
         db.commit()
         db.refresh(user)
     return user
+
+
+def create_pairing_invite(db: Session, *, settings: Settings) -> tuple[PairingInvite, str]:
+    invite_token = generate_token()
+    invite = PairingInvite(
+        token_hash=hash_token(invite_token),
+        expires_at=utcnow() + timedelta(seconds=settings.pairing_code_ttl_seconds),
+    )
+    db.add(invite)
+    db.commit()
+    db.refresh(invite)
+    return invite, invite_token
+
+
+def create_host_enrollment_invite(
+    db: Session,
+    *,
+    settings: Settings,
+    user_id: str,
+) -> tuple[HostEnrollmentInvite, str]:
+    invite_token = generate_token()
+    invite = HostEnrollmentInvite(
+        user_id=user_id,
+        token_hash=hash_token(invite_token),
+        expires_at=utcnow() + timedelta(seconds=settings.host_enrollment_code_ttl_seconds),
+    )
+    db.add(invite)
+    db.commit()
+    db.refresh(invite)
+    return invite, invite_token
 
 
 def record_audit(
@@ -142,6 +188,232 @@ def refresh_auth_session(db: Session, *, settings: Settings, refresh_token: str)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid auth session.")
 
     return rotate_auth_session(db, settings=settings, user=user, device=device)
+
+
+def redeem_pairing_invite(
+    db: Session,
+    *,
+    settings: Settings,
+    invite_token: str,
+    display_name: str,
+    platform: str,
+    installation_id: str,
+    device_name: str,
+    device_model: str,
+    system_version: str,
+    app_version: str,
+    build_number: str,
+    bundle_id: str,
+    environment: str,
+) -> tuple[PairingInvite, User, Device, AuthSession, str, str]:
+    invite = db.scalar(select(PairingInvite).where(PairingInvite.token_hash == hash_token(invite_token)))
+
+    if invite is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This setup code is invalid.")
+
+    if invite.redeemed_at is not None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This setup code has already been used.")
+
+    if normalize_datetime(invite.expires_at) < utcnow():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This setup code has expired.")
+
+    user = User(display_name=display_name.strip())
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    device = upsert_device(
+        db,
+        user=user,
+        platform=platform,
+        installation_id=installation_id,
+        device_name=device_name,
+        device_model=device_model,
+        system_version=system_version,
+        app_version=app_version,
+        build_number=build_number,
+        bundle_id=bundle_id,
+        environment=environment,
+    )
+    auth_session, access_token, refresh_token = rotate_auth_session(db, settings=settings, user=user, device=device)
+
+    invite.redeemed_at = utcnow()
+    invite.redeemed_user_id = user.id
+    invite.redeemed_device_id = device.id
+    db.commit()
+    db.refresh(invite)
+
+    return invite, user, device, auth_session, access_token, refresh_token
+
+
+def redeem_host_enrollment_invite(
+    db: Session,
+    *,
+    settings: Settings,
+    invite_token: str,
+    connector_display_name: str | None,
+    platform: str,
+    hostname: str,
+    hermes_command: str,
+    hermes_version: str | None,
+    connector_version: str,
+) -> tuple[HostEnrollmentInvite, HermesHost, str]:
+    invite = db.scalar(select(HostEnrollmentInvite).where(HostEnrollmentInvite.token_hash == hash_token(invite_token)))
+
+    if invite is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This host setup code is invalid.")
+
+    if invite.redeemed_at is not None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This host setup code has already been used.")
+
+    if normalize_datetime(invite.expires_at) < utcnow():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This host setup code has expired.")
+
+    connector_token = generate_token()
+    host = db.scalar(select(HermesHost).where(HermesHost.user_id == invite.user_id))
+    if host is None:
+        host = HermesHost(
+            user_id=invite.user_id,
+            display_name=connector_display_name,
+            platform=platform,
+            hostname=hostname,
+            hermes_command=hermes_command,
+            hermes_version=hermes_version,
+            connector_version=connector_version,
+            connector_token_hash=hash_token(connector_token),
+        )
+        db.add(host)
+    else:
+        host.display_name = connector_display_name
+        host.platform = platform
+        host.hostname = hostname
+        host.hermes_command = hermes_command
+        host.hermes_version = hermes_version
+        host.connector_version = connector_version
+        host.connector_token_hash = hash_token(connector_token)
+        host.active_connection_nonce = None
+        host.revoked_at = None
+        host.last_seen_at = None
+
+    db.commit()
+    db.refresh(host)
+
+    invite.redeemed_at = utcnow()
+    invite.redeemed_host_id = host.id
+    db.commit()
+    db.refresh(invite)
+
+    return invite, host, connector_token
+
+
+def revoke_auth_session(db: Session, *, auth_session: AuthSession) -> AuthSession:
+    auth_session.revoked_at = utcnow()
+    db.commit()
+    db.refresh(auth_session)
+    return auth_session
+
+
+def current_hermes_host_for_user(db: Session, *, user_id: str) -> HermesHost | None:
+    host = db.scalar(select(HermesHost).where(HermesHost.user_id == user_id))
+    if host is None or host.revoked_at is not None or host.connector_token_hash is None:
+        return None
+    return host
+
+
+def revoke_current_hermes_host(db: Session, *, user_id: str) -> HermesHost | None:
+    host = db.scalar(select(HermesHost).where(HermesHost.user_id == user_id))
+    if host is None:
+        return None
+
+    host.connector_token_hash = None
+    host.active_connection_nonce = None
+    host.revoked_at = utcnow()
+    db.commit()
+    db.refresh(host)
+    return host
+
+
+def authenticate_hermes_host(db: Session, *, connector_token: str) -> HermesHost:
+    host = db.scalar(
+        select(HermesHost).where(
+            HermesHost.connector_token_hash == hash_token(connector_token),
+            HermesHost.revoked_at.is_(None),
+        )
+    )
+    if host is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid connector credential.")
+    return host
+
+
+def activate_hermes_host_connection(
+    db: Session,
+    *,
+    host: HermesHost,
+    connection_nonce: str,
+    connector_version: str,
+    platform: str,
+    hostname: str,
+    hermes_command: str,
+    hermes_version: str | None,
+    display_name: str | None = None,
+) -> HermesHost:
+    host.active_connection_nonce = connection_nonce
+    host.connector_version = connector_version
+    host.platform = platform
+    host.hostname = hostname
+    host.hermes_command = hermes_command
+    host.hermes_version = hermes_version
+    host.display_name = display_name
+    host.last_seen_at = utcnow()
+    host.last_connected_at = utcnow()
+    db.commit()
+    db.refresh(host)
+    return host
+
+
+def touch_hermes_host_connection(db: Session, *, host_id: str, connection_nonce: str) -> HermesHost | None:
+    host = db.get(HermesHost, host_id)
+    if host is None or host.revoked_at is not None:
+        return None
+    if host.active_connection_nonce != connection_nonce:
+        return None
+
+    host.last_seen_at = utcnow()
+    db.commit()
+    db.refresh(host)
+    return host
+
+
+def deactivate_hermes_host_connection(db: Session, *, host_id: str, connection_nonce: str) -> HermesHost | None:
+    host = db.get(HermesHost, host_id)
+    if host is None:
+        return None
+    if host.active_connection_nonce != connection_nonce:
+        return host
+
+    host.active_connection_nonce = None
+    db.commit()
+    db.refresh(host)
+    return host
+
+
+def hermes_host_is_online(db: Session, *, host: HermesHost | None, settings: Settings) -> bool:
+    if host is None or host.revoked_at is not None or host.active_connection_nonce is None or host.last_seen_at is None:
+        return False
+
+    age = utcnow() - normalize_datetime(host.last_seen_at)
+    if age <= timedelta(seconds=settings.connector_heartbeat_timeout_seconds):
+        return True
+
+    active_job = db.scalar(
+        select(MessageJob.id).where(
+            MessageJob.host_id == host.id,
+            MessageJob.status == "running",
+            MessageJob.lease_expires_at.is_not(None),
+            MessageJob.lease_expires_at > utcnow(),
+        )
+    )
+    return active_job is not None
 
 
 def upsert_push_registration(
@@ -298,6 +570,15 @@ def list_conversation_messages(db: Session, *, conversation_id: str) -> list[Mes
     )
 
 
+def conversation_history_before_message(db: Session, *, conversation_id: str, message_id: str) -> list[Message]:
+    history: list[Message] = []
+    for message in list_conversation_messages(db, conversation_id=conversation_id):
+        if message.id == message_id:
+            break
+        history.append(message)
+    return history
+
+
 def append_message(
     db: Session,
     *,
@@ -325,38 +606,325 @@ def append_message(
     return message
 
 
+def update_message_delivery_status(db: Session, *, message: Message, delivery_status: str) -> Message:
+    message.delivery_status = delivery_status
+    db.commit()
+    db.refresh(message)
+    return message
+
+
+def create_message_job(
+    db: Session,
+    *,
+    user_id: str,
+    conversation_id: str,
+    user_message_id: str,
+    session_id_snapshot: str | None,
+) -> MessageJob:
+    job = MessageJob(
+        user_id=user_id,
+        conversation_id=conversation_id,
+        user_message_id=user_message_id,
+        session_id_snapshot=session_id_snapshot,
+        status="queued",
+        retryable=True,
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return job
+
+
+def get_message_job(db: Session, *, job_id: str) -> MessageJob | None:
+    return db.get(MessageJob, job_id)
+
+
+def requeue_expired_message_jobs(db: Session) -> None:
+    now = utcnow()
+    db.execute(
+        update(MessageJob)
+        .where(
+            MessageJob.status == "running",
+            MessageJob.lease_expires_at.is_not(None),
+            MessageJob.lease_expires_at < now,
+        )
+        .values(
+            status="queued",
+            host_id=None,
+            claimed_connection_nonce=None,
+            claimed_at=None,
+            lease_expires_at=None,
+            updated_at=now,
+        )
+    )
+    db.commit()
+
+
+def claim_next_message_job(
+    db: Session,
+    *,
+    host: HermesHost,
+    connection_nonce: str,
+    settings: Settings,
+) -> MessageJob | None:
+    requeue_expired_message_jobs(db)
+
+    job = db.scalar(
+        select(MessageJob)
+        .where(
+            MessageJob.user_id == host.user_id,
+            MessageJob.status == "queued",
+        )
+        .order_by(MessageJob.created_at.asc())
+    )
+    if job is None:
+        return None
+
+    now = utcnow()
+    lease_expires_at = now + timedelta(seconds=settings.connector_job_lease_seconds)
+    result = db.execute(
+        update(MessageJob)
+        .where(
+            MessageJob.id == job.id,
+            MessageJob.status == "queued",
+        )
+        .values(
+            status="running",
+            host_id=host.id,
+            claimed_connection_nonce=connection_nonce,
+            claimed_at=now,
+            lease_expires_at=lease_expires_at,
+            updated_at=now,
+        )
+    )
+    db.commit()
+
+    if result.rowcount != 1:
+        return None
+
+    return db.get(MessageJob, job.id)
+
+
+def _finalize_job_message(
+    db: Session,
+    *,
+    job: MessageJob,
+    role: str,
+    text: str,
+    delivery_status: str,
+) -> Message:
+    conversation = db.get(Conversation, job.conversation_id)
+    if conversation is None:
+        raise RuntimeError("Conversation not found for job.")
+
+    message = Message(
+        conversation_id=conversation.id,
+        user_id=job.user_id,
+        role=role,
+        text=text,
+        delivery_status=delivery_status,
+    )
+    conversation.last_message_at = utcnow()
+    conversation.updated_at = utcnow()
+    db.add(message)
+    db.flush()
+    return message
+
+
+def complete_message_job(
+    db: Session,
+    *,
+    job_id: str,
+    connection_nonce: str | None,
+    text: str,
+    session_id: str | None,
+) -> MessageJob | None:
+    job = db.get(MessageJob, job_id)
+    if job is None:
+        return None
+    if connection_nonce is not None and job.claimed_connection_nonce != connection_nonce:
+        return job
+    if job.result_message_id is not None or job.status == "completed":
+        return job
+
+    user_message = db.get(Message, job.user_message_id)
+    conversation = db.get(Conversation, job.conversation_id)
+    if user_message is None or conversation is None:
+        raise RuntimeError("Message job references missing records.")
+
+    result_message = _finalize_job_message(
+        db,
+        job=job,
+        role="hermes",
+        text=text,
+        delivery_status="delivered",
+    )
+    user_message.delivery_status = "delivered"
+    conversation.hermes_session_id = session_id or conversation.hermes_session_id
+    job.status = "completed"
+    job.completed_at = utcnow()
+    job.result_text = text
+    job.result_session_id = session_id or job.result_session_id
+    job.result_message_id = result_message.id
+    job.retryable = False
+    db.commit()
+    db.refresh(job)
+    return job
+
+
+def fail_message_job(
+    db: Session,
+    *,
+    job_id: str,
+    connection_nonce: str | None,
+    error_text: str,
+    retryable: bool,
+) -> MessageJob | None:
+    job = db.get(MessageJob, job_id)
+    if job is None:
+        return None
+    if connection_nonce is not None and job.claimed_connection_nonce != connection_nonce:
+        return job
+    if job.result_message_id is not None or job.status == "completed":
+        return job
+
+    if retryable:
+        job.status = "queued"
+        job.host_id = None
+        job.claimed_connection_nonce = None
+        job.claimed_at = None
+        job.lease_expires_at = None
+        job.error_text = error_text
+        job.retryable = True
+        db.commit()
+        db.refresh(job)
+        return job
+
+    user_message = db.get(Message, job.user_message_id)
+    if user_message is None:
+        raise RuntimeError("Message job references a missing user message.")
+
+    system_message = _finalize_job_message(
+        db,
+        job=job,
+        role="system",
+        text=f"Hermes could not process this message: {error_text}",
+        delivery_status="delivered",
+    )
+    user_message.delivery_status = "failed"
+    job.status = "failed"
+    job.completed_at = utcnow()
+    job.error_text = error_text
+    job.retryable = False
+    job.result_message_id = system_message.id
+    db.commit()
+    db.refresh(job)
+    return job
+
+
 def generate_hermes_reply(
     *,
     adapter: HermesAdapter,
     latest_user_message: str,
     history: list[Message],
-) -> str:
+    session_id: str | None = None,
+) -> HermesChatResult:
     replay_history = [
         HermesConversationMessage(role=message.role, text=message.text)
         for message in history
     ]
-    result = adapter.send_message(
+    return adapter.send_message(
         latest_user_message=latest_user_message,
         history=replay_history,
+        session_id=session_id,
     )
-    return result.text
 
 
-def serialize_message(message: Message) -> dict:
-    return {
+def process_message_job_with_adapter(
+    db: Session,
+    *,
+    job_id: str,
+    adapter: HermesAdapter,
+) -> MessageJob | None:
+    job = db.get(MessageJob, job_id)
+    if job is None:
+        return None
+
+    user_message = db.get(Message, job.user_message_id)
+    if user_message is None:
+        raise RuntimeError("Message job references a missing user message.")
+
+    history = conversation_history_before_message(
+        db,
+        conversation_id=job.conversation_id,
+        message_id=user_message.id,
+    )
+    try:
+        hermes_reply = generate_hermes_reply(
+            adapter=adapter,
+            latest_user_message=user_message.text,
+            history=history,
+            session_id=job.session_id_snapshot,
+        )
+    except RuntimeError as error:
+        return fail_message_job(
+            db,
+            job_id=job.id,
+            connection_nonce=None,
+            error_text=str(error),
+            retryable=False,
+        )
+
+    return complete_message_job(
+        db,
+        job_id=job.id,
+        connection_nonce=None,
+        text=hermes_reply.text,
+        session_id=hermes_reply.session_id or job.session_id_snapshot,
+    )
+
+
+def default_message_delivery_status(message: Message) -> str:
+    if message.delivery_status:
+        return message.delivery_status
+    if message.role == "user":
+        return "sent"
+    return "delivered"
+
+
+def list_message_jobs_for_conversation(db: Session, *, conversation_id: str) -> list[MessageJob]:
+    return list(
+        db.scalars(
+            select(MessageJob)
+            .where(MessageJob.conversation_id == conversation_id)
+            .order_by(MessageJob.created_at.asc())
+        ).all()
+    )
+
+
+def serialize_message(message: Message, *, job: MessageJob | None = None) -> dict:
+    payload = {
         "id": message.id,
         "role": message.role,
         "text": message.text,
         "timestamp": message.created_at,
+        "deliveryStatus": default_message_delivery_status(message),
     }
+    if job is not None and payload["deliveryStatus"] in {"pending", "failed"}:
+        payload["jobId"] = job.id
+    return payload
 
 
-def serialize_conversation(conversation: Conversation, messages: list[Message]) -> dict:
+def serialize_conversation(conversation: Conversation, messages: list[Message], jobs: list[MessageJob] | None = None) -> dict:
+    jobs_by_message_id = {job.user_message_id: job for job in jobs or []}
     return {
         "id": conversation.id,
         "title": conversation.title,
         "updatedAt": conversation.updated_at,
-        "messages": [serialize_message(message) for message in messages],
+        "messages": [
+            serialize_message(message, job=jobs_by_message_id.get(message.id))
+            for message in messages
+        ],
     }
 
 
@@ -374,3 +942,27 @@ def serialize_inbox_item(item: InboxItem) -> dict:
         "primaryActionTitle": primary_title,
         "secondaryActionTitle": secondary_title,
     }
+
+
+def serialize_hermes_host(db: Session, *, host: HermesHost | None, settings: Settings) -> dict | None:
+    if host is None or host.revoked_at is not None or host.connector_token_hash is None:
+        return None
+
+    return {
+        "id": host.id,
+        "displayName": host.display_name,
+        "hostname": host.hostname,
+        "platform": host.platform,
+        "connectorVersion": host.connector_version,
+        "hermesCommand": host.hermes_command,
+        "hermesVersion": host.hermes_version,
+        "lastSeenAt": host.last_seen_at,
+        "lastConnectedAt": host.last_connected_at,
+        "isOnline": hermes_host_is_online(db, host=host, settings=settings),
+    }
+
+
+def build_connector_websocket_url(public_base_url: str) -> str:
+    parsed = urlparse(public_base_url)
+    scheme = "wss" if parsed.scheme == "https" else "ws"
+    return urlunparse((scheme, parsed.netloc, f"{parsed.path}/hosts/ws", "", "", ""))

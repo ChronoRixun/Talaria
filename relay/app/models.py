@@ -61,6 +61,52 @@ class AuthSession(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 
 
+class PairingInvite(Base):
+    __tablename__ = "pairing_invites"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    token_hash: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    redeemed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    redeemed_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"))
+    redeemed_device_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("devices.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class HermesHost(Base):
+    __tablename__ = "hermes_hosts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False, unique=True)
+    display_name: Mapped[str | None] = mapped_column(Text)
+    platform: Mapped[str | None] = mapped_column(Text)
+    hostname: Mapped[str | None] = mapped_column(Text)
+    hermes_command: Mapped[str | None] = mapped_column(Text)
+    hermes_version: Mapped[str | None] = mapped_column(Text)
+    connector_version: Mapped[str | None] = mapped_column(Text)
+    connector_token_hash: Mapped[str | None] = mapped_column(Text)
+    active_connection_nonce: Mapped[str | None] = mapped_column(Text)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_connected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class HostEnrollmentInvite(Base):
+    __tablename__ = "host_enrollment_invites"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    token_hash: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    redeemed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    redeemed_host_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("hermes_hosts.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+
 class PushRegistration(Base):
     __tablename__ = "push_registrations"
 
@@ -81,6 +127,7 @@ class Conversation(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
     title: Mapped[str] = mapped_column(Text, nullable=False, default="Hermes")
+    hermes_session_id: Mapped[str | None] = mapped_column(Text)
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     last_message_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
@@ -98,6 +145,29 @@ class Message(Base):
     client_message_id: Mapped[str | None] = mapped_column(String(36))
     delivery_status: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class MessageJob(Base):
+    __tablename__ = "message_jobs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    conversation_id: Mapped[str] = mapped_column(String(36), ForeignKey("conversations.id"), nullable=False)
+    user_message_id: Mapped[str] = mapped_column(String(36), ForeignKey("messages.id"), nullable=False, unique=True)
+    host_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("hermes_hosts.id"))
+    claimed_connection_nonce: Mapped[str | None] = mapped_column(Text)
+    session_id_snapshot: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="queued")
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    result_message_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("messages.id"))
+    result_text: Mapped[str | None] = mapped_column(Text)
+    result_session_id: Mapped[str | None] = mapped_column(Text)
+    error_text: Mapped[str | None] = mapped_column(Text)
+    retryable: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 
 
 class InboxItem(Base):

@@ -6,10 +6,12 @@ struct HermesMobileApp: App {
 
     var body: some Scene {
         WindowGroup {
-            MainTabView()
+            AppRootView()
                 .environment(container)
                 .environment(container.router)
                 .environment(container.sessionStore)
+                .environment(container.pairingStore)
+                .environment(container.hostStore)
                 .environment(container.chatStore)
                 .environment(container.inboxStore)
                 .environment(container.permissionsStore)

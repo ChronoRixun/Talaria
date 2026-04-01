@@ -22,7 +22,7 @@ struct AppSessionState: Codable, Hashable, Sendable {
         connectionStatus: ConnectionStatus = .disconnected,
         syncStatus: SyncStatus = .offline,
         isMockMode: Bool = true,
-        backendEndpoint: String = AppEnvironment.development.baseURLString,
+        backendEndpoint: String = AppEnvironmentPolicy.currentBuild.defaultEnvironment.baseURLString,
         lastSyncAt: Date? = nil,
         pushTokenRegistered: Bool = false
     ) {

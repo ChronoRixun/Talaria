@@ -13,11 +13,20 @@ final class SettingsStore {
     }
 
     var onEnvironmentChanged: (@MainActor (AppEnvironment) async -> Void)?
+    var availableEnvironments: [AppEnvironment] {
+        environmentPolicy.availableEnvironments
+    }
 
     private let persistence: any AppPersistenceStoreProtocol
+    private let environmentPolicy: AppEnvironmentPolicy
 
-    init(persistence: any AppPersistenceStoreProtocol) {
+    init(
+        persistence: any AppPersistenceStoreProtocol,
+        environmentPolicy: AppEnvironmentPolicy = .currentBuild
+    ) {
         self.persistence = persistence
-        self.settings = persistence.loadUserSettings() ?? DemoData.sampleUserSettings
+        self.environmentPolicy = environmentPolicy
+        let storedSettings = persistence.loadUserSettings() ?? DemoData.sampleUserSettings
+        self.settings = storedSettings.applyingEnvironmentPolicy(environmentPolicy)
     }
 }

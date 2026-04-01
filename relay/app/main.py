@@ -1,37 +1,72 @@
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 import uuid
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Body, Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .config import Settings
 from .database import Database
 from .hermes_adapter import build_hermes_adapter
-from .models import PushRegistration
-from .schemas import DeviceRegisterRequest, InboxActionRequest, InternalInboxCreateRequest, MessageCreateRequest, PushRegisterRequest, RefreshRequest
+from .models import Conversation, HermesHost, Message, PushRegistration
+from .pairing import HostSetupCodePayload, build_host_setup_code
+from .schemas import (
+    DeviceRegisterRequest,
+    HostEnrollmentCodeCreateRequest,
+    HostRedeemRequest,
+    InboxActionRequest,
+    InternalInboxCreateRequest,
+    MessageCreateRequest,
+    PairingRedeemRequest,
+    PushRegisterRequest,
+    RefreshRequest,
+)
 from .security import AuthContext, get_auth_context, get_db, get_settings, require_internal_key
 from .services import (
+    activate_hermes_host_connection,
+    append_message,
+    authenticate_hermes_host,
+    build_connector_websocket_url,
+    claim_next_message_job,
+    complete_message_job,
+    conversation_history_before_message,
+    create_host_enrollment_invite,
     create_inbox_item,
+    create_message_job,
+    current_hermes_host_for_user,
+    deactivate_hermes_host_connection,
     ensure_default_user,
-    generate_hermes_reply,
+    fail_message_job,
     get_inbox_item_for_user,
+    get_message_job,
     get_or_create_current_conversation,
-    list_inbox_actions,
+    hermes_host_is_online,
     list_conversation_messages,
+    list_inbox_actions,
     list_inbox_items,
+    list_message_jobs_for_conversation,
     record_audit,
     record_inbox_action,
+    redeem_host_enrollment_invite,
+    redeem_pairing_invite,
     refresh_auth_session,
+    revoke_auth_session,
+    revoke_current_hermes_host,
     rotate_auth_session,
-    append_message,
     serialize_conversation,
+    serialize_hermes_host,
     serialize_inbox_item,
+    serialize_message,
+    touch_hermes_host_connection,
     upsert_device,
     upsert_push_registration,
+    process_message_job_with_adapter,
 )
 
 
@@ -43,6 +78,27 @@ def success(data: dict) -> dict:
             "timestamp": datetime.now(timezone.utc).isoformat(),
         },
     }
+
+
+def success_response(data: dict, *, status_code: int = status.HTTP_200_OK) -> JSONResponse:
+    return JSONResponse(status_code=status_code, content=jsonable_encoder(success(data)))
+
+
+def parse_bearer_token(authorization_header: str | None) -> str | None:
+    if authorization_header is None:
+        return None
+    prefix = "Bearer "
+    if not authorization_header.startswith(prefix):
+        return None
+    return authorization_header[len(prefix) :].strip() or None
+
+
+def reply_state_for_job(job_status: str) -> str:
+    if job_status == "completed":
+        return "delivered"
+    if job_status == "failed":
+        return "failed"
+    return "pending"
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -58,6 +114,70 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.database = database
     app.state.hermes_adapter = build_hermes_adapter(settings)
+
+    async def wait_for_job_completion(job_id: str, timeout_seconds: int) -> object | None:
+        deadline = asyncio.get_running_loop().time() + timeout_seconds
+        while asyncio.get_running_loop().time() < deadline:
+            with database.session() as db:
+                job = get_message_job(db, job_id=job_id)
+                if job is None or job.status in {"completed", "failed"}:
+                    return job
+            await asyncio.sleep(0.25)
+        return None
+
+    def build_message_response_payload(db: Session, *, conversation_id: str, job_id: str) -> tuple[dict, int]:
+        job = get_message_job(db, job_id=job_id)
+        if job is None:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Message job not found.")
+
+        conversation = db.get(Conversation, conversation_id)
+        if conversation is None:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Conversation not found.")
+
+        user_message = db.get(Message, job.user_message_id)
+        messages = list_conversation_messages(db, conversation_id=conversation_id)
+        jobs = list_message_jobs_for_conversation(db, conversation_id=conversation_id)
+
+        payload = {
+            "replyState": reply_state_for_job(job.status),
+            "conversation": serialize_conversation(conversation, messages, jobs=jobs),
+            "userMessage": serialize_message(user_message, job=job) if user_message else None,
+        }
+
+        if job.result_message_id:
+            result_message = db.get(Message, job.result_message_id)
+            if result_message is not None:
+                payload["message"] = serialize_message(result_message)
+
+        status_code = status.HTTP_202_ACCEPTED if job.status in {"queued", "running"} else status.HTTP_200_OK
+        return payload, status_code
+
+    def build_job_execute_payload(db: Session, *, job_id: str) -> dict:
+        job = get_message_job(db, job_id=job_id)
+        if job is None:
+            raise RuntimeError("Message job not found.")
+
+        user_message = db.get(Message, job.user_message_id)
+        if user_message is None:
+            raise RuntimeError("User message not found for job.")
+
+        history = conversation_history_before_message(
+            db,
+            conversation_id=job.conversation_id,
+            message_id=user_message.id,
+        )
+        return {
+            "type": "job.execute",
+            "version": 1,
+            "job": {
+                "id": job.id,
+                "conversationId": job.conversation_id,
+                "latestUserMessage": user_message.text,
+                "history": [{"role": message.role, "text": message.text} for message in history],
+                "sessionId": job.session_id_snapshot,
+                "timeoutSeconds": settings.connector_job_lease_seconds,
+            },
+        }
 
     @app.get("/v1/health")
     def health() -> dict:
@@ -129,6 +249,161 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             }
         )
 
+    @app.post("/v1/pairing/redeem")
+    def redeem_pairing(
+        payload: PairingRedeemRequest,
+        db: Session = Depends(get_db),
+        request_settings: Settings = Depends(get_settings),
+    ) -> dict:
+        invite, user, device, auth_session, access_token, refresh_token = redeem_pairing_invite(
+            db,
+            settings=request_settings,
+            invite_token=payload.inviteToken,
+            display_name=payload.displayName,
+            platform=payload.device.platform,
+            installation_id=str(payload.device.installationId),
+            device_name=payload.device.deviceName,
+            device_model=payload.device.deviceModel,
+            system_version=payload.device.systemVersion,
+            app_version=payload.device.appVersion,
+            build_number=payload.device.buildNumber,
+            bundle_id=payload.device.bundleId,
+            environment=payload.client.environment,
+        )
+
+        record_audit(
+            db,
+            actor_type="app",
+            actor_id=device.id,
+            action="pairing.redeem",
+            entity_type="pairing_invite",
+            entity_id=invite.id,
+            payload={"installationId": str(payload.device.installationId)},
+        )
+        db.commit()
+
+        return success(
+            {
+                "user": {
+                    "id": user.id,
+                    "displayName": user.display_name,
+                },
+                "deviceId": device.id,
+                "deviceRegistered": True,
+                "session": {
+                    "connectionStatus": "connected",
+                    "isMockMode": False,
+                    "backendEndpoint": request_settings.public_base_url,
+                    "lastSyncAt": auth_session.updated_at,
+                },
+                "auth": {
+                    "accessToken": access_token,
+                    "refreshToken": refresh_token,
+                    "expiresAt": auth_session.access_expires_at,
+                },
+            }
+        )
+
+    @app.post("/v1/hosts/enrollment-codes")
+    def create_host_enrollment_code(
+        payload: HostEnrollmentCodeCreateRequest | None = Body(default=None),
+        auth: AuthContext = Depends(get_auth_context),
+        db: Session = Depends(get_db),
+        request_settings: Settings = Depends(get_settings),
+    ) -> dict:
+        invite, invite_token = create_host_enrollment_invite(db, settings=request_settings, user_id=auth.user.id)
+        setup_code = build_host_setup_code(
+            HostSetupCodePayload(
+                relay_url=request_settings.public_base_url,
+                enrollment_token=invite_token,
+                expires_at=invite.expires_at,
+            )
+        )
+        host = current_hermes_host_for_user(db, user_id=auth.user.id)
+        record_audit(
+            db,
+            actor_type="user",
+            actor_id=auth.user.id,
+            action="host.enrollment_code.create",
+            entity_type="host_enrollment_invite",
+            entity_id=invite.id,
+            payload={"displayName": payload.displayName if payload else None},
+        )
+        db.commit()
+        return success(
+            {
+                "setupCode": setup_code,
+                "expiresAt": invite.expires_at,
+                "relayHost": request_settings.public_base_url,
+                "host": serialize_hermes_host(db, host=host, settings=request_settings),
+            }
+        )
+
+    @app.get("/v1/hosts/current")
+    def current_host(
+        auth: AuthContext = Depends(get_auth_context),
+        db: Session = Depends(get_db),
+        request_settings: Settings = Depends(get_settings),
+    ) -> dict:
+        host = current_hermes_host_for_user(db, user_id=auth.user.id)
+        return success({"host": serialize_hermes_host(db, host=host, settings=request_settings)})
+
+    @app.post("/v1/hosts/current/revoke")
+    def revoke_current_host(
+        auth: AuthContext = Depends(get_auth_context),
+        db: Session = Depends(get_db),
+    ) -> dict:
+        host = revoke_current_hermes_host(db, user_id=auth.user.id)
+        record_audit(
+            db,
+            actor_type="user",
+            actor_id=auth.user.id,
+            action="host.revoke",
+            entity_type="hermes_host",
+            entity_id=host.id if host else None,
+        )
+        db.commit()
+        return success({"revoked": host is not None})
+
+    @app.post("/v1/hosts/redeem")
+    def redeem_host(
+        payload: HostRedeemRequest,
+        db: Session = Depends(get_db),
+        request_settings: Settings = Depends(get_settings),
+    ) -> dict:
+        invite, host, connector_token = redeem_host_enrollment_invite(
+            db,
+            settings=request_settings,
+            invite_token=payload.enrollmentToken,
+            connector_display_name=payload.displayName,
+            platform=payload.connector.platform,
+            hostname=payload.connector.hostname,
+            hermes_command=payload.connector.hermesCommand,
+            hermes_version=payload.connector.hermesVersion,
+            connector_version=payload.connector.connectorVersion,
+        )
+        record_audit(
+            db,
+            actor_type="connector",
+            actor_id=host.id,
+            action="host.redeem",
+            entity_type="host_enrollment_invite",
+            entity_id=invite.id,
+            payload={"hostname": payload.connector.hostname},
+        )
+        db.commit()
+        return success(
+            {
+                "host": {
+                    "id": host.id,
+                    "userId": host.user_id,
+                },
+                "connectorCredential": connector_token,
+                "webSocketURL": build_connector_websocket_url(request_settings.public_base_url),
+                "relayURL": request_settings.public_base_url,
+            }
+        )
+
     @app.get("/v1/session")
     def session(
         auth: AuthContext = Depends(get_auth_context),
@@ -193,6 +468,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             }
         )
 
+    @app.post("/v1/auth/revoke")
+    def revoke_auth(
+        auth: AuthContext = Depends(get_auth_context),
+        db: Session = Depends(get_db),
+    ) -> dict:
+        revoke_auth_session(db, auth_session=auth.auth_session)
+        record_audit(
+            db,
+            actor_type="app",
+            actor_id=auth.device.id,
+            action="auth.revoke",
+            entity_type="auth_session",
+            entity_id=auth.auth_session.id,
+        )
+        db.commit()
+
+        return success({"revoked": True})
+
     @app.post("/v1/push/register")
     def register_push(
         payload: PushRegisterRequest,
@@ -230,15 +523,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def current_conversation(auth: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict:
         conversation = get_or_create_current_conversation(db, user_id=auth.user.id)
         messages = list_conversation_messages(db, conversation_id=conversation.id)
-        return success({"conversation": serialize_conversation(conversation, messages)})
+        jobs = list_message_jobs_for_conversation(db, conversation_id=conversation.id)
+        return success({"conversation": serialize_conversation(conversation, messages, jobs=jobs)})
 
     @app.post("/v1/messages")
-    def create_message(
+    async def create_message(
         payload: MessageCreateRequest,
         auth: AuthContext = Depends(get_auth_context),
         db: Session = Depends(get_db),
-    ) -> dict:
+        request_settings: Settings = Depends(get_settings),
+    ) -> JSONResponse:
         conversation = get_or_create_current_conversation(db, user_id=auth.user.id)
+        initial_delivery_status = "pending" if request_settings.hermes_adapter == "connector" else "sent"
         user_message = append_message(
             db,
             conversation=conversation,
@@ -246,28 +542,30 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             role="user",
             text=payload.text,
             client_message_id=str(payload.clientMessageId) if payload.clientMessageId else None,
-            delivery_status="sent",
+            delivery_status=initial_delivery_status,
         )
 
-        history = list_conversation_messages(db, conversation_id=conversation.id)
-        try:
-            hermes_reply = generate_hermes_reply(
-                adapter=app.state.hermes_adapter,
-                latest_user_message=payload.text,
-                history=history[:-1],
-            )
-        except RuntimeError as error:
-            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
-
-        assistant_message = append_message(
+        job = create_message_job(
             db,
-            conversation=conversation,
             user_id=auth.user.id,
-            role="hermes",
-            text=hermes_reply,
-            delivery_status="delivered",
+            conversation_id=conversation.id,
+            user_message_id=user_message.id,
+            session_id_snapshot=conversation.hermes_session_id,
         )
 
+        if request_settings.hermes_adapter == "connector":
+            host = current_hermes_host_for_user(db, user_id=auth.user.id)
+            if host is not None and hermes_host_is_online(db, host=host, settings=request_settings):
+                await wait_for_job_completion(job.id, request_settings.connector_sync_wait_seconds)
+        else:
+            process_message_job_with_adapter(
+                db,
+                job_id=job.id,
+                adapter=app.state.hermes_adapter,
+            )
+
+        db.expire_all()
+        payload_data, status_code = build_message_response_payload(db, conversation_id=conversation.id, job_id=job.id)
         record_audit(
             db,
             actor_type="user",
@@ -275,27 +573,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             action="chat.message.create",
             entity_type="conversation",
             entity_id=conversation.id,
+            payload={"jobId": job.id, "replyState": payload_data["replyState"]},
         )
         db.commit()
-
-        messages = list_conversation_messages(db, conversation_id=conversation.id)
-        return success(
-            {
-                "conversation": serialize_conversation(conversation, messages),
-                "message": {
-                    "id": assistant_message.id,
-                    "role": assistant_message.role,
-                    "text": assistant_message.text,
-                    "timestamp": assistant_message.created_at,
-                },
-                "userMessage": {
-                    "id": user_message.id,
-                    "role": user_message.role,
-                    "text": user_message.text,
-                    "timestamp": user_message.created_at,
-                },
-            }
-        )
+        return success_response(payload_data, status_code=status_code)
 
     @app.get("/v1/inbox")
     def inbox(auth: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict:
@@ -378,6 +659,153 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 ]
             }
         )
+
+    @app.websocket("/v1/hosts/ws")
+    async def hosts_websocket(websocket: WebSocket) -> None:
+        await websocket.accept()
+        authorization = websocket.headers.get("authorization")
+        connector_token = parse_bearer_token(authorization)
+        if connector_token is None:
+            await websocket.close(code=4401)
+            return
+
+        try:
+            hello_message = await websocket.receive_json()
+        except WebSocketDisconnect:
+            return
+
+        if hello_message.get("type") != "hello":
+            await websocket.close(code=4400)
+            return
+
+        connector_info = hello_message.get("connector") or {}
+        connection_nonce = str(uuid.uuid4())
+        host_id: str | None = None
+
+        try:
+            with database.session() as db:
+                host = authenticate_hermes_host(db, connector_token=connector_token)
+                activated_host = activate_hermes_host_connection(
+                    db,
+                    host=host,
+                    connection_nonce=connection_nonce,
+                    connector_version=connector_info.get("connectorVersion", "unknown"),
+                    platform=connector_info.get("platform", "unknown"),
+                    hostname=connector_info.get("hostname", "unknown"),
+                    hermes_command=connector_info.get("hermesCommand", "hermes"),
+                    hermes_version=connector_info.get("hermesVersion"),
+                    display_name=connector_info.get("displayName"),
+                )
+                host_id = activated_host.id
+                ready_payload = {
+                    "type": "ready",
+                    "version": 1,
+                    "host": serialize_hermes_host(db, host=activated_host, settings=settings),
+                }
+
+            await websocket.send_json(jsonable_encoder(ready_payload))
+
+            while True:
+                with database.session() as db:
+                    host = db.get(HermesHost, host_id)
+                    if host is None or host.active_connection_nonce != connection_nonce or host.revoked_at is not None:
+                        await websocket.close(code=4401)
+                        return
+
+                    claimed_job = claim_next_message_job(
+                        db,
+                        host=host,
+                        connection_nonce=connection_nonce,
+                        settings=settings,
+                    )
+
+                    if claimed_job is not None:
+                        job_payload = build_job_execute_payload(db, job_id=claimed_job.id)
+                    else:
+                        job_payload = None
+
+                if job_payload is not None:
+                    await websocket.send_json(job_payload)
+
+                    while True:
+                        try:
+                            incoming = await asyncio.wait_for(
+                                websocket.receive_json(),
+                                timeout=settings.connector_heartbeat_timeout_seconds,
+                            )
+                        except asyncio.TimeoutError:
+                            await websocket.close(code=1011)
+                            return
+
+                        message_type = incoming.get("type")
+                        if message_type == "heartbeat":
+                            with database.session() as db:
+                                touched = touch_hermes_host_connection(db, host_id=host_id, connection_nonce=connection_nonce)
+                            if touched is None:
+                                await websocket.close(code=4401)
+                                return
+                            continue
+
+                        if message_type == "job.result" and incoming.get("jobId") == claimed_job.id:
+                            with database.session() as db:
+                                completed = complete_message_job(
+                                    db,
+                                    job_id=claimed_job.id,
+                                    connection_nonce=connection_nonce,
+                                    text=incoming.get("text", "").strip(),
+                                    session_id=incoming.get("sessionId"),
+                                )
+                                if completed is None:
+                                    await websocket.close(code=1011)
+                                    return
+                            break
+
+                        if message_type == "job.failed" and incoming.get("jobId") == claimed_job.id:
+                            with database.session() as db:
+                                failed = fail_message_job(
+                                    db,
+                                    job_id=claimed_job.id,
+                                    connection_nonce=connection_nonce,
+                                    error_text=incoming.get("error", "Hermes connector failed."),
+                                    retryable=bool(incoming.get("retryable", False)),
+                                )
+                                if failed is None:
+                                    await websocket.close(code=1011)
+                                    return
+                            break
+
+                        await websocket.close(code=4400)
+                        return
+
+                    continue
+
+                try:
+                    incoming = await asyncio.wait_for(
+                        websocket.receive_json(),
+                        timeout=settings.connector_idle_poll_interval_seconds,
+                    )
+                except asyncio.TimeoutError:
+                    continue
+
+                if incoming.get("type") == "heartbeat":
+                    with database.session() as db:
+                        touched = touch_hermes_host_connection(db, host_id=host_id, connection_nonce=connection_nonce)
+                    if touched is None:
+                        await websocket.close(code=4401)
+                        return
+                    continue
+
+                await websocket.close(code=4400)
+                return
+        except HTTPException:
+            await websocket.close(code=4401)
+            return
+        except WebSocketDisconnect:
+            return
+        finally:
+            if host_id is not None:
+                with database.session() as db:
+                    deactivate_hermes_host_connection(db, host_id=host_id, connection_nonce=connection_nonce)
 
     return app
 

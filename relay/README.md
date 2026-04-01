@@ -1,6 +1,6 @@
 # Hermes Mobile Relay
 
-FastAPI relay for Hermes Mobile. This service owns device registration, app session bootstrap, push registration, inbox APIs, and Hermes-facing internal inbox hooks.
+FastAPI relay for Hermes Mobile. This service owns device registration, pairing, app session bootstrap, host enrollment, message persistence, connector queueing, push registration, inbox APIs, and Hermes-facing internal inbox hooks.
 
 ## Run locally
 
@@ -21,13 +21,26 @@ pip install -e .[dev]
 uvicorn app.main:app --reload
 ```
 
+## Deploy to Fly.io
+
+Fly's docs recommend installing `flyctl`, logging in with `fly auth login`, and running `fly launch` or `fly deploy` from the app source directory. Because this repo is a monorepo and Fly deploys from the current working directory, deploy from [`/Users/dylan-mac-mini/Documents/HermesMobile/relay`](/Users/dylan-mac-mini/Documents/HermesMobile/relay), where [`fly.toml`](/Users/dylan-mac-mini/Documents/HermesMobile/relay/fly.toml) and [`Dockerfile`](/Users/dylan-mac-mini/Documents/HermesMobile/relay/Dockerfile) live.
+
+The Fly deployment details for this relay are documented in [`relay/docs/fly-io.md`](/Users/dylan-mac-mini/Documents/HermesMobile/relay/docs/fly-io.md).
+
 ## API surface
 
 - `GET /v1/health`
 - `GET /v1/version`
 - `POST /v1/device/register`
+- `POST /v1/pairing/redeem`
+- `POST /v1/hosts/enrollment-codes`
+- `GET /v1/hosts/current`
+- `POST /v1/hosts/current/revoke`
+- `POST /v1/hosts/redeem`
+- `GET /v1/hosts/ws` (WebSocket)
 - `GET /v1/session`
 - `POST /v1/auth/refresh`
+- `POST /v1/auth/revoke`
 - `POST /v1/push/register`
 - `GET /v1/conversations/current`
 - `POST /v1/messages`
@@ -36,9 +49,18 @@ uvicorn app.main:app --reload
 - `POST /internal/inbox/create`
 - `GET /internal/inbox/{id}/actions`
 
-## Wiring a Hermes agent for chat
+## Hermes execution modes
 
-The first chat integration uses the documented Hermes CLI single-query surface. Set:
+The relay now supports three Hermes execution modes:
+
+- `HERMES_ADAPTER=mock`
+  - local/demo behavior with deterministic mock replies
+- `HERMES_ADAPTER=cli`
+  - the relay shells out to Hermes locally, useful for same-machine development and smoke tests
+- `HERMES_ADAPTER=connector`
+  - production-oriented mode where the public relay queues jobs and a user-owned host connector invokes Hermes locally on that machine
+
+For local CLI mode, set:
 
 ```bash
 HERMES_ADAPTER=cli
@@ -47,6 +69,57 @@ HERMES_WORKDIR=/path/to/your/hermes/project
 HERMES_PROVIDER=
 HERMES_MODEL=
 HERMES_TOOLSETS=
+HERMES_SOURCE=tool
 ```
 
-The relay will replay the mobile conversation history into `hermes chat -q ...` and persist the returned assistant reply. This is the safest first live strategy because the official docs clearly document `hermes chat -q`, while session-resume composition with `-q` is not explicitly guaranteed.
+The relay now uses Hermes quiet mode for programmatic calls, parses the returned `session_id`, and stores that ID on the relay conversation. The first turn still uses relay-side history replay into `hermes chat -Q -q ...`; follow-up turns resume the same Hermes session when possible, and fall back to transcript replay if the local Hermes session is missing.
+
+For connector mode, set:
+
+```bash
+HERMES_ADAPTER=connector
+PUBLIC_BASE_URL=https://your.public.relay.example/v1
+HOST_ENROLLMENT_CODE_TTL_SECONDS=900
+CONNECTOR_SYNC_WAIT_SECONDS=25
+CONNECTOR_JOB_LEASE_SECONDS=180
+CONNECTOR_HEARTBEAT_TIMEOUT_SECONDS=30
+CONNECTOR_IDLE_POLL_INTERVAL_SECONDS=1.0
+```
+
+In connector mode the relay never shells out to Hermes directly. Instead, it persists chat jobs and waits for a connected `hermes-mobile-connector` host process to claim and execute them.
+
+## Generating a mobile setup code
+
+Hermes Mobile production pairing is self-hosted. The operator runs Hermes plus this relay, exposes `PUBLIC_BASE_URL` over HTTPS or a trusted tunnel/VPN, and then generates a single-use setup code locally:
+
+```bash
+cd /Users/dylan-mac-mini/Documents/HermesMobile/relay
+source .venv/bin/activate
+hermes-mobile-relay-admin create-setup-code
+```
+
+That command prints:
+- an opaque setup code that Hermes Mobile can paste manually
+- an ASCII QR code for scanning
+- the relay host and expiry time
+
+In `development`, `PUBLIC_BASE_URL=http://127.0.0.1:8000/v1` is still allowed for same-machine simulator testing. Outside development, pairing should use an externally reachable HTTPS `PUBLIC_BASE_URL`.
+
+## Connecting a Hermes host
+
+After the iPhone app is paired to the relay, the user can generate a short-lived host setup code from the Settings screen. On the machine where Hermes lives:
+
+```bash
+cd /Users/dylan-mac-mini/Documents/HermesMobile/connector
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .[dev]
+
+export HERMES_COMMAND=/absolute/path/to/hermes
+export HERMES_WORKDIR=/path/to/your/hermes/project
+
+hermes-mobile-connector enroll --code 'HC1:...'
+hermes-mobile-connector run
+```
+
+The connector keeps one outbound authenticated WebSocket connection to the relay, executes one Hermes job at a time, resumes Hermes sessions when possible, and sends replies back to the relay for delivery to the iOS app.

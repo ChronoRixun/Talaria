@@ -12,9 +12,13 @@ dependencies = [
   "httpx>=0.28.0,<1.0.0",
   "psycopg[binary]>=3.2.0,<4.0.0",
   "python-dotenv>=1.0.0,<2.0.0",
+  "qrcode>=8.2,<9.0",
   "sqlalchemy>=2.0.36,<3.0.0",
   "uvicorn[standard]>=0.32.0,<1.0.0",
 ]
+
+[project.scripts]
+hermes-mobile-relay-admin = "app.admin:main"
 
 [project.optional-dependencies]
 dev = [

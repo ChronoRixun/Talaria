@@ -1,5 +1,4 @@
 import Foundation
-import UIKit
 
 @MainActor
 @Observable
@@ -50,22 +49,25 @@ final class AppSessionStore {
         defer { isBootstrapping = false }
 
         let request = makeRegistrationRequest()
+        let accessTokenBeforeBootstrap = await currentAccessToken()
+        let needsRegistration =
+            forceRegistration
+            || !state.deviceRegistered
+            || state.deviceID == nil
+            || accessTokenBeforeBootstrap == nil
 
         do {
-            if forceRegistration || !state.deviceRegistered || state.deviceID == nil {
+            if needsRegistration {
                 let response = try await bootstrapService.registerDevice(request)
-                try await persist(tokens: response.tokens)
-                state = mergeInstallationID(into: response.state, from: request.installationID)
+                await applySessionState(response.state, tokens: response.tokens)
             }
 
-            let accessToken = await currentAccessToken()
-            var loadedState = try await bootstrapService.loadSession(accessToken: accessToken)
-            loadedState = mergeInstallationID(into: loadedState, from: request.installationID)
-            loadedState.syncStatus = .synced
-            loadedState.lastSyncAt = .now
-            loadedState.pushTokenRegistered = notificationService.isPushTokenRegistered
-            state = loadedState
+            try await loadAndApplySessionState(installationID: request.installationID)
         } catch {
+            if await attemptRefreshAndReload(installationID: request.installationID) {
+                return
+            }
+
             lastErrorMessage = error.localizedDescription
             state.connectionStatus = .error
             state.syncStatus = .error
@@ -82,8 +84,12 @@ final class AppSessionStore {
         await secureStore.retrieve(key: SecureKeys.accessToken)
     }
 
+    func currentRefreshToken() async -> String? {
+        await secureStore.retrieve(key: SecureKeys.refreshToken)
+    }
+
     func refreshAccessTokenIfNeeded() async {
-        guard let refreshToken = await secureStore.retrieve(key: SecureKeys.refreshToken) else { return }
+        guard let refreshToken = await currentRefreshToken() else { return }
 
         do {
             let tokens = try await bootstrapService.refreshAuth(refreshToken: refreshToken)
@@ -93,25 +99,73 @@ final class AppSessionStore {
         }
     }
 
+    func applyPairedSession(state: AppSessionState, tokens: AuthTokens) async {
+        lastErrorMessage = nil
+        await applySessionState(state, tokens: tokens)
+    }
+
+    func revokeCurrentSession() async {
+        do {
+            try await bootstrapService.revokeCurrentSession(accessToken: await currentAccessToken())
+        } catch {
+            lastErrorMessage = error.localizedDescription
+        }
+    }
+
+    func clearSession() async {
+        await secureStore.delete(key: SecureKeys.accessToken)
+        await secureStore.delete(key: SecureKeys.refreshToken)
+
+        let retainedInstallationID = state.installationID
+        let retainedEndpoint = state.backendEndpoint
+        lastErrorMessage = nil
+        isBootstrapping = false
+        state = AppSessionState(
+            installationID: retainedInstallationID,
+            backendEndpoint: retainedEndpoint
+        )
+        persistence.clearSessionState()
+    }
+
     private func persist(tokens: AuthTokens) async throws {
         await secureStore.store(key: SecureKeys.accessToken, value: tokens.accessToken)
         await secureStore.store(key: SecureKeys.refreshToken, value: tokens.refreshToken)
     }
 
     private func makeRegistrationRequest() -> DeviceRegistrationRequest {
-        let device = UIDevice.current
-        let bundle = Bundle.main
-
-        return DeviceRegistrationRequest(
+        DeviceRegistrationRequest.current(
             installationID: state.installationID,
-            deviceName: device.name,
-            appVersion: bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0.0",
-            buildNumber: bundle.object(forInfoDictionaryKey: kCFBundleVersionKey as String) as? String ?? "1",
-            bundleID: bundle.bundleIdentifier ?? "com.appfactory.HermesMobile",
-            deviceModel: device.model,
-            systemVersion: device.systemVersion,
             environment: environmentProvider()
         )
+    }
+
+    private func loadAndApplySessionState(installationID: UUID) async throws {
+        let accessToken = await currentAccessToken()
+        var loadedState = try await bootstrapService.loadSession(accessToken: accessToken)
+        loadedState = mergeInstallationID(into: loadedState, from: installationID)
+        loadedState.syncStatus = .synced
+        loadedState.lastSyncAt = .now
+        loadedState.pushTokenRegistered = notificationService.isPushTokenRegistered
+        state = loadedState
+    }
+
+    private func applySessionState(_ remoteState: AppSessionState, tokens: AuthTokens) async {
+        try? await persist(tokens: tokens)
+        state = mergeInstallationID(into: remoteState, from: state.installationID)
+    }
+
+    private func attemptRefreshAndReload(installationID: UUID) async -> Bool {
+        guard let refreshToken = await currentRefreshToken() else { return false }
+
+        do {
+            let tokens = try await bootstrapService.refreshAuth(refreshToken: refreshToken)
+            try await persist(tokens: tokens)
+            try await loadAndApplySessionState(installationID: installationID)
+            return true
+        } catch {
+            lastErrorMessage = error.localizedDescription
+            return false
+        }
     }
 
     private func mergeInstallationID(into state: AppSessionState, from installationID: UUID) -> AppSessionState {

@@ -80,6 +80,12 @@ final class LiveSessionBootstrapService: SessionBootstrapServiceProtocol {
         let expiresAt: Date
     }
 
+    private struct EmptyBody: Encodable {}
+
+    private struct RevokeResponse: Decodable {
+        let revoked: Bool
+    }
+
     private let apiClient: RelayAPIClient
 
     init(apiClient: RelayAPIClient) {
@@ -151,6 +157,14 @@ final class LiveSessionBootstrapService: SessionBootstrapServiceProtocol {
             accessToken: response.accessToken,
             refreshToken: response.refreshToken,
             expiresAt: response.expiresAt
+        )
+    }
+
+    func revokeCurrentSession(accessToken: String?) async throws {
+        let _: RevokeResponse = try await apiClient.post(
+            path: "auth/revoke",
+            body: EmptyBody(),
+            accessToken: accessToken
         )
     }
 }

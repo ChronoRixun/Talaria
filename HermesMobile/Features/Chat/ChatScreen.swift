@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ChatScreen: View {
     @Environment(ChatStore.self) private var chatStore
+    @Environment(HermesHostStore.self) private var hostStore
     @Environment(AppSessionStore.self) private var sessionStore
     @Environment(TabRouter.self) private var router
 
@@ -14,6 +15,9 @@ struct ChatScreen: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
+                if hostStore.isHostOnline == false {
+                    hostOfflineBanner
+                }
                 messageList
                 ChatInputBar(
                     text: $messageText,
@@ -26,8 +30,12 @@ struct ChatScreen: View {
         .toolbarTitleDisplayMode(.inline)
         .toolbar { toolbarContent }
         .task {
+            chatStore.setPollingEnabled(true)
+            await hostStore.refresh()
             await chatStore.loadConversationIfNeeded()
-            scrollToBottom()
+        }
+        .onDisappear {
+            chatStore.setPollingEnabled(false)
         }
         .onChange(of: chatStore.conversation?.messages.count ?? 0) {
             scrollToBottom()
@@ -52,6 +60,34 @@ struct ChatScreen: View {
         .defaultScrollAnchor(.bottom)
         .scrollDismissesKeyboard(.interactively)
         .redacted(reason: chatStore.isLoading ? .placeholder : [])
+    }
+
+    private var hostOfflineBanner: some View {
+        HStack(alignment: .center, spacing: Design.Spacing.sm) {
+            Image(systemName: "desktopcomputer.trianglebadge.exclamationmark")
+                .foregroundStyle(.orange)
+
+            VStack(alignment: .leading, spacing: Design.Spacing.xxxs) {
+                Text("Hermes host offline")
+                    .font(Design.Typography.callout)
+                Text("Messages will queue until your Hermes host reconnects.")
+                    .font(Design.Typography.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Button("Settings") {
+                router.selectedTab = .settings
+            }
+            .buttonStyle(.glass)
+            .font(Design.Typography.caption)
+        }
+        .padding(.horizontal, Design.Spacing.md)
+        .padding(.vertical, Design.Spacing.sm)
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: Design.CornerRadius.lg))
+        .padding(.horizontal, Design.Spacing.md)
+        .padding(.top, Design.Spacing.md)
     }
 
     // MARK: - Toolbar

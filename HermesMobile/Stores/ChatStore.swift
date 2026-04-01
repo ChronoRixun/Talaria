@@ -5,6 +5,8 @@ import Foundation
 final class ChatStore {
     var conversation: Conversation?
     var isLoading = false
+    private var isPollingEnabled = false
+    private var pollingTask: Task<Void, Never>?
 
     private let hermesClient: any HermesClientProtocol
 
@@ -21,12 +23,72 @@ final class ChatStore {
         isLoading = true
         defer { isLoading = false }
         conversation = await hermesClient.loadConversation()
+        restartPendingPollingIfNeeded()
     }
 
     func sendMessage(_ content: String) async {
         guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
 
-        let _ = await hermesClient.send(message: content)
+        let response = await hermesClient.send(message: content)
         conversation = hermesClient.currentConversation
+
+        if conversation == nil && response.status == .failed {
+            if conversation == nil {
+                conversation = Conversation(title: "Hermes")
+            }
+            conversation?.messages.append(response)
+            conversation?.lastActivity = response.timestamp
+        }
+
+        restartPendingPollingIfNeeded()
+    }
+
+    func setPollingEnabled(_ isEnabled: Bool) {
+        isPollingEnabled = isEnabled
+        if isEnabled {
+            restartPendingPollingIfNeeded()
+        } else {
+            pollingTask?.cancel()
+            pollingTask = nil
+        }
+    }
+
+    func reset() {
+        pollingTask?.cancel()
+        pollingTask = nil
+        isPollingEnabled = false
+        conversation = nil
+        isLoading = false
+    }
+
+    private var hasPendingMessages: Bool {
+        conversation?.messages.contains(where: { $0.sender == .user && $0.status == .sending }) == true
+    }
+
+    private func restartPendingPollingIfNeeded() {
+        guard isPollingEnabled, hasPendingMessages else {
+            pollingTask?.cancel()
+            pollingTask = nil
+            return
+        }
+
+        guard pollingTask == nil else { return }
+
+        pollingTask = Task { [weak self] in
+            guard let self else { return }
+
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled else { break }
+                self.conversation = await self.hermesClient.loadConversation()
+                if self.hasPendingMessages == false {
+                    break
+                }
+            }
+
+            if self.pollingTask?.isCancelled == false {
+                self.pollingTask = nil
+            }
+        }
     }
 }

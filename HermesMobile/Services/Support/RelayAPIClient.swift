@@ -1,5 +1,61 @@
 import Foundation
 
+enum RelayCoders {
+    private static func internetDateTimeStyle() -> Date.ISO8601FormatStyle {
+        Date.ISO8601FormatStyle(timeZone: .gmt)
+    }
+
+    private static func internetDateTimeFractionalStyle() -> Date.ISO8601FormatStyle {
+        Date.ISO8601FormatStyle(includingFractionalSeconds: true, timeZone: .gmt)
+    }
+
+    private static func normalizedRelayDateStrings(for value: String) -> [String] {
+        if value.hasSuffix("Z") || value.range(of: #"[+-]\d{2}:\d{2}$"#, options: .regularExpression) != nil {
+            return [value]
+        }
+
+        return ["\(value)Z"]
+    }
+
+    static func makeEncoder() -> JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }
+
+    static func makeDecoder() -> JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let value = try container.decode(String.self)
+
+            if let date = parseRelayDate(value) {
+                return date
+            }
+
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Unsupported relay date: \(value)"
+            )
+        }
+        return decoder
+    }
+
+    static func parseRelayDate(_ value: String) -> Date? {
+        for candidate in normalizedRelayDateStrings(for: value) {
+            if let date = try? internetDateTimeFractionalStyle().parse(candidate) {
+                return date
+            }
+
+            if let date = try? internetDateTimeStyle().parse(candidate) {
+                return date
+            }
+        }
+
+        return nil
+    }
+}
+
 @MainActor
 final class RelayAPIClient {
     private struct Envelope<T: Decodable>: Decodable {
@@ -14,6 +70,10 @@ final class RelayAPIClient {
         }
 
         let error: ErrorPayload
+    }
+
+    private struct FastAPIErrorEnvelope: Decodable {
+        let detail: String
     }
 
     enum ClientError: LocalizedError {
@@ -41,14 +101,8 @@ final class RelayAPIClient {
     ) {
         self.baseURLProvider = baseURLProvider
         self.session = session
-
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        self.encoder = encoder
-
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        self.decoder = decoder
+        self.encoder = RelayCoders.makeEncoder()
+        self.decoder = RelayCoders.makeDecoder()
     }
 
     func get<T: Decodable>(
@@ -111,6 +165,10 @@ final class RelayAPIClient {
         guard (200 ..< 300).contains(httpResponse.statusCode) else {
             if let errorEnvelope = try? decoder.decode(ErrorEnvelope.self, from: data) {
                 throw ClientError.requestFailed(errorEnvelope.error.message)
+            }
+
+            if let errorEnvelope = try? decoder.decode(FastAPIErrorEnvelope.self, from: data) {
+                throw ClientError.requestFailed(errorEnvelope.detail)
             }
 
             throw ClientError.requestFailed("Relay request failed with status \(httpResponse.statusCode).")

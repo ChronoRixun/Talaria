@@ -34,6 +34,7 @@ enum AppTab: String, CaseIterable, Identifiable {
 enum Route: Hashable {
     case permissions
     case capture
+    case connectHost
 }
 
 // MARK: - Sheet Destinations

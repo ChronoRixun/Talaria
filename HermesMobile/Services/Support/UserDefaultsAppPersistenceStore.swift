@@ -6,6 +6,7 @@ final class UserDefaultsAppPersistenceStore: AppPersistenceStoreProtocol {
         static let userSettings = "hermes.userSettings"
         static let sessionState = "hermes.sessionState"
         static let inboxState = "hermes.inboxState"
+        static let pairedRelayConfiguration = "hermes.pairedRelayConfiguration"
     }
 
     private let defaults: UserDefaults
@@ -40,12 +41,32 @@ final class UserDefaultsAppPersistenceStore: AppPersistenceStoreProtocol {
         save(state, key: Keys.sessionState)
     }
 
+    func clearSessionState() {
+        defaults.removeObject(forKey: Keys.sessionState)
+    }
+
     func loadInboxState() -> InboxLocalState {
         load(InboxLocalState.self, key: Keys.inboxState) ?? InboxLocalState()
     }
 
     func saveInboxState(_ state: InboxLocalState) {
         save(state, key: Keys.inboxState)
+    }
+
+    func clearInboxState() {
+        defaults.removeObject(forKey: Keys.inboxState)
+    }
+
+    func loadPairedRelayConfiguration() -> PairedRelayConfiguration? {
+        load(PairedRelayConfiguration.self, key: Keys.pairedRelayConfiguration)
+    }
+
+    func savePairedRelayConfiguration(_ configuration: PairedRelayConfiguration) {
+        save(configuration, key: Keys.pairedRelayConfiguration)
+    }
+
+    func clearPairedRelayConfiguration() {
+        defaults.removeObject(forKey: Keys.pairedRelayConfiguration)
     }
 
     private func load<T: Decodable>(_ type: T.Type, key: String) -> T? {

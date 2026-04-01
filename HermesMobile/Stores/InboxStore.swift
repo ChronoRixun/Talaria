@@ -10,6 +10,7 @@ final class InboxStore {
     private let inboxService: any InboxServiceProtocol
     private let persistence: any AppPersistenceStoreProtocol
     private let sessionStore: AppSessionStore
+    private let allowDemoFallback: Bool
     private var localState: InboxLocalState {
         didSet { persistence.saveInboxState(localState) }
     }
@@ -17,11 +18,13 @@ final class InboxStore {
     init(
         inboxService: any InboxServiceProtocol,
         persistence: any AppPersistenceStoreProtocol,
-        sessionStore: AppSessionStore
+        sessionStore: AppSessionStore,
+        allowDemoFallback: Bool = true
     ) {
         self.inboxService = inboxService
         self.persistence = persistence
         self.sessionStore = sessionStore
+        self.allowDemoFallback = allowDemoFallback
         self.localState = persistence.loadInboxState()
     }
 
@@ -42,7 +45,7 @@ final class InboxStore {
             items = applyLocalState(to: fetchedItems)
         } catch {
             lastErrorMessage = error.localizedDescription
-            items = applyLocalState(to: DemoData.sampleInboxItems)
+            items = allowDemoFallback ? applyLocalState(to: DemoData.sampleInboxItems) : []
         }
     }
 
@@ -112,5 +115,12 @@ final class InboxStore {
             }
             return adjustedItem
         }
+    }
+
+    func reset() {
+        items = []
+        lastErrorMessage = nil
+        localState = InboxLocalState()
+        persistence.clearInboxState()
     }
 }

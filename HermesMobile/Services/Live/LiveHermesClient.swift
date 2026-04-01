@@ -7,8 +7,10 @@ final class LiveHermesClient: HermesClientProtocol {
     }
 
     private struct MessageResponse: Decodable {
+        let replyState: String
         let conversation: RelayConversation
-        let message: RelayMessage
+        let userMessage: RelayMessage?
+        let message: RelayMessage?
     }
 
     private struct RelayConversation: Decodable {
@@ -23,6 +25,8 @@ final class LiveHermesClient: HermesClientProtocol {
         let role: MessageSender
         let text: String
         let timestamp: Date
+        let deliveryStatus: String?
+        let jobId: UUID?
     }
 
     private struct MessageCreateBody: Encodable {
@@ -35,13 +39,16 @@ final class LiveHermesClient: HermesClientProtocol {
 
     private let apiClient: RelayAPIClient
     private let accessTokenProvider: @MainActor () async -> String?
+    private let allowDemoFallback: Bool
 
     init(
         apiClient: RelayAPIClient,
-        accessTokenProvider: @escaping @MainActor () async -> String?
+        accessTokenProvider: @escaping @MainActor () async -> String?,
+        allowDemoFallback: Bool = true
     ) {
         self.apiClient = apiClient
         self.accessTokenProvider = accessTokenProvider
+        self.allowDemoFallback = allowDemoFallback
     }
 
     func connect() async {
@@ -76,7 +83,13 @@ final class LiveHermesClient: HermesClientProtocol {
             )
             currentConversation = mapConversation(response.conversation)
             connectionStatus = .connected
-            return mapMessage(response.message)
+            if let message = response.message {
+                return mapMessage(message)
+            }
+            if let userMessage = response.userMessage {
+                return mapMessage(userMessage)
+            }
+            return Message(sender: .system, content: "Hermes did not return a message.", status: .failed)
         } catch {
             connectionStatus = .error
             return Message(sender: .system, content: "Hermes relay is unavailable right now.", status: .failed)
@@ -96,8 +109,16 @@ final class LiveHermesClient: HermesClientProtocol {
             return conversation
         } catch {
             connectionStatus = .error
-            return currentConversation ?? DemoData.sampleConversation
+            return currentConversation ?? fallbackConversation()
         }
+    }
+
+    private func fallbackConversation() -> Conversation {
+        if allowDemoFallback {
+            return DemoData.sampleConversation
+        }
+
+        return Conversation(title: "Hermes")
     }
 
     private func mapConversation(_ relayConversation: RelayConversation) -> Conversation {
@@ -115,7 +136,23 @@ final class LiveHermesClient: HermesClientProtocol {
             sender: relayMessage.role,
             content: relayMessage.text,
             timestamp: relayMessage.timestamp,
-            status: relayMessage.role == .user ? .sent : .delivered
+            jobID: relayMessage.jobId,
+            status: mapDeliveryStatus(relayMessage.deliveryStatus, sender: relayMessage.role)
         )
+    }
+
+    private func mapDeliveryStatus(_ deliveryStatus: String?, sender: MessageSender) -> MessageStatus {
+        switch deliveryStatus {
+        case "pending":
+            return .sending
+        case "sent":
+            return .sent
+        case "delivered":
+            return .delivered
+        case "failed":
+            return .failed
+        default:
+            return sender == .user ? .sent : .delivered
+        }
     }
 }

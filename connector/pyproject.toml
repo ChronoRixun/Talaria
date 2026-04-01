@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hermes-mobile-connector"
+version = "0.1.0"
+description = "Connector process that bridges a local Hermes CLI to Hermes Mobile relay."
+requires-python = ">=3.11"
+dependencies = [
+  "httpx>=0.28.0,<1.0.0",
+  "websockets>=15.0,<16.0",
+]
+
+[project.scripts]
+hermes-mobile-connector = "hermes_mobile_connector.cli:main"
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.0,<9.0.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["hermes_mobile_connector*"]

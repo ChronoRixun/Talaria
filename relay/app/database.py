@@ -3,7 +3,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from typing import Iterator
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 
@@ -27,6 +27,19 @@ class Database:
         from . import models  # noqa: F401
 
         Base.metadata.create_all(self.engine)
+        self._run_migrations()
+
+    def _run_migrations(self) -> None:
+        inspector = inspect(self.engine)
+
+        with self.engine.begin() as connection:
+            conversation_columns = {column["name"] for column in inspector.get_columns("conversations")}
+            if "hermes_session_id" not in conversation_columns:
+                connection.execute(text("ALTER TABLE conversations ADD COLUMN hermes_session_id TEXT"))
+
+            message_columns = {column["name"] for column in inspector.get_columns("messages")}
+            if "delivery_status" not in message_columns:
+                connection.execute(text("ALTER TABLE messages ADD COLUMN delivery_status TEXT"))
 
     @contextmanager
     def session(self) -> Iterator[Session]:
