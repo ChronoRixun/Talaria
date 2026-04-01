@@ -11,7 +11,7 @@ def _default_state_dir() -> Path:
     configured = os.getenv("HERMES_MOBILE_CONNECTOR_HOME")
     if configured:
         return Path(configured).expanduser()
-    return Path.home() / ".hermes-mobile-connector"
+    return Path.home() / ".hermes-mobile"
 
 
 @dataclass
@@ -40,7 +40,7 @@ class ConnectorStateStore:
     def load(self) -> ConnectorState:
         if not self.state_path.exists():
             raise RuntimeError(
-                "Connector is not set up yet. Run `hermes-mobile-connector setup` first "
+                "Connector is not set up yet. Run `hermes-mobile setup` first "
                 "or use the legacy `enroll --code ...` flow."
             )
         data = json.loads(self.state_path.read_text(encoding="utf-8"))
@@ -59,3 +59,9 @@ class ConnectorStateStore:
         except PermissionError:
             pass
         return state
+
+    def clear(self) -> None:
+        if self.state_path.exists():
+            self.state_path.unlink()
+        if self.state_dir.exists() and not any(self.state_dir.iterdir()):
+            self.state_dir.rmdir()

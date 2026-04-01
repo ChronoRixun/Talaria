@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [project.scripts]
-hermes-mobile-connector = "hermes_mobile_connector.cli:main"
+hermes-mobile = "hermes_mobile_connector.cli:main"
 
 [project.optional-dependencies]
 dev = [

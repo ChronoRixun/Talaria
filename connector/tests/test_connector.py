@@ -159,6 +159,23 @@ def test_status_lines_include_core_runtime_details(tmp_path):
     assert any("Host ID: host-123" == line for line in lines)
 
 
+def test_state_store_clear_removes_state(tmp_path):
+    store = ConnectorStateStore(state_dir=tmp_path / "connector-clear")
+    store.save(
+        ConnectorState(
+            relay_url="https://relay.example.com/v1",
+            web_socket_url="wss://relay.example.com/v1/hosts/ws",
+            user_id="user-123",
+            host_id="host-123",
+            connector_credential="secret",
+        )
+    )
+    assert store.state_path.exists()
+    store.clear()
+    assert not store.state_path.exists()
+    assert not store.state_dir.exists()
+
+
 def test_executor_detects_missing_session_and_extracts_session_id():
     executor = make_executor()
     parsed = executor._parse_cli_output(  # noqa: SLF001
