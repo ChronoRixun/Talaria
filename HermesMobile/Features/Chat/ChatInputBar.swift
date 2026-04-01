@@ -21,7 +21,7 @@ struct ChatInputBar: View {
         .padding(.vertical, Design.Spacing.xs)
         .glassEffect(.regular, in: Capsule())
         .padding(.horizontal, Design.Spacing.md)
-        .padding(.bottom, Design.Spacing.xs)
+        .padding(.bottom, Design.Spacing.md)
     }
 
     private var penButton: some View {

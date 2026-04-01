@@ -161,7 +161,6 @@ nonisolated enum DemoData {
         avatarInitials: "A",
         notificationsEnabled: true,
         hapticFeedbackEnabled: true,
-        analyticsEnabled: false,
         environment: AppEnvironmentPolicy.currentBuild.defaultEnvironment,
         autoConnectOnLaunch: true
     )

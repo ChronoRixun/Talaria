@@ -103,6 +103,10 @@ final class HermesMobileUITests: XCTestCase {
         completePairing(in: app, setupCode: context.setupCode)
 
         app.tabBars.buttons["Settings"].tap()
+        let manageButton = app.buttons["Manage Hermes Host"]
+        XCTAssertTrue(manageButton.waitForExistence(timeout: 5))
+        manageButton.tap()
+
         let disconnectButton = app.buttons["Disconnect Hermes"]
         XCTAssertTrue(disconnectButton.waitForExistence(timeout: 5))
         disconnectButton.tap()

@@ -42,7 +42,6 @@ struct MainTabView: View {
                 }
             }
         }
-        .tabBarMinimizeBehavior(.onScrollDown)
         .sheet(item: $router.activeSheet) { destination in
             sheetDestination(destination)
         }

@@ -14,7 +14,6 @@ struct SettingsScreen: View {
 
             ScrollView {
                 VStack(spacing: Design.Spacing.lg) {
-                    profileSection
                     connectionSection
                     if settingsStore.availableEnvironments.count > 1 {
                         environmentSection
@@ -31,31 +30,6 @@ struct SettingsScreen: View {
         .navigationTitle("Settings")
         .task {
             await hostStore.refresh()
-        }
-    }
-
-    // MARK: - Profile
-
-    private var profileSection: some View {
-        SettingsSectionView(title: "Profile") {
-            HStack(spacing: Design.Spacing.md) {
-                Text(settingsStore.settings.avatarInitials)
-                    .font(.system(size: Design.Size.iconMedium, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Design.Brand.accent)
-                    .frame(width: Design.Size.avatarMedium, height: Design.Size.avatarMedium)
-                    .clipShape(Circle())
-                    .glassEffect(.regular, in: Circle())
-
-                VStack(alignment: .leading, spacing: Design.Spacing.xxxs) {
-                    Text(settingsStore.settings.userName)
-                        .font(Design.Typography.headline)
-                    Text("Personal assistant profile")
-                        .font(Design.Typography.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-            }
         }
     }
 
@@ -90,45 +64,17 @@ struct SettingsScreen: View {
                         )
                     }
 
-                    if settingsStore.availableEnvironments.count > 1 {
-                        Button {
-                            router.navigate(to: .connectHost, in: .settings)
-                        } label: {
-                            HStack {
-                                Label(hostStore.currentHost == nil ? "Connect Hermes Host" : "Manage Hermes Host", systemImage: "desktopcomputer.and.arrow.down")
-                                    .font(Design.Typography.callout)
-                                    .foregroundStyle(.primary)
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(Design.Typography.caption)
-                                    .foregroundStyle(.tertiary)
-                            }
-                            .frame(minHeight: Design.Size.minTapTarget)
-                        }
-                    }
-
-                    if hostStore.currentHost != nil {
-                        Button(role: .destructive) {
-                            Task { await hostStore.revokeCurrentHost() }
-                        } label: {
-                            HStack {
-                                Label("Revoke Current Host", systemImage: "desktopcomputer.trianglebadge.exclamationmark")
-                                    .font(Design.Typography.callout)
-                                    .foregroundStyle(.red)
-                                Spacer()
-                            }
-                            .frame(minHeight: Design.Size.minTapTarget)
-                        }
-                    }
-
                     Button {
-                        Task { await pairingStore.disconnect() }
+                        router.navigate(to: .connectHost, in: .settings)
                     } label: {
                         HStack {
-                            Label("Disconnect Hermes", systemImage: "rectangle.portrait.and.arrow.right")
+                            Label("Manage Hermes Host", systemImage: "desktopcomputer.and.arrow.down")
                                 .font(Design.Typography.callout)
-                                .foregroundStyle(.red)
+                                .foregroundStyle(.primary)
                             Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(Design.Typography.caption)
+                                .foregroundStyle(.tertiary)
                         }
                         .frame(minHeight: Design.Size.minTapTarget)
                     }
@@ -200,16 +146,8 @@ struct SettingsScreen: View {
     // MARK: - Privacy
 
     private var privacySection: some View {
-        @Bindable var settingsStore = settingsStore
-
-        return SettingsSectionView(title: "Privacy") {
+        SettingsSectionView(title: "Privacy") {
             VStack(spacing: Design.Spacing.sm) {
-                Toggle(isOn: $settingsStore.settings.analyticsEnabled) {
-                    Label("Usage Analytics", systemImage: "chart.bar.fill")
-                        .font(Design.Typography.callout)
-                }
-                .tint(Design.Brand.accent)
-
                 Button {
                     router.navigate(to: .permissions)
                 } label: {

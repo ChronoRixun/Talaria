@@ -202,11 +202,9 @@ struct AppStoresTests {
         let settingsStore = SettingsStore(persistence: persistence)
 
         settingsStore.settings.environment = .staging
-        settingsStore.settings.analyticsEnabled = true
 
         let reloaded = persistence.loadUserSettings()
         #expect(reloaded?.environment == .staging)
-        #expect(reloaded?.analyticsEnabled == true)
     }
 
     @Test @MainActor
@@ -222,7 +220,6 @@ struct AppStoresTests {
                 avatarInitials: "A",
                 notificationsEnabled: true,
                 hapticFeedbackEnabled: true,
-                analyticsEnabled: false,
                 environment: .staging,
                 autoConnectOnLaunch: true
             )

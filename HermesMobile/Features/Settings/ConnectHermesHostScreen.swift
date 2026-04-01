@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ConnectHermesHostScreen: View {
     @Environment(HermesHostStore.self) private var hostStore
+    @Environment(PairingStore.self) private var pairingStore
 
     var body: some View {
         ZStack {
@@ -13,6 +14,7 @@ struct ConnectHermesHostScreen: View {
                     heroSection
                     statusSection
                     setupCodeSection
+                    dangerZoneSection
 
                     if let errorMessage = hostStore.lastErrorMessage {
                         errorCard(message: errorMessage)
@@ -59,16 +61,6 @@ struct ConnectHermesHostScreen: View {
                     .foregroundStyle(.secondary)
             }
 
-            if hostStore.currentHost != nil {
-                Button(role: .destructive) {
-                    Task { await hostStore.revokeCurrentHost() }
-                } label: {
-                    Label("Revoke Current Host", systemImage: "xmark.circle")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.glass)
-                .disabled(hostStore.isWorking)
-            }
         }
         .padding(Design.Spacing.lg)
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: Design.CornerRadius.xl))
@@ -121,6 +113,39 @@ struct ConnectHermesHostScreen: View {
                     }
                 }
                 .buttonStyle(.glassProminent)
+            }
+        }
+        .padding(Design.Spacing.lg)
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: Design.CornerRadius.xl))
+    }
+
+    private var dangerZoneSection: some View {
+        VStack(alignment: .leading, spacing: Design.Spacing.sm) {
+            if hostStore.currentHost != nil {
+                Button(role: .destructive) {
+                    Task { await hostStore.revokeCurrentHost() }
+                } label: {
+                    HStack {
+                        Label("Revoke Current Host", systemImage: "desktopcomputer.trianglebadge.exclamationmark")
+                            .font(Design.Typography.callout)
+                            .foregroundStyle(.red)
+                        Spacer()
+                    }
+                    .frame(minHeight: Design.Size.minTapTarget)
+                }
+                .disabled(hostStore.isWorking)
+            }
+
+            Button {
+                Task { await pairingStore.disconnect() }
+            } label: {
+                HStack {
+                    Label("Disconnect Hermes", systemImage: "rectangle.portrait.and.arrow.right")
+                        .font(Design.Typography.callout)
+                        .foregroundStyle(.red)
+                    Spacer()
+                }
+                .frame(minHeight: Design.Size.minTapTarget)
             }
         }
         .padding(Design.Spacing.lg)

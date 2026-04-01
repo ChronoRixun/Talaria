@@ -33,7 +33,6 @@ struct UserSettings: Codable, Hashable, Sendable {
     var avatarInitials: String
     var notificationsEnabled: Bool
     var hapticFeedbackEnabled: Bool
-    var analyticsEnabled: Bool
     var environment: AppEnvironment
     var autoConnectOnLaunch: Bool
 
@@ -42,7 +41,6 @@ struct UserSettings: Codable, Hashable, Sendable {
         avatarInitials: String = "U",
         notificationsEnabled: Bool = true,
         hapticFeedbackEnabled: Bool = true,
-        analyticsEnabled: Bool = false,
         environment: AppEnvironment = AppEnvironmentPolicy.currentBuild.defaultEnvironment,
         autoConnectOnLaunch: Bool = true
     ) {
@@ -50,7 +48,6 @@ struct UserSettings: Codable, Hashable, Sendable {
         self.avatarInitials = avatarInitials
         self.notificationsEnabled = notificationsEnabled
         self.hapticFeedbackEnabled = hapticFeedbackEnabled
-        self.analyticsEnabled = analyticsEnabled
         self.environment = environment
         self.autoConnectOnLaunch = autoConnectOnLaunch
     }

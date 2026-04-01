@@ -53,7 +53,7 @@ final class AppContainer {
         )
         let settingsStore = SettingsStore(persistence: persistence)
         let syncCoordinator = MockSyncCoordinator()
-        let notificationService = MockNotificationService()
+        let notificationService = LiveNotificationService()
         let allowMockFallbacks = AppEnvironmentPolicy.currentBuild.allowsEnvironmentOverrides
         let usesMockPairingService = processEnvironment["UITEST_PAIRING_MODE"] == "mock"
         let pairingService: any PairingServiceProtocol
@@ -133,8 +133,8 @@ final class AppContainer {
                 allowDemoFallback: allowMockFallbacks
             ),
             permissionsStore: PermissionsStore(
-                locationService: MockLocationService(),
-                healthService: MockHealthService(),
+                locationService: LiveLocationService(),
+                healthService: LiveHealthService(),
                 notificationService: notificationService,
                 mediaService: MockMediaService()
             ),
@@ -181,6 +181,12 @@ final class AppContainer {
         chatStore.reset()
         inboxStore.reset()
         await initialize()
+
+        // Request push notification permission at a meaningful moment (post-pairing)
+        let notificationCapability = permissionsStore.capabilities.first { $0.permissionType == .notifications }
+        if notificationCapability?.status == .notDetermined {
+            await permissionsStore.requestPermission(for: .notifications)
+        }
     }
 
     private func handlePairingRemoved() async {

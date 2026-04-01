@@ -101,13 +101,6 @@ struct ChatScreen: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .topBarLeading) {
-            GlassCircleButton(icon: "line.3.horizontal") {
-                router.activeSheet = .conversationList
-            }
-            .accessibilityLabel("Conversations")
-        }
-
         ToolbarItem(placement: .principal) {
             StatusIndicator(status: hostStore.isHostOnline ? .connected : .disconnected)
         }
