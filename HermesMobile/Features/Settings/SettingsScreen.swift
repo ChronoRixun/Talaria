@@ -69,53 +69,11 @@ struct SettingsScreen: View {
                 settingsRow(
                     icon: sessionStore.state.connectionStatus.displayIcon,
                     iconColor: sessionStore.state.connectionStatus.displayColor,
-                    title: "Hermes Server",
+                    title: "Status",
                     subtitle: sessionStore.state.connectionStatus.displayLabel
                 )
 
-                settingsRow(
-                    icon: sessionStore.state.syncStatus.displayIcon,
-                    iconColor: sessionStore.state.syncStatus.displayColor,
-                    title: "Sync Status",
-                    subtitle: sessionStore.state.syncStatus.displayLabel
-                )
-
-                settingsRow(
-                    icon: sessionStore.state.deviceRegistered ? "iphone.gen3" : "iphone.slash",
-                    iconColor: sessionStore.state.deviceRegistered ? .green : .secondary,
-                    title: "Device Registration",
-                    subtitle: sessionStore.state.deviceRegistered ? "Registered" : "Pending"
-                )
-
-                settingsRow(
-                    icon: sessionStore.state.pushTokenRegistered ? "bell.badge.fill" : "bell.slash",
-                    iconColor: sessionStore.state.pushTokenRegistered ? .green : .secondary,
-                    title: "Push Registration",
-                    subtitle: sessionStore.state.pushTokenRegistered ? "Registered" : "Not Registered"
-                )
-
-                settingsRow(
-                    icon: "clock.arrow.circlepath",
-                    iconColor: .secondary,
-                    title: "Last Sync",
-                    subtitle: sessionStore.state.lastSyncAt?.formatted(date: .abbreviated, time: .shortened) ?? "Never"
-                )
-
-                if let pairedRelay = pairingStore.pairedRelayConfiguration {
-                    settingsRow(
-                        icon: "server.rack",
-                        iconColor: .secondary,
-                        title: "Relay Host",
-                        subtitle: pairedRelay.hostDisplayName
-                    )
-
-                    settingsRow(
-                        icon: "person.crop.circle",
-                        iconColor: .secondary,
-                        title: "Connected Account",
-                        subtitle: sessionStore.state.displayName ?? "Unknown"
-                    )
-
+                if pairingStore.pairedRelayConfiguration != nil {
                     settingsRow(
                         icon: hostStore.isHostOnline ? "desktopcomputer" : "desktopcomputer.trianglebadge.exclamationmark",
                         iconColor: hostStore.isHostOnline ? .green : .orange,
@@ -127,7 +85,7 @@ struct SettingsScreen: View {
                         settingsRow(
                             icon: "clock.arrow.circlepath",
                             iconColor: .secondary,
-                            title: "Host Last Seen",
+                            title: "Last Seen",
                             subtitle: host.lastSeenAt?.formatted(date: .abbreviated, time: .shortened) ?? "Unknown"
                         )
                     }
@@ -213,12 +171,6 @@ struct SettingsScreen: View {
                     }
                 }
 
-                settingsRow(
-                    icon: "server.rack",
-                    iconColor: .secondary,
-                    title: "Backend Endpoint",
-                    subtitle: sessionStore.state.backendEndpoint
-                )
             }
         }
     }
