@@ -34,8 +34,11 @@ struct HermesMobileApp: App {
                 .environment(container.talkStore)
                 .task { await container.initialize() }
                 .onChange(of: scenePhase) { _, newPhase in
-                    guard newPhase == .active else { return }
-                    Task { await container.handleAppDidBecomeActive() }
+                    if newPhase == .active {
+                        Task { await container.handleAppDidBecomeActive() }
+                    } else if newPhase == .background || newPhase == .inactive {
+                        Task { await container.talkStore.endSessionIfNeeded() }
+                    }
                 }
         }
     }

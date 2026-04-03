@@ -4,6 +4,44 @@ import Testing
 
 struct AppStoresTests {
 
+    private final class StubURLProtocol: URLProtocol, @unchecked Sendable {
+        nonisolated(unsafe) static var requestHandler: (@Sendable (URLRequest) throws -> (HTTPURLResponse, Data))?
+
+        override class func canInit(with request: URLRequest) -> Bool {
+            true
+        }
+
+        override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+            request
+        }
+
+        override func startLoading() {
+            guard let handler = Self.requestHandler else {
+                client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+                return
+            }
+
+            do {
+                let (response, data) = try handler(request)
+                client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+                client?.urlProtocol(self, didLoad: data)
+                client?.urlProtocolDidFinishLoading(self)
+            } catch {
+                client?.urlProtocol(self, didFailWithError: error)
+            }
+        }
+
+        override func stopLoading() {}
+    }
+
+    private final class MutableBox<T>: @unchecked Sendable {
+        var value: T
+
+        init(_ value: T) {
+            self.value = value
+        }
+    }
+
     private struct TimestampPayload: Decodable {
         let timestamp: Date
     }
@@ -149,6 +187,66 @@ struct AppStoresTests {
         }
     }
 
+    @MainActor
+    private final class RecordingVoiceSessionService: VoiceSessionServiceProtocol {
+        var voiceState: VoiceState = .idle { didSet { publishSnapshot() } }
+        var connectionState: TalkConnectionState = .idle { didSet { publishSnapshot() } }
+        var transcriptItems: [TranscriptItem] = [] { didSet { publishSnapshot() } }
+        var sessionDuration: TimeInterval = 0 { didSet { publishSnapshot() } }
+        var isMuted = false { didSet { publishSnapshot() } }
+        var blockedReason: String? { didSet { publishSnapshot() } }
+        var statusMessage: String? { didSet { publishSnapshot() } }
+        var canStartSession = false { didSet { publishSnapshot() } }
+        var latencyMetrics = TalkLatencyMetrics() { didSet { publishSnapshot() } }
+
+        var snapshot: TalkSessionSnapshot {
+            TalkSessionSnapshot(
+                voiceState: voiceState,
+                connectionState: connectionState,
+                transcriptItems: transcriptItems,
+                sessionDuration: sessionDuration,
+                isMuted: isMuted,
+                blockedReason: blockedReason,
+                statusMessage: statusMessage,
+                canStartSession: canStartSession,
+                latencyMetrics: latencyMetrics
+            )
+        }
+
+        private let eventHub = TalkSessionEventHub()
+
+        func events() -> AsyncStream<TalkSessionEvent> {
+            eventHub.stream(initial: snapshot)
+        }
+
+        func refreshReadiness() async {
+            voiceState = .disconnected
+            connectionState = .blocked
+            blockedReason = "OpenAI Realtime is not configured on this Hermes host."
+            statusMessage = blockedReason
+            canStartSession = false
+        }
+
+        func startSession() async {}
+
+        func endSession() async {
+            voiceState = .idle
+            connectionState = .idle
+        }
+
+        func toggleMute() async {
+            isMuted.toggle()
+        }
+
+        func emitAssistantTurn(_ text: String) {
+            transcriptItems.append(TranscriptItem(speaker: .hermes, text: text, isPartial: false))
+        }
+
+        private func publishSnapshot() {
+            eventHub.publish(snapshot: snapshot)
+        }
+    }
+
     @Test @MainActor
     func sessionBootstrapPersistsStateAndTokens() async throws {
         let suiteName = "session-bootstrap-\(UUID().uuidString)"
@@ -266,6 +364,100 @@ struct AppStoresTests {
 
         #expect(hermesClient.sendCallCount == 1)
         #expect(chatStore.conversation?.messages.count == 1)
+    }
+
+    @Test @MainActor
+    func talkStoreReflectsBlockedReadinessState() async throws {
+        let voiceService = RecordingVoiceSessionService()
+        let talkStore = TalkStore(voiceService: voiceService)
+
+        await talkStore.refreshReadiness()
+
+        #expect(talkStore.connectionState == .blocked)
+        #expect(talkStore.voiceState == .disconnected)
+        #expect(talkStore.canStartSession == false)
+        #expect(talkStore.blockedReason == "OpenAI Realtime is not configured on this Hermes host.")
+    }
+
+    @Test @MainActor
+    func talkStoreUpdatesFromVoiceEventStream() async throws {
+        let voiceService = RecordingVoiceSessionService()
+        let talkStore = TalkStore(voiceService: voiceService)
+
+        try? await Task.sleep(for: .milliseconds(25))
+        voiceService.emitAssistantTurn("Event-driven reply")
+        try? await Task.sleep(for: .milliseconds(25))
+
+        #expect(talkStore.transcriptItems.count == 1)
+        #expect(talkStore.transcriptItems.first?.text == "Event-driven reply")
+    }
+
+    @Test @MainActor
+    func liveVoiceSessionServiceRefreshesExpiredAccessTokenDuringReadiness() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StubURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+
+        let accessToken = MutableBox("expired-token")
+        let refreshCallCount = MutableBox(0)
+        let requestCount = MutableBox(0)
+
+        StubURLProtocol.requestHandler = { request in
+            requestCount.value += 1
+            let url = try #require(request.url)
+            #expect(url.absoluteString == "https://relay.example.com/v1/talk/readiness")
+
+            let authHeader = request.value(forHTTPHeaderField: "Authorization")
+            if authHeader == "Bearer expired-token" {
+                let response = HTTPURLResponse(url: url, statusCode: 401, httpVersion: nil, headerFields: nil)!
+                let data = #"{"error":{"code":"unauthorized","message":"expired or invalid access token","retryable":false}}"#.data(using: .utf8)!
+                return (response, data)
+            }
+
+            #expect(authHeader == "Bearer refreshed-token")
+            let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let data = #"""
+            {"data":{
+              "ready":true,
+              "hostOnline":true,
+              "configured":true,
+              "blockedReason":null,
+              "preferredModels":["gpt-realtime-1.5"],
+              "selectedModel":"gpt-realtime-1.5",
+              "voice":"verse",
+              "voiceContextUpdatedAt":"2026-04-01T20:40:47.636600Z"
+            }}
+            """#.data(using: .utf8)!
+            return (response, data)
+        }
+
+        defer {
+            StubURLProtocol.requestHandler = nil
+        }
+
+        let apiClient = RelayAPIClient(
+            baseURLProvider: { "https://relay.example.com/v1" },
+            session: session
+        )
+        let voiceService = LiveVoiceSessionService(
+            apiClient: apiClient,
+            accessTokenProvider: { accessToken.value },
+            accessTokenRefresher: {
+                refreshCallCount.value += 1
+                accessToken.value = "refreshed-token"
+                return accessToken.value
+            },
+            urlSession: session
+        )
+
+        await voiceService.refreshReadiness()
+
+        #expect(refreshCallCount.value == 1)
+        #expect(requestCount.value == 2)
+        #expect(voiceService.canStartSession)
+        #expect(voiceService.connectionState == .ready)
+        #expect(voiceService.statusMessage == "Hermes talk is ready.")
+        #expect(voiceService.blockedReason == nil)
     }
 
     @Test @MainActor

@@ -25,6 +25,8 @@ from .models import (
     PhonePairingCode,
     PushRegistration,
     User,
+    VoiceSession,
+    VoiceTurn,
     utcnow,
 )
 from .pairing import generate_phone_pairing_code, normalize_phone_pairing_code
@@ -527,6 +529,146 @@ def deactivate_hermes_host_connection(db: Session, *, host_id: str, connection_n
     db.commit()
     db.refresh(host)
     return host
+
+
+def create_voice_session(
+    db: Session,
+    *,
+    user_id: str,
+    host_id: str,
+) -> tuple[VoiceSession, str]:
+    active_sessions = db.scalars(
+        select(VoiceSession).where(
+            VoiceSession.user_id == user_id,
+            VoiceSession.status == "active",
+            VoiceSession.ended_at.is_(None),
+        )
+    ).all()
+    for existing in active_sessions:
+        existing.status = "ended"
+        existing.ended_at = utcnow()
+        existing.relay_tool_token_hash = None
+
+    relay_tool_token = generate_token()
+    voice_session = VoiceSession(
+        user_id=user_id,
+        host_id=host_id,
+        relay_tool_token_hash=hash_token(relay_tool_token),
+    )
+    db.add(voice_session)
+    db.commit()
+    db.refresh(voice_session)
+    return voice_session, relay_tool_token
+
+
+def get_voice_session(db: Session, *, voice_session_id: str) -> VoiceSession | None:
+    return db.get(VoiceSession, voice_session_id)
+
+
+def get_voice_session_for_tool_token(db: Session, *, relay_tool_token: str) -> VoiceSession | None:
+    voice_session = db.scalar(
+        select(VoiceSession).where(
+            VoiceSession.relay_tool_token_hash == hash_token(relay_tool_token),
+            VoiceSession.status == "active",
+            VoiceSession.ended_at.is_(None),
+        )
+    )
+    return voice_session
+
+
+def mark_voice_session_started(
+    db: Session,
+    *,
+    voice_session_id: str,
+    realtime_session_id: str | None,
+    realtime_model: str | None,
+    realtime_voice: str | None,
+) -> VoiceSession | None:
+    voice_session = db.get(VoiceSession, voice_session_id)
+    if voice_session is None:
+        return None
+    voice_session.realtime_session_id = realtime_session_id
+    voice_session.realtime_model = realtime_model
+    voice_session.realtime_voice = realtime_voice
+    db.commit()
+    db.refresh(voice_session)
+    return voice_session
+
+
+def end_voice_session(
+    db: Session,
+    *,
+    voice_session_id: str,
+    last_error: str | None = None,
+) -> VoiceSession | None:
+    voice_session = db.get(VoiceSession, voice_session_id)
+    if voice_session is None:
+        return None
+    if voice_session.status != "ended":
+        voice_session.status = "ended"
+        voice_session.ended_at = voice_session.ended_at or utcnow()
+        voice_session.relay_tool_token_hash = None
+    if last_error and not voice_session.last_error:
+        voice_session.last_error = last_error
+    db.commit()
+    db.refresh(voice_session)
+    return voice_session
+
+
+def serialize_voice_session(voice_session: VoiceSession) -> dict:
+    return {
+        "id": voice_session.id,
+        "status": voice_session.status,
+        "model": voice_session.realtime_model,
+        "voice": voice_session.realtime_voice,
+        "startedAt": voice_session.started_at,
+        "endedAt": voice_session.ended_at,
+        "lastError": voice_session.last_error,
+    }
+
+
+def record_voice_turn(
+    db: Session,
+    *,
+    voice_session_id: str,
+    role: str,
+    source: str,
+    text: str,
+    client_turn_id: str | None = None,
+) -> VoiceTurn:
+    if client_turn_id:
+        existing = db.scalar(
+            select(VoiceTurn).where(
+                VoiceTurn.voice_session_id == voice_session_id,
+                VoiceTurn.client_turn_id == client_turn_id,
+            )
+        )
+        if existing is not None:
+            return existing
+
+    turn = VoiceTurn(
+        voice_session_id=voice_session_id,
+        client_turn_id=client_turn_id,
+        role=role,
+        source=source,
+        text=text,
+    )
+    db.add(turn)
+    db.commit()
+    db.refresh(turn)
+    return turn
+
+
+def serialize_voice_turn(turn: VoiceTurn) -> dict:
+    return {
+        "id": turn.id,
+        "voiceSessionId": turn.voice_session_id,
+        "clientTurnId": turn.client_turn_id,
+        "role": turn.role,
+        "source": turn.source,
+        "text": turn.text,
+        "createdAt": turn.created_at,
+    }
 
 
 def hermes_host_is_online(db: Session, *, host: HermesHost | None, settings: Settings) -> bool:

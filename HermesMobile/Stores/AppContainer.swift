@@ -141,6 +141,18 @@ final class AppContainer {
             locationService: liveLocationService,
             healthService: liveHealthService
         )
+        let voiceService: any VoiceSessionServiceProtocol = if usesMockPairingService {
+            MockVoiceSessionService()
+        } else {
+            LiveVoiceSessionService(
+                apiClient: apiClient,
+                accessTokenProvider: { await sessionStore.currentAccessToken() },
+                accessTokenRefresher: {
+                    await sessionStore.refreshAccessTokenIfNeeded()
+                    return await sessionStore.currentAccessToken()
+                }
+            )
+        }
 
         let container = AppContainer(
             sessionStore: sessionStore,
@@ -160,7 +172,7 @@ final class AppContainer {
                 mediaService: MockMediaService()
             ),
             settingsStore: settingsStore,
-            talkStore: TalkStore(voiceService: MockVoiceSessionService()),
+            talkStore: TalkStore(voiceService: voiceService),
             sensorUploadService: sensorUploadService
         )
 
@@ -206,6 +218,7 @@ final class AppContainer {
 
         await hostStore.refresh()
         await sensorUploadService?.handleAppDidBecomeActive()
+        await talkStore.refreshReadiness()
     }
 
     func handleSystemLaunch() async {
@@ -214,6 +227,7 @@ final class AppContainer {
 
         sensorUploadService?.start()
         await sensorUploadService?.handleSystemLaunch()
+        await talkStore.refreshReadiness()
     }
 
     private func handlePairingActivated() async {
@@ -230,10 +244,13 @@ final class AppContainer {
 
         // Start sensor data pipeline
         sensorUploadService?.start()
+        await talkStore.refreshReadiness()
     }
 
     private func handlePairingRemoved() async {
         isInitialized = false
+        await talkStore.endSessionIfNeeded()
+        talkStore.reset()
         sensorUploadService?.stop()
         sensorUploadService?.resetOutbox()
         router.selectedTab = .chat

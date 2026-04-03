@@ -37,3 +37,97 @@ enum VoiceState: String, Codable, Hashable, Sendable, CaseIterable {
         }
     }
 }
+
+enum TalkConnectionState: String, Codable, Hashable, Sendable {
+    case idle
+    case checking
+    case ready
+    case connecting
+    case connected
+    case blocked
+    case failed
+
+    var displayLabel: String {
+        switch self {
+        case .idle: "Idle"
+        case .checking: "Checking"
+        case .ready: "Ready"
+        case .connecting: "Connecting"
+        case .connected: "Connected"
+        case .blocked: "Unavailable"
+        case .failed: "Failed"
+        }
+    }
+}
+
+enum TranscriptSpeaker: String, Codable, Hashable, Sendable {
+    case user
+    case hermes
+    case system
+
+    var displayLabel: String {
+        switch self {
+        case .user: "You"
+        case .hermes: "Hermes"
+        case .system: "System"
+        }
+    }
+}
+
+struct TranscriptItem: Identifiable, Codable, Hashable, Sendable {
+    let id: UUID
+    var speaker: TranscriptSpeaker
+    var text: String
+    var isPartial: Bool
+
+    init(
+        id: UUID = UUID(),
+        speaker: TranscriptSpeaker,
+        text: String,
+        isPartial: Bool = false
+    ) {
+        self.id = id
+        self.speaker = speaker
+        self.text = text
+        self.isPartial = isPartial
+    }
+}
+
+struct TalkLatencyMetrics: Codable, Hashable, Sendable {
+    var sessionStartRequestedAt: Date? = nil
+    var relayBootstrapReceivedAt: Date? = nil
+    var realtimeConnectedAt: Date? = nil
+    var firstUserFinalizedAt: Date? = nil
+    var firstAssistantFinalizedAt: Date? = nil
+
+    var bootstrapLatency: TimeInterval? {
+        guard let sessionStartRequestedAt, let relayBootstrapReceivedAt else { return nil }
+        return relayBootstrapReceivedAt.timeIntervalSince(sessionStartRequestedAt)
+    }
+
+    var connectLatency: TimeInterval? {
+        guard let sessionStartRequestedAt, let realtimeConnectedAt else { return nil }
+        return realtimeConnectedAt.timeIntervalSince(sessionStartRequestedAt)
+    }
+
+    var firstAssistantLatency: TimeInterval? {
+        guard let sessionStartRequestedAt, let firstAssistantFinalizedAt else { return nil }
+        return firstAssistantFinalizedAt.timeIntervalSince(sessionStartRequestedAt)
+    }
+}
+
+struct TalkSessionSnapshot: Hashable, Sendable {
+    var voiceState: VoiceState
+    var connectionState: TalkConnectionState
+    var transcriptItems: [TranscriptItem]
+    var sessionDuration: TimeInterval
+    var isMuted: Bool
+    var blockedReason: String?
+    var statusMessage: String?
+    var canStartSession: Bool
+    var latencyMetrics: TalkLatencyMetrics
+}
+
+enum TalkSessionEvent: Hashable, Sendable {
+    case snapshot(TalkSessionSnapshot)
+}

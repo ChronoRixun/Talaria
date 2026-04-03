@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import uuid
 from threading import Thread
 
 from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
+from app.models import VoiceTurn
+from app.services import record_voice_turn
 
 
 def build_client(tmp_path):
@@ -257,6 +260,413 @@ def test_connected_host_gets_job_and_preserves_session_resume(tmp_path):
             assert second_response["payload"].status_code == 200
             messages = second_response["payload"].json()["data"]["conversation"]["messages"]
             assert messages[-1]["text"] == "Second connector reply"
+
+
+def test_talk_readiness_reflects_connector_configuration(tmp_path):
+    with build_client(tmp_path) as client:
+        connector_data = setup_connector(client)
+        pairing_code = create_phone_pairing_code(client, connector_data["connectorCredential"])
+        access_token = redeem_phone(
+            client,
+            pairing_code["displayCode"],
+            "31313131-4141-5151-6161-717171717171",
+        )["auth"]["accessToken"]
+
+        with client.websocket_connect(
+            "/v1/hosts/ws",
+            headers={"Authorization": f"Bearer {connector_data['connectorCredential']}"},
+        ) as websocket:
+            websocket.send_json(
+                {
+                    "type": "hello",
+                    "connector": {
+                        "platform": "macos",
+                        "hostname": "dylans-mac-mini",
+                        "connectorVersion": "0.1.0",
+                        "hermesCommand": "/Users/dylan/.local/bin/hermes",
+                        "hermesVersion": "hermes 1.2.3",
+                    },
+                }
+            )
+            assert websocket.receive_json()["type"] == "ready"
+
+            response: dict = {}
+
+            def fetch_readiness() -> None:
+                response["payload"] = client.get(
+                    "/v1/talk/readiness",
+                    headers={"Authorization": f"Bearer {access_token}"},
+                )
+
+            thread = Thread(target=fetch_readiness)
+            thread.start()
+            rpc = websocket.receive_json()
+            assert rpc["type"] == "rpc.request"
+            assert rpc["method"] == "talk.prewarm"
+
+            websocket.send_json(
+                {
+                    "type": "rpc.response",
+                    "requestId": rpc["requestId"],
+                    "success": True,
+                    "result": {
+                        "configured": False,
+                        "preferredModels": ["gpt-realtime-1.5", "gpt-realtime"],
+                        "selectedModel": None,
+                        "voice": "verse",
+                        "blockedReason": "OpenAI Realtime is not configured on this Hermes host.",
+                        "voiceContextUpdatedAt": "2026-04-01T12:00:00Z",
+                    },
+                }
+            )
+            thread.join(timeout=5)
+
+            assert response["payload"].status_code == 200
+            data = response["payload"].json()["data"]
+            assert data["ready"] is False
+            assert data["hostOnline"] is True
+            assert data["configured"] is False
+            assert data["blockedReason"] == "OpenAI Realtime is not configured on this Hermes host."
+            assert data["voice"] == "verse"
+
+
+def test_talk_session_create_and_end_roundtrip(tmp_path):
+    with build_client(tmp_path) as client:
+        connector_data = setup_connector(client)
+        pairing_code = create_phone_pairing_code(client, connector_data["connectorCredential"])
+        access_token = redeem_phone(
+            client,
+            pairing_code["displayCode"],
+            "81818181-9191-a1a1-b1b1-c1c1c1c1c1c1",
+        )["auth"]["accessToken"]
+
+        with client.websocket_connect(
+            "/v1/hosts/ws",
+            headers={"Authorization": f"Bearer {connector_data['connectorCredential']}"},
+        ) as websocket:
+            websocket.send_json(
+                {
+                    "type": "hello",
+                    "connector": {
+                        "platform": "macos",
+                        "hostname": "dylans-mac-mini",
+                        "connectorVersion": "0.1.0",
+                        "hermesCommand": "/Users/dylan/.local/bin/hermes",
+                        "hermesVersion": "hermes 1.2.3",
+                    },
+                }
+            )
+            assert websocket.receive_json()["type"] == "ready"
+
+            create_response: dict = {}
+
+            def create_session() -> None:
+                create_response["payload"] = client.post(
+                    "/v1/talk/session",
+                    headers={"Authorization": f"Bearer {access_token}"},
+                )
+
+            create_thread = Thread(target=create_session)
+            create_thread.start()
+            create_rpc = websocket.receive_json()
+            assert create_rpc["type"] == "rpc.request"
+            assert create_rpc["method"] == "talk.session.create"
+            assert create_rpc["params"]["relayMcpURL"].startswith("https://relay.example.test/v1/talk/mcp?token=")
+
+            websocket.send_json(
+                {
+                    "type": "rpc.response",
+                    "requestId": create_rpc["requestId"],
+                    "success": True,
+                    "result": {
+                        "clientSecret": "ephemeral-secret",
+                        "expiresAt": "2026-04-01T16:00:00Z",
+                        "session": {
+                            "id": "sess_123",
+                            "type": "realtime",
+                        },
+                        "model": "gpt-realtime-1.5",
+                        "voice": "verse",
+                        "voiceContextUpdatedAt": "2026-04-01T15:59:00Z",
+                    },
+                }
+            )
+            create_thread.join(timeout=5)
+
+            assert create_response["payload"].status_code == 200
+            create_data = create_response["payload"].json()["data"]
+            assert create_data["bootstrap"]["clientSecret"] == "ephemeral-secret"
+            assert create_data["bootstrap"]["session"]["id"] == "sess_123"
+            assert create_data["bootstrap"]["model"] == "gpt-realtime-1.5"
+            voice_session_id = create_data["voiceSession"]["id"]
+
+            end_response: dict = {}
+
+            def end_session() -> None:
+                end_response["payload"] = client.post(
+                    f"/v1/talk/session/{voice_session_id}/end",
+                    headers={"Authorization": f"Bearer {access_token}"},
+                )
+
+            end_thread = Thread(target=end_session)
+            end_thread.start()
+            end_rpc = websocket.receive_json()
+            assert end_rpc["type"] == "rpc.request"
+            assert end_rpc["method"] == "talk.session.end"
+            assert end_rpc["params"]["voiceSessionId"] == voice_session_id
+            websocket.send_json(
+                {
+                    "type": "rpc.response",
+                    "requestId": end_rpc["requestId"],
+                    "success": True,
+                    "result": {
+                        "ended": True,
+                        "voiceSessionId": voice_session_id,
+                    },
+                }
+            )
+            end_thread.join(timeout=5)
+
+            assert end_response["payload"].status_code == 200
+            assert end_response["payload"].json()["data"]["ended"] is True
+
+
+def test_talk_turn_endpoint_persists_final_turns_and_is_idempotent(tmp_path):
+    with build_client(tmp_path) as client:
+        connector_data = setup_connector(client)
+        pairing_code = create_phone_pairing_code(client, connector_data["connectorCredential"])
+        access_token = redeem_phone(
+            client,
+            pairing_code["displayCode"],
+            "a1111111-b222-c333-d444-e55555555555",
+        )["auth"]["accessToken"]
+
+        with client.websocket_connect(
+            "/v1/hosts/ws",
+            headers={"Authorization": f"Bearer {connector_data['connectorCredential']}"},
+        ) as websocket:
+            websocket.send_json(
+                {
+                    "type": "hello",
+                    "connector": {
+                        "platform": "macos",
+                        "hostname": "dylans-mac-mini",
+                        "connectorVersion": "0.1.0",
+                        "hermesCommand": "/Users/dylan/.local/bin/hermes",
+                        "hermesVersion": "hermes 1.2.3",
+                    },
+                }
+            )
+            assert websocket.receive_json()["type"] == "ready"
+
+            create_response: dict = {}
+
+            def create_session() -> None:
+                create_response["payload"] = client.post(
+                    "/v1/talk/session",
+                    headers={"Authorization": f"Bearer {access_token}"},
+                )
+
+            create_thread = Thread(target=create_session)
+            create_thread.start()
+            create_rpc = websocket.receive_json()
+            websocket.send_json(
+                {
+                    "type": "rpc.response",
+                    "requestId": create_rpc["requestId"],
+                    "success": True,
+                    "result": {
+                        "clientSecret": "ephemeral-secret",
+                        "expiresAt": "2026-04-01T16:00:00Z",
+                        "session": {"id": "sess_123", "type": "realtime"},
+                        "model": "gpt-realtime-1.5",
+                        "voice": "verse",
+                        "voiceContextUpdatedAt": "2026-04-01T15:59:00Z",
+                    },
+                }
+            )
+            create_thread.join(timeout=5)
+            voice_session_id = create_response["payload"].json()["data"]["voiceSession"]["id"]
+
+            client_turn_id = str(uuid.uuid4())
+            payload = {
+                "clientTurnId": client_turn_id,
+                "role": "user",
+                "source": "realtime",
+                "text": "Tell me what changed today.",
+            }
+            first_turn = client.post(
+                f"/v1/talk/session/{voice_session_id}/turns",
+                headers={"Authorization": f"Bearer {access_token}"},
+                json=payload,
+            )
+            duplicate_turn = client.post(
+                f"/v1/talk/session/{voice_session_id}/turns",
+                headers={"Authorization": f"Bearer {access_token}"},
+                json=payload,
+            )
+
+            assert first_turn.status_code == 200
+            assert duplicate_turn.status_code == 200
+            assert first_turn.json()["data"]["turn"]["id"] == duplicate_turn.json()["data"]["turn"]["id"]
+
+            with client.app.state.database.session() as db:
+                record_voice_turn(
+                    db,
+                    voice_session_id=voice_session_id,
+                    role="assistant",
+                    source="tool",
+                    text="Hermes tool reply",
+                )
+                turns = db.query(VoiceTurn).filter(VoiceTurn.voice_session_id == voice_session_id).all()
+
+            assert len(turns) == 2
+            assert {turn.source for turn in turns} == {"realtime", "tool"}
+
+
+def test_talk_session_end_is_idempotent(tmp_path):
+    with build_client(tmp_path) as client:
+        connector_data = setup_connector(client)
+        pairing_code = create_phone_pairing_code(client, connector_data["connectorCredential"])
+        access_token = redeem_phone(
+            client,
+            pairing_code["displayCode"],
+            "f1111111-e222-d333-c444-b55555555555",
+        )["auth"]["accessToken"]
+
+        with client.websocket_connect(
+            "/v1/hosts/ws",
+            headers={"Authorization": f"Bearer {connector_data['connectorCredential']}"},
+        ) as websocket:
+            websocket.send_json(
+                {
+                    "type": "hello",
+                    "connector": {
+                        "platform": "macos",
+                        "hostname": "dylans-mac-mini",
+                        "connectorVersion": "0.1.0",
+                        "hermesCommand": "/Users/dylan/.local/bin/hermes",
+                        "hermesVersion": "hermes 1.2.3",
+                    },
+                }
+            )
+            assert websocket.receive_json()["type"] == "ready"
+
+            create_response: dict = {}
+
+            def create_session() -> None:
+                create_response["payload"] = client.post(
+                    "/v1/talk/session",
+                    headers={"Authorization": f"Bearer {access_token}"},
+                )
+
+            create_thread = Thread(target=create_session)
+            create_thread.start()
+            create_rpc = websocket.receive_json()
+            websocket.send_json(
+                {
+                    "type": "rpc.response",
+                    "requestId": create_rpc["requestId"],
+                    "success": True,
+                    "result": {
+                        "clientSecret": "ephemeral-secret",
+                        "expiresAt": "2026-04-01T16:00:00Z",
+                        "session": {"id": "sess_123", "type": "realtime"},
+                        "model": "gpt-realtime-1.5",
+                        "voice": "verse",
+                        "voiceContextUpdatedAt": "2026-04-01T15:59:00Z",
+                    },
+                }
+            )
+            create_thread.join(timeout=5)
+            voice_session_id = create_response["payload"].json()["data"]["voiceSession"]["id"]
+
+            first_end: dict = {}
+
+            def end_session() -> None:
+                first_end["payload"] = client.post(
+                    f"/v1/talk/session/{voice_session_id}/end",
+                    headers={"Authorization": f"Bearer {access_token}"},
+                )
+
+            end_thread = Thread(target=end_session)
+            end_thread.start()
+            end_rpc = websocket.receive_json()
+            websocket.send_json(
+                {
+                    "type": "rpc.response",
+                    "requestId": end_rpc["requestId"],
+                    "success": True,
+                    "result": {"ended": True, "voiceSessionId": voice_session_id},
+                }
+            )
+            end_thread.join(timeout=5)
+
+            second_end = client.post(
+                f"/v1/talk/session/{voice_session_id}/end",
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+
+            assert first_end["payload"].status_code == 200
+            assert second_end.status_code == 200
+            assert first_end["payload"].json()["data"]["ended"] is True
+            assert second_end.json()["data"]["ended"] is True
+
+
+def test_talk_session_returns_conflict_when_connector_is_unconfigured(tmp_path):
+    with build_client(tmp_path) as client:
+        connector_data = setup_connector(client)
+        pairing_code = create_phone_pairing_code(client, connector_data["connectorCredential"])
+        access_token = redeem_phone(
+            client,
+            pairing_code["displayCode"],
+            "d1d1d1d1-e2e2-f3f3-a4a4-b5b5b5b5b5b5",
+        )["auth"]["accessToken"]
+
+        with client.websocket_connect(
+            "/v1/hosts/ws",
+            headers={"Authorization": f"Bearer {connector_data['connectorCredential']}"},
+        ) as websocket:
+            websocket.send_json(
+                {
+                    "type": "hello",
+                    "connector": {
+                        "platform": "macos",
+                        "hostname": "dylans-mac-mini",
+                        "connectorVersion": "0.1.0",
+                        "hermesCommand": "/Users/dylan/.local/bin/hermes",
+                        "hermesVersion": "hermes 1.2.3",
+                    },
+                }
+            )
+            assert websocket.receive_json()["type"] == "ready"
+
+            response: dict = {}
+
+            def create_session() -> None:
+                response["payload"] = client.post(
+                    "/v1/talk/session",
+                    headers={"Authorization": f"Bearer {access_token}"},
+                )
+
+            thread = Thread(target=create_session)
+            thread.start()
+            rpc = websocket.receive_json()
+            assert rpc["type"] == "rpc.request"
+            assert rpc["method"] == "talk.session.create"
+
+            websocket.send_json(
+                {
+                    "type": "rpc.response",
+                    "requestId": rpc["requestId"],
+                    "success": False,
+                    "error": "OpenAI Realtime talk mode is not configured on this Hermes host.",
+                }
+            )
+            thread.join(timeout=5)
+
+            assert response["payload"].status_code == 409
+            assert response["payload"].json()["detail"] == "OpenAI Realtime talk mode is not configured on this Hermes host."
 
 
 def test_sensor_delivery_returns_retry_offline_and_delivered_after_connector_ack(tmp_path):

@@ -124,6 +124,13 @@ class SensorHealthRequest(BaseModel):
     samples: list[SensorHealthSample] = Field(min_length=1, max_length=100)
 
 
+class VoiceTurnCreateRequest(BaseModel):
+    clientTurnId: UUID | None = None
+    role: str = Field(min_length=1, max_length=32)
+    source: str = Field(default="realtime", min_length=1, max_length=32)
+    text: str = Field(min_length=1)
+
+
 class InternalInboxCreateRequest(BaseModel):
     userId: UUID | None = None
     deviceId: UUID | None = None

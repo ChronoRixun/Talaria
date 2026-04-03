@@ -77,11 +77,14 @@ final class RelayAPIClient {
     }
 
     enum ClientError: LocalizedError {
+        case unauthorized(String)
         case invalidURL(String)
         case requestFailed(String)
 
         var errorDescription: String? {
             switch self {
+            case .unauthorized(let message):
+                message
             case .invalidURL(let url):
                 "Invalid relay URL: \(url)"
             case .requestFailed(let message):
@@ -163,15 +166,22 @@ final class RelayAPIClient {
         }
 
         guard (200 ..< 300).contains(httpResponse.statusCode) else {
+            let makeError: (String) -> ClientError = { message in
+                if httpResponse.statusCode == 401 {
+                    return .unauthorized(message)
+                }
+                return .requestFailed(message)
+            }
+
             if let errorEnvelope = try? decoder.decode(ErrorEnvelope.self, from: data) {
-                throw ClientError.requestFailed(errorEnvelope.error.message)
+                throw makeError(errorEnvelope.error.message)
             }
 
             if let errorEnvelope = try? decoder.decode(FastAPIErrorEnvelope.self, from: data) {
-                throw ClientError.requestFailed(errorEnvelope.detail)
+                throw makeError(errorEnvelope.detail)
             }
 
-            throw ClientError.requestFailed("Relay request failed with status \(httpResponse.statusCode).")
+            throw makeError("Relay request failed with status \(httpResponse.statusCode).")
         }
 
         return try decoder.decode(Envelope<T>.self, from: data).data

@@ -47,6 +47,8 @@ class Settings:
     connector_heartbeat_timeout_seconds: int = 30
     connector_idle_poll_interval_seconds: float = 1.0
     connector_sensor_ack_timeout_seconds: float = 3.0
+    connector_rpc_timeout_seconds: float = 30.0
+    talk_delegate_timeout_seconds: float = 90.0
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -77,4 +79,6 @@ class Settings:
             connector_heartbeat_timeout_seconds=int(os.getenv("CONNECTOR_HEARTBEAT_TIMEOUT_SECONDS", "30")),
             connector_idle_poll_interval_seconds=float(os.getenv("CONNECTOR_IDLE_POLL_INTERVAL_SECONDS", "1.0")),
             connector_sensor_ack_timeout_seconds=float(os.getenv("CONNECTOR_SENSOR_ACK_TIMEOUT_SECONDS", "3.0")),
+            connector_rpc_timeout_seconds=float(os.getenv("CONNECTOR_RPC_TIMEOUT_SECONDS", "30.0")),
+            talk_delegate_timeout_seconds=float(os.getenv("TALK_DELEGATE_TIMEOUT_SECONDS", "90.0")),
         )

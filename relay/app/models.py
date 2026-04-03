@@ -187,6 +187,36 @@ class MessageJob(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 
 
+class VoiceSession(Base):
+    __tablename__ = "voice_sessions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    host_id: Mapped[str] = mapped_column(String(36), ForeignKey("hermes_hosts.id"), nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="active")
+    relay_tool_token_hash: Mapped[str | None] = mapped_column(Text)
+    realtime_session_id: Mapped[str | None] = mapped_column(Text)
+    realtime_model: Mapped[str | None] = mapped_column(Text)
+    realtime_voice: Mapped[str | None] = mapped_column(Text)
+    last_error: Mapped[str | None] = mapped_column(Text)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class VoiceTurn(Base):
+    __tablename__ = "voice_turns"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    voice_session_id: Mapped[str] = mapped_column(String(36), ForeignKey("voice_sessions.id"), nullable=False)
+    client_turn_id: Mapped[str | None] = mapped_column(String(36))
+    role: Mapped[str] = mapped_column(Text, nullable=False)
+    source: Mapped[str] = mapped_column(Text, nullable=False, default="tool")
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
 class InboxItem(Base):
     __tablename__ = "inbox_items"
 

@@ -7,12 +7,13 @@ import os
 import platform as platform_module
 import socket
 import sys
+import uuid
 
 import httpx
 from websockets.asyncio.client import connect as websocket_connect
 
 from . import __version__
-from .hermes_runner import ConnectorHermesSettings, HermesCLIExecutor, HermesConversationMessage
+from .hermes_runner import ConnectorHermesSettings, HermesCLIExecutor
 from .mcp_registration import (
     inspect_native_mcp_registration,
     native_mcp_readiness_message,
@@ -21,11 +22,20 @@ from .mcp_registration import (
     validate_native_mcp_server,
 )
 from .sensor_store import HealthSample, LocationReading, SensorStore
+from .runtime_adapter import HermesRuntimeAdapter, HostRuntimeAdapter, RuntimeConversationMessage
 from .service_management import build_service_manager
 from .setup_code import decode_host_setup_code
-from .state import ConnectorRuntimeConfig, ConnectorState, ConnectorStateStore
+from .state import (
+    ConnectorRuntimeConfig,
+    ConnectorSecrets,
+    ConnectorState,
+    ConnectorStateStore,
+    RealtimeTalkConfig,
+)
+from .talk_support import DEFAULT_REALTIME_MODELS, DEFAULT_REALTIME_VOICE, build_voice_context_snapshot
 
 DEFAULT_RELAY_URL = "https://hermes-mobile-relay-dylan.fly.dev/v1"
+OPENAI_REALTIME_CLIENT_SECRETS_URL = "https://api.openai.com/v1/realtime/client_secrets"
 
 
 def utcnow_iso() -> str:
@@ -63,6 +73,7 @@ class HermesMobileConnector:
         self.heartbeat_interval_seconds = heartbeat_interval_seconds
         self.reconnect_delay_seconds = reconnect_delay_seconds
         self._sensor_store: SensorStore | None = None
+        self._voice_delegate_sessions: dict[str, str] = {}
 
     @property
     def sensor_store(self) -> SensorStore:
@@ -183,6 +194,121 @@ class HermesMobileConnector:
         metadata = self.metadata(display_name=state.connector_display_name, settings=settings)
         return self._configure_native_mcp(state, hermes_command=metadata.hermes_command)
 
+    def configure_realtime(
+        self,
+        *,
+        api_key: str | None = None,
+        clear: bool = False,
+        validate: bool = True,
+    ) -> ConnectorState:
+        state = self.state_store.load()
+        secrets = self.state_store.load_secrets()
+
+        if clear:
+            secrets.openai_api_key = None
+            self.state_store.save_secrets(secrets)
+            state.realtime_talk = RealtimeTalkConfig(enabled=False)
+            state.voice_context_snapshot = None
+            return self.state_store.save(state)
+
+        normalized_api_key = (api_key or "").strip()
+        if normalized_api_key:
+            secrets.openai_api_key = normalized_api_key
+            self.state_store.save_secrets(secrets)
+
+        if not secrets.openai_api_key:
+            raise RuntimeError("An OpenAI API key is required to configure Realtime talk mode.")
+
+        config = state.realtime_talk or RealtimeTalkConfig()
+        config.enabled = True
+        if not config.preferred_models:
+            config.preferred_models = list(DEFAULT_REALTIME_MODELS)
+        if not config.voice:
+            config.voice = DEFAULT_REALTIME_VOICE
+        state.realtime_talk = config
+        state = self.refresh_voice_context(state=state)
+        self.state_store.save(state)
+
+        if validate:
+            return self.validate_realtime_configuration()
+        return state
+
+    def validate_realtime_configuration(self) -> ConnectorState:
+        state = self.state_store.load()
+        secrets = self.state_store.load_secrets()
+        if not secrets.openai_api_key:
+            config = state.realtime_talk or RealtimeTalkConfig(enabled=False)
+            config.enabled = False
+            config.last_validated_at = utcnow_iso()
+            config.last_validation_error = "OpenAI API key is not configured."
+            config.last_selected_model = None
+            state.realtime_talk = config
+            return self.state_store.save(state)
+
+        config = state.realtime_talk or RealtimeTalkConfig()
+        state = self.refresh_voice_context(state=state)
+        try:
+            _, selected_model = self._create_openai_realtime_session(
+                api_key=secrets.openai_api_key,
+                config=config,
+                instructions="Validation run for Hermes Mobile talk mode.",
+                relay_mcp_url=None,
+            )
+            config.enabled = True
+            config.last_validated_at = utcnow_iso()
+            config.last_validation_error = None
+            config.last_selected_model = selected_model
+            state.realtime_talk = config
+            self.state_store.save(state)
+            return state
+        except Exception as error:  # noqa: BLE001
+            config.enabled = True
+            config.last_validated_at = utcnow_iso()
+            config.last_validation_error = str(error)
+            config.last_selected_model = None
+            state.realtime_talk = config
+            return self.state_store.save(state)
+
+    def refresh_voice_context(self, *, state: ConnectorState | None = None) -> ConnectorState:
+        state = state or self.state_store.load()
+        self.apply_runtime_environment(state)
+        settings = self.settings_for_state(state)
+        readiness_summary = native_mcp_readiness_message(hermes_command=settings.hermes_command)
+        if state.mcp_last_test_error:
+            readiness_summary = f"{readiness_summary} ({state.mcp_last_test_error})"
+        state.voice_context_snapshot = build_voice_context_snapshot(
+            sensor_store=self.sensor_store,
+            hermes_home=state.runtime_config.hermes_home if state.runtime_config else os.getenv("HERMES_HOME"),
+            readiness_summary=readiness_summary,
+        )
+        return self.state_store.save(state)
+
+    def talk_readiness_payload(self) -> dict:
+        state = self.state_store.load()
+        config = state.realtime_talk or RealtimeTalkConfig(enabled=False)
+        secrets = self.state_store.load_secrets()
+        self.apply_runtime_environment(state)
+        runtime = self.settings_for_state(state)
+        has_api_key = bool(secrets.openai_api_key)
+        configured = bool(config.enabled and has_api_key)
+        blocked_reason = None
+        if not has_api_key:
+            blocked_reason = "OpenAI Realtime is not configured on this Hermes host."
+        elif config.last_validation_error:
+            blocked_reason = config.last_validation_error
+        return {
+            "configured": configured and config.last_validation_error is None,
+            "apiKeyPresent": has_api_key,
+            "preferredModels": config.preferred_models or list(DEFAULT_REALTIME_MODELS),
+            "selectedModel": config.last_selected_model,
+            "voice": config.voice or DEFAULT_REALTIME_VOICE,
+            "lastValidatedAt": config.last_validated_at,
+            "lastValidationError": config.last_validation_error,
+            "blockedReason": blocked_reason,
+            "mcpReadiness": native_mcp_readiness_message(hermes_command=runtime.hermes_command),
+            "voiceContextUpdatedAt": state.voice_context_snapshot.updated_at if state.voice_context_snapshot else None,
+        }
+
     def refresh_runtime_config(self, *, force: bool = False) -> ConnectorState:
         state = self.state_store.load()
         if state.runtime_config is not None and not force:
@@ -220,6 +346,7 @@ class HermesMobileConnector:
 
     async def _run_once(self, state: ConnectorState) -> None:
         state = self.refresh_runtime_config(force=False)
+        state = self.refresh_voice_context(state=state)
         self.apply_runtime_environment(state)
         settings = self.settings_for_state(state)
         metadata = self.metadata(display_name=state.connector_display_name, settings=settings)
@@ -266,6 +393,9 @@ class HermesMobileConnector:
                 message_type = message.get("type")
                 if message_type == "job.execute":
                     await self._handle_job(websocket, message["job"])
+                    continue
+                if message_type == "rpc.request":
+                    await websocket.send(json.dumps(await self._handle_rpc_request(message)))
                     continue
                 if message_type == "ready":
                     continue
@@ -333,15 +463,15 @@ class HermesMobileConnector:
 
     async def _handle_job(self, websocket, job: dict) -> None:
         state = self.state_store.load()
-        executor = self.executor_for_state(state)
+        runtime = self.runtime_adapter_for_state(state)
 
         async def execute_job() -> dict:
             try:
                 result = await asyncio.to_thread(
-                    executor.send_message,
+                    runtime.send_text_message,
                     latest_user_message=job["latestUserMessage"],
                     history=[
-                        HermesConversationMessage(role=item["role"], text=item["text"])
+                        RuntimeConversationMessage(role=item["role"], text=item["text"])
                         for item in job.get("history", [])
                     ],
                     session_id=job.get("sessionId"),
@@ -368,6 +498,193 @@ class HermesMobileConnector:
                 return
             await websocket.send(json.dumps({"type": "heartbeat"}))
 
+    async def _handle_rpc_request(self, message: dict) -> dict:
+        request_id = message.get("requestId") or str(uuid.uuid4())
+        method = message.get("method")
+        params = message.get("params") or {}
+
+        try:
+            if method == "talk.prewarm":
+                result = self._rpc_talk_prewarm()
+            elif method == "talk.session.create":
+                result = self._rpc_talk_session_create(params)
+            elif method == "talk.session.end":
+                result = self._rpc_talk_session_end(params)
+            elif method in {"talk.delegate", "talk.hermes_delegate"}:
+                result = await self._rpc_talk_delegate(params)
+            else:
+                raise RuntimeError(f"Unsupported RPC method: {method}")
+            return {
+                "type": "rpc.response",
+                "requestId": request_id,
+                "success": True,
+                "result": result,
+            }
+        except Exception as error:  # noqa: BLE001
+            return {
+                "type": "rpc.response",
+                "requestId": request_id,
+                "success": False,
+                "error": str(error),
+            }
+
+    def _rpc_talk_prewarm(self) -> dict:
+        state = self.refresh_voice_context()
+        return self.talk_readiness_payload() | {
+            "voiceContextUpdatedAt": state.voice_context_snapshot.updated_at if state.voice_context_snapshot else None,
+        }
+
+    def _rpc_talk_session_create(self, params: dict) -> dict:
+        state = self.refresh_voice_context()
+        config = state.realtime_talk or RealtimeTalkConfig(enabled=False)
+        secrets = self.state_store.load_secrets()
+        if not config.enabled or not secrets.openai_api_key:
+            raise RuntimeError("OpenAI Realtime talk mode is not configured on this Hermes host.")
+        if config.last_validation_error:
+            raise RuntimeError(config.last_validation_error)
+
+        relay_mcp_url = params.get("relayMcpURL")
+        if not relay_mcp_url:
+            raise RuntimeError("Relay MCP URL is required.")
+
+        snapshot = state.voice_context_snapshot
+        if snapshot is None:
+            raise RuntimeError("Voice context is not ready yet.")
+
+        session_payload, selected_model = self._create_openai_realtime_session(
+            api_key=secrets.openai_api_key,
+            config=config,
+            instructions=snapshot.system_prompt,
+            relay_mcp_url=relay_mcp_url,
+        )
+
+        config.last_selected_model = selected_model
+        config.last_validated_at = utcnow_iso()
+        config.last_validation_error = None
+        state.realtime_talk = config
+        self.state_store.save(state)
+
+        client_secret = session_payload.get("client_secret") or {}
+        session_data = {key: value for key, value in session_payload.items() if key != "client_secret"}
+        expires_at = client_secret.get("expires_at")
+        if isinstance(expires_at, (int, float)):
+            expires_at = datetime.fromtimestamp(expires_at, timezone.utc).isoformat()
+        return {
+            "clientSecret": client_secret.get("value"),
+            "expiresAt": expires_at,
+            "session": session_data,
+            "model": selected_model,
+            "voice": config.voice or DEFAULT_REALTIME_VOICE,
+            "voiceContextUpdatedAt": snapshot.updated_at,
+        }
+
+    def _rpc_talk_session_end(self, params: dict) -> dict:
+        voice_session_id = str(params.get("voiceSessionId") or "").strip()
+        if voice_session_id:
+            self._voice_delegate_sessions.pop(voice_session_id, None)
+        return {"ended": True, "voiceSessionId": voice_session_id or None}
+
+    async def _rpc_talk_delegate(self, params: dict) -> dict:
+        voice_session_id = str(params.get("voiceSessionId") or "").strip()
+        prompt = str(params.get("prompt") or "").strip()
+        if not voice_session_id:
+            raise RuntimeError("voiceSessionId is required.")
+        if not prompt:
+            raise RuntimeError("prompt is required.")
+
+        state = self.state_store.load()
+        runtime = self.runtime_adapter_for_state(state)
+        session_id = self._voice_delegate_sessions.get(voice_session_id)
+        result = await asyncio.to_thread(
+            runtime.delegate_talk_turn,
+            prompt=prompt,
+            session_id=session_id,
+        )
+        if result.session_id:
+            self._voice_delegate_sessions[voice_session_id] = result.session_id
+        return {
+            "text": result.text,
+            "sessionId": result.session_id,
+            "voiceSessionId": voice_session_id,
+        }
+
+    def _create_openai_realtime_session(
+        self,
+        *,
+        api_key: str,
+        config: RealtimeTalkConfig,
+        instructions: str,
+        relay_mcp_url: str | None,
+    ) -> tuple[dict, str]:
+        last_error: str | None = None
+        preferred_models = config.preferred_models or list(DEFAULT_REALTIME_MODELS)
+        for model in preferred_models:
+            try:
+                session_definition: dict = {
+                    "type": "realtime",
+                    "model": model,
+                    "instructions": instructions,
+                    "audio": {
+                        "input": {
+                            "turn_detection": {
+                                "type": config.turn_detection_type,
+                                "create_response": config.create_response,
+                                "interrupt_response": config.interrupt_response,
+                            }
+                        },
+                        "output": {
+                            "voice": config.voice or DEFAULT_REALTIME_VOICE,
+                        },
+                    },
+                }
+                if relay_mcp_url:
+                    session_definition["tools"] = [
+                        {
+                            "type": "mcp",
+                            "server_label": "hermes_mobile_relay",
+                            "server_url": relay_mcp_url,
+                            "allowed_tools": ["hermes_delegate"],
+                            "require_approval": "never",
+                        }
+                    ]
+
+                response = httpx.post(
+                    OPENAI_REALTIME_CLIENT_SECRETS_URL,
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={"session": session_definition},
+                    timeout=30.0,
+                )
+                if response.status_code >= 400:
+                    message = self._extract_http_error_message(response)
+                    last_error = message
+                    continue
+                return response.json(), model
+            except Exception as error:  # noqa: BLE001
+                last_error = str(error)
+                continue
+
+        raise RuntimeError(last_error or "OpenAI Realtime session creation failed.")
+
+    @staticmethod
+    def _extract_http_error_message(response: httpx.Response) -> str:
+        try:
+            payload = response.json()
+        except Exception:  # noqa: BLE001
+            return response.text or f"HTTP {response.status_code}"
+
+        error = payload.get("error")
+        if isinstance(error, dict):
+            message = error.get("message")
+            if message:
+                return str(message)
+        message = payload.get("message")
+        if message:
+            return str(message)
+        return response.text or f"HTTP {response.status_code}"
+
     def status_lines(self) -> list[str]:
         state = self.state_store.load()
         self.apply_runtime_environment(state)
@@ -376,6 +693,7 @@ class HermesMobileConnector:
         mcp_status = inspect_native_mcp_registration(server_name=state.mcp_server_name)
         sensor_status = self.sensor_store.get_sensor_freshness_summary()
         service_status = build_service_manager(self.state_store).status()
+        talk_status = self.talk_readiness_payload()
         lines = [
             f"Relay URL: {state.relay_url}",
             f"WebSocket URL: {state.web_socket_url}",
@@ -388,6 +706,11 @@ class HermesMobileConnector:
             f"MCP tools: {', '.join(mcp_status.included_tools) if mcp_status.included_tools else 'none configured'}",
             f"MCP validation: {self._mcp_validation_summary(state=state, mcp_status=mcp_status)}",
             f"MCP readiness: {native_mcp_readiness_message(hermes_command=metadata.hermes_command)}",
+            f"Realtime talk: {'configured' if talk_status['configured'] else 'not configured'}",
+            f"Realtime models: {', '.join(talk_status['preferredModels'])}",
+            f"Realtime selected model: {talk_status['selectedModel'] or 'none'}",
+            f"Realtime API key: {'present' if talk_status['apiKeyPresent'] else 'missing'}",
+            f"Realtime validation: {talk_status['lastValidationError'] or 'ok'}",
             f"Background service: {service_status.summary}",
             f"Last connected: {state.last_connected_at or 'never'}",
             f"Last error: {state.last_error or 'none'}",
@@ -408,6 +731,8 @@ class HermesMobileConnector:
             f"{health.get('freshCount', 0)} fresh / {health.get('staleCount', 0)} stale "
             f"across {health.get('count', 0)} metrics"
         )
+        if state.voice_context_snapshot is not None:
+            lines.append(f"Voice context updated: {state.voice_context_snapshot.updated_at}")
         return lines
 
     def validate_mcp(self) -> list[str]:
@@ -433,6 +758,7 @@ class HermesMobileConnector:
         try:
             registration = register_native_mcp_server(state_dir=self.state_store.state_dir)
             state.mcp_server_name = registration.server_name
+            state.mcp_configured = True
             state.mcp_command_path = registration.command_path
             state.mcp_registered_at = utcnow_iso()
             state.mcp_last_test_at = utcnow_iso()
@@ -446,6 +772,7 @@ class HermesMobileConnector:
         return self.state_store.save(state)
 
     def _mark_mcp_unconfigured(self, state: ConnectorState) -> ConnectorState:
+        state.mcp_configured = False
         state.mcp_last_test_at = utcnow_iso()
         state.mcp_last_test_error = None
         return self.state_store.save(state)
@@ -454,8 +781,10 @@ class HermesMobileConnector:
     def _mcp_validation_summary(*, state: ConnectorState, mcp_status) -> str:
         if state.mcp_last_test_error:
             return state.mcp_last_test_error
-        if not mcp_status.registered:
+        if not state.mcp_configured:
             return "not configured (run `hermes-mobile configure-mcp` when ready)"
+        if not mcp_status.registered:
+            return "configured in connector state, but Hermes config is currently missing"
         return "ok"
 
     def capture_runtime_config(self, *, relay_url: str) -> ConnectorRuntimeConfig:
@@ -485,6 +814,9 @@ class HermesMobileConnector:
 
     def executor_for_state(self, state: ConnectorState) -> HermesCLIExecutor:
         return HermesCLIExecutor(self.settings_for_state(state))
+
+    def runtime_adapter_for_state(self, state: ConnectorState) -> HostRuntimeAdapter:
+        return HermesRuntimeAdapter(self.executor_for_state(state))
 
     def apply_runtime_environment(self, state: ConnectorState) -> None:
         if state.runtime_config is not None and state.runtime_config.hermes_home:

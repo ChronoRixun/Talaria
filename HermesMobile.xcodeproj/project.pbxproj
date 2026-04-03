@@ -13,6 +13,7 @@
 		0473E620C237D0016A164470 /* MockNotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C18F83ECB3EC666614F9D54D /* MockNotificationService.swift */; };
 		072CE0C8A7A668AA18B93FEA /* LiveInboxService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE23CAFCDB6E64ED3FFB78BB /* LiveInboxService.swift */; };
 		07CBAF78A59A8936AD0CF6BE /* LivePairingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A1DE23F50DFDF112A61490D /* LivePairingService.swift */; };
+		A8D1B6C2E5F64010BB110001 /* LiveVoiceSessionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8D1B6C2E5F64010BB110000 /* LiveVoiceSessionService.swift */; };
 		A1B2C3D4E5F60101AABB0006 /* LiveHealthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60101AABB0005 /* LiveHealthService.swift */; };
 		A1B2C3D4E5F60101AABB0004 /* LiveLocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60101AABB0003 /* LiveLocationService.swift */; };
 		A1B2C3D4E5F60101AABB0002 /* LiveNotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60101AABB0001 /* LiveNotificationService.swift */; };
@@ -150,6 +151,7 @@
 		25563E39F08D0F19F538ADD8 /* VoiceState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceState.swift; sourceTree = "<group>"; };
 		2A16440BD7ECCFF064BD6232 /* TalkStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkStore.swift; sourceTree = "<group>"; };
 		2A1DE23F50DFDF112A61490D /* LivePairingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LivePairingService.swift; sourceTree = "<group>"; };
+		A8D1B6C2E5F64010BB110000 /* LiveVoiceSessionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveVoiceSessionService.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60101AABB0005 /* LiveHealthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveHealthService.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60101AABB0003 /* LiveLocationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveLocationService.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60101AABB0001 /* LiveNotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveNotificationService.swift; sourceTree = "<group>"; };
@@ -332,6 +334,7 @@
 				18C2AFDCFC6C6C119984318D /* LiveHermesHostService.swift */,
 				EE23CAFCDB6E64ED3FFB78BB /* LiveInboxService.swift */,
 				2A1DE23F50DFDF112A61490D /* LivePairingService.swift */,
+				A8D1B6C2E5F64010BB110000 /* LiveVoiceSessionService.swift */,
 				B3F7A2D1E8C4590A6D2B1F07 /* SensorUploadService.swift */,
 				A1B2C3D4E5F60101AABB0005 /* LiveHealthService.swift */,
 				A1B2C3D4E5F60101AABB0003 /* LiveLocationService.swift */,
@@ -586,6 +589,7 @@
 			);
 			name = HermesMobile;
 			packageProductDependencies = (
+				A1B2C3D4E5F60101AABB1002 /* WebRTC */,
 			);
 			productName = HermesMobile;
 			productReference = E11909D98B0F5781E0DA91D1 /* HermesMobile.app */;
@@ -639,6 +643,9 @@
 			);
 			mainGroup = 9C206139AC908A0338E738A2;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				A1B2C3D4E5F60101AABB1001 /* XCRemoteSwiftPackageReference "WebRTC" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 885E8F8307636D94085EA353 /* Products */;
 			projectDirPath = "";
@@ -730,6 +737,7 @@
 				CF02B513265DDFE8A1376364 /* LiveHermesHostService.swift in Sources */,
 				072CE0C8A7A668AA18B93FEA /* LiveInboxService.swift in Sources */,
 				07CBAF78A59A8936AD0CF6BE /* LivePairingService.swift in Sources */,
+				A8D1B6C2E5F64010BB110001 /* LiveVoiceSessionService.swift in Sources */,
 				C9E5D4A3B2F168073C4A9E01 /* SensorUploadService.swift in Sources */,
 				A1B2C3D4E5F60101AABB0006 /* LiveHealthService.swift in Sources */,
 				A1B2C3D4E5F60101AABB0004 /* LiveLocationService.swift in Sources */,
@@ -805,6 +813,17 @@
 			targetProxy = C0035DFAE736CD216744D2C4 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		A1B2C3D4E5F60101AABB1001 /* XCRemoteSwiftPackageReference "WebRTC" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/stasel/WebRTC.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 130.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCBuildConfiguration section */
 		42430EED93C5DA3BA63225AC /* Release */ = {
@@ -1098,6 +1117,14 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A1B2C3D4E5F60101AABB1002 /* WebRTC */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A1B2C3D4E5F60101AABB1001 /* XCRemoteSwiftPackageReference "WebRTC" */;
+			productName = WebRTC;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 2358AE5B1FB017C5923C2FD9 /* Project object */;
 }

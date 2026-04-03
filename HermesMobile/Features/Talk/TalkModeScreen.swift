@@ -15,9 +15,25 @@ struct TalkModeScreen: View {
                 VoiceOrb(voiceState: talkStore.voiceState)
 
                 TranscriptView(
-                    transcript: talkStore.transcript,
+                    transcriptItems: talkStore.transcriptItems,
                     voiceState: talkStore.voiceState
                 )
+
+                if let statusMessage = talkStore.statusMessage {
+                    Text(statusMessage)
+                        .font(Design.Typography.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, Design.Spacing.lg)
+                }
+
+                if let blockedReason = talkStore.blockedReason, !talkStore.isSessionActive {
+                    Text(blockedReason)
+                        .font(Design.Typography.callout)
+                        .foregroundStyle(.orange)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, Design.Spacing.lg)
+                }
 
                 sessionTimer
 
@@ -28,6 +44,9 @@ struct TalkModeScreen: View {
             .padding(.bottom, Design.Spacing.xxl)
         }
         .navigationTitle("Talk Mode")
+        .task {
+            await talkStore.refreshReadiness()
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 mockIndicator
@@ -98,6 +117,7 @@ struct TalkModeScreen: View {
                     }
                     .buttonStyle(.glassProminent)
                     .accessibilityLabel("Start voice session")
+                    .disabled(!talkStore.canStartSession)
                 }
             }
         }

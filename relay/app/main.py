@@ -32,6 +32,7 @@ from .schemas import (
     SensorLocationRequest,
     PushRegisterRequest,
     RefreshRequest,
+    VoiceTurnCreateRequest,
 )
 from .security import AuthContext, get_auth_context, get_db, get_settings, require_internal_key
 from .services import (
@@ -43,17 +44,20 @@ from .services import (
     complete_message_job,
     conversation_history_before_message,
     create_phone_pairing_code,
+    create_voice_session,
     create_host_enrollment_invite,
     create_inbox_item,
     create_message_job,
     current_hermes_host_for_user,
     deactivate_hermes_host_connection,
+    end_voice_session,
     ensure_default_user,
     fail_message_job,
     get_inbox_item_for_user,
     get_message_job,
     get_message_job_for_user_message,
     get_or_create_current_conversation,
+    get_voice_session,
     get_user_message_by_client_message_id,
     hermes_host_is_online,
     list_conversation_messages,
@@ -73,12 +77,17 @@ from .services import (
     serialize_hermes_host,
     serialize_inbox_item,
     serialize_message,
+    serialize_voice_session,
+    serialize_voice_turn,
     setup_connector_account,
     touch_hermes_host_connection,
     upsert_device,
     upsert_push_registration,
+    mark_voice_session_started,
     process_message_job_with_adapter,
+    record_voice_turn,
 )
+from .talk_mcp import build_talk_mcp_app
 
 
 def success(data: dict) -> dict:
@@ -139,6 +148,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.connector_sessions: dict[str, ConnectorSession] = {}
     app.state.sensor_delivery_waiters: dict[str, asyncio.Future[bool]] = {}
+    app.state.connector_rpc_waiters: dict[str, asyncio.Future[dict]] = {}
 
     def require_connector_host(
         authorization: str | None = Header(default=None),
@@ -180,6 +190,59 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if waiter is not None and not waiter.done():
             waiter.set_result(delivered)
 
+    def resolve_connector_rpc_response(
+        request_id: str | None,
+        *,
+        success: bool,
+        result: dict | None = None,
+        error: str | None = None,
+    ) -> None:
+        if request_id is None:
+            return
+        waiter = app.state.connector_rpc_waiters.pop(request_id, None)
+        if waiter is None or waiter.done():
+            return
+        if success:
+            waiter.set_result(result or {})
+        else:
+            waiter.set_exception(RuntimeError(error or "Connector RPC failed."))
+
+    async def send_connector_rpc(
+        user_id: str,
+        *,
+        method: str,
+        params: dict | None = None,
+        timeout_seconds: float | None = None,
+    ) -> dict:
+        session = connector_session_for_user(user_id)
+        if session is None:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Hermes host is offline.")
+
+        request_id = str(uuid.uuid4())
+        waiter: asyncio.Future[dict] = asyncio.get_running_loop().create_future()
+        app.state.connector_rpc_waiters[request_id] = waiter
+
+        try:
+            await session.websocket.send_json(
+                {
+                    "type": "rpc.request",
+                    "version": 1,
+                    "requestId": request_id,
+                    "method": method,
+                    "params": params or {},
+                }
+            )
+        except Exception as error:
+            clear_connector_session(user_id, session.connection_nonce)
+            app.state.connector_rpc_waiters.pop(request_id, None)
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Hermes host is unavailable.") from error
+
+        try:
+            return await asyncio.wait_for(waiter, timeout_seconds or settings.connector_rpc_timeout_seconds)
+        except asyncio.TimeoutError as error:
+            app.state.connector_rpc_waiters.pop(request_id, None)
+            raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Hermes host did not respond in time.") from error
+
     async def forward_sensor_payload(
         *,
         user_id: str,
@@ -212,6 +275,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         status_code = status.HTTP_200_OK if delivered else status.HTTP_202_ACCEPTED
         delivery_state = "delivered" if delivered else "retry"
         return success_response({"deliveryState": delivery_state}, status_code=status_code)
+
+    app.state.send_connector_rpc = send_connector_rpc
+    app.mount("/v1/talk/mcp", build_talk_mcp_app(app))
 
     def build_message_response_payload(db: Session, *, conversation_id: str, job_id: str) -> tuple[dict, int]:
         job = get_message_job(db, job_id=job_id)
@@ -636,6 +702,189 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
         db.commit()
         return success({"revoked": host is not None})
+
+    @app.get("/v1/talk/readiness")
+    async def talk_readiness(
+        auth: AuthContext = Depends(get_auth_context),
+        db: Session = Depends(get_db),
+        request_settings: Settings = Depends(get_settings),
+    ) -> dict:
+        host = current_hermes_host_for_user(db, user_id=auth.user.id)
+        host_data = serialize_hermes_host(db, host=host, settings=request_settings)
+        if host is None:
+            return success(
+                {
+                    "ready": False,
+                    "hostOnline": False,
+                    "configured": False,
+                    "blockedReason": "Connect a Hermes host before starting talk mode.",
+                    "host": host_data,
+                }
+            )
+        if not hermes_host_is_online(db, host=host, settings=request_settings):
+            return success(
+                {
+                    "ready": False,
+                    "hostOnline": False,
+                    "configured": False,
+                    "blockedReason": "Your Hermes host is offline.",
+                    "host": host_data,
+                }
+            )
+
+        prewarm = await send_connector_rpc(auth.user.id, method="talk.prewarm")
+        blocked_reason = prewarm.get("blockedReason") or prewarm.get("lastValidationError")
+        return success(
+            {
+                "ready": bool(prewarm.get("configured")) and not blocked_reason,
+                "hostOnline": True,
+                "configured": bool(prewarm.get("configured")),
+                "blockedReason": blocked_reason,
+                "host": host_data,
+                "preferredModels": prewarm.get("preferredModels"),
+                "selectedModel": prewarm.get("selectedModel"),
+                "voice": prewarm.get("voice"),
+                "voiceContextUpdatedAt": prewarm.get("voiceContextUpdatedAt"),
+            }
+        )
+
+    @app.post("/v1/talk/session")
+    async def create_talk_session(
+        auth: AuthContext = Depends(get_auth_context),
+        db: Session = Depends(get_db),
+        request_settings: Settings = Depends(get_settings),
+    ) -> JSONResponse:
+        host = current_hermes_host_for_user(db, user_id=auth.user.id)
+        if host is None or not hermes_host_is_online(db, host=host, settings=request_settings):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Your Hermes host must be online to start talk mode.")
+
+        voice_session, relay_tool_token = create_voice_session(
+            db,
+            user_id=auth.user.id,
+            host_id=host.id,
+        )
+        relay_mcp_url = f"{request_settings.public_base_url}/talk/mcp?token={relay_tool_token}"
+
+        try:
+            bootstrap = await send_connector_rpc(
+                auth.user.id,
+                method="talk.session.create",
+                params={
+                    "voiceSessionId": voice_session.id,
+                    "relayMcpURL": relay_mcp_url,
+                },
+                timeout_seconds=request_settings.connector_rpc_timeout_seconds,
+            )
+        except HTTPException:
+            with database.session() as cleanup_db:
+                end_voice_session(cleanup_db, voice_session_id=voice_session.id)
+            raise
+        except RuntimeError as error:
+            with database.session() as cleanup_db:
+                end_voice_session(cleanup_db, voice_session_id=voice_session.id, last_error=str(error))
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+        except Exception as error:  # noqa: BLE001
+            with database.session() as cleanup_db:
+                end_voice_session(cleanup_db, voice_session_id=voice_session.id, last_error=str(error))
+            raise
+
+        started = mark_voice_session_started(
+            db,
+            voice_session_id=voice_session.id,
+            realtime_session_id=(bootstrap.get("session") or {}).get("id"),
+            realtime_model=bootstrap.get("model"),
+            realtime_voice=bootstrap.get("voice"),
+        )
+        record_audit(
+            db,
+            actor_type="user",
+            actor_id=auth.user.id,
+            action="talk.session.create",
+            entity_type="voice_session",
+            entity_id=voice_session.id,
+            payload={"model": bootstrap.get("model"), "voice": bootstrap.get("voice")},
+        )
+        db.commit()
+        return success_response(
+            {
+                "voiceSession": serialize_voice_session(started or voice_session),
+                "bootstrap": {
+                    "clientSecret": bootstrap.get("clientSecret"),
+                    "expiresAt": bootstrap.get("expiresAt"),
+                    "session": bootstrap.get("session") or {},
+                    "model": bootstrap.get("model"),
+                    "voice": bootstrap.get("voice"),
+                },
+            }
+        )
+
+    @app.post("/v1/talk/session/{voice_session_id}/end")
+    async def end_talk_session(
+        voice_session_id: str,
+        auth: AuthContext = Depends(get_auth_context),
+        db: Session = Depends(get_db),
+    ) -> dict:
+        voice_session = get_voice_session(db, voice_session_id=voice_session_id)
+        if voice_session is None or voice_session.user_id != auth.user.id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Talk session not found.")
+
+        if voice_session.status == "active":
+            try:
+                await send_connector_rpc(
+                    auth.user.id,
+                    method="talk.session.end",
+                    params={"voiceSessionId": voice_session.id},
+                )
+            except HTTPException:
+                pass
+            end_voice_session(db, voice_session_id=voice_session.id)
+
+        record_audit(
+            db,
+            actor_type="user",
+            actor_id=auth.user.id,
+            action="talk.session.end",
+            entity_type="voice_session",
+            entity_id=voice_session.id,
+        )
+        db.commit()
+        return success({"ended": True, "voiceSession": serialize_voice_session(voice_session)})
+
+    @app.post("/v1/talk/session/{voice_session_id}/turns")
+    def create_talk_turn(
+        voice_session_id: str,
+        payload: VoiceTurnCreateRequest,
+        auth: AuthContext = Depends(get_auth_context),
+        db: Session = Depends(get_db),
+    ) -> dict:
+        voice_session = get_voice_session(db, voice_session_id=voice_session_id)
+        if voice_session is None or voice_session.user_id != auth.user.id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Talk session not found.")
+
+        turn = record_voice_turn(
+            db,
+            voice_session_id=voice_session.id,
+            client_turn_id=str(payload.clientTurnId) if payload.clientTurnId else None,
+            role=payload.role,
+            source=payload.source,
+            text=payload.text.strip(),
+        )
+        record_audit(
+            db,
+            actor_type="user",
+            actor_id=auth.user.id,
+            action="talk.turn.create",
+            entity_type="voice_turn",
+            entity_id=turn.id,
+            payload={
+                "voiceSessionId": voice_session.id,
+                "role": payload.role,
+                "source": payload.source,
+                "clientTurnId": str(payload.clientTurnId) if payload.clientTurnId else None,
+            },
+        )
+        db.commit()
+        return success({"turn": serialize_voice_turn(turn)})
 
     @app.post("/v1/hosts/redeem")
     def redeem_host(
@@ -1072,6 +1321,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                                 )
                                 continue
 
+                            if message_type == "rpc.response":
+                                resolve_connector_rpc_response(
+                                    incoming.get("requestId"),
+                                    success=bool(incoming.get("success", False)),
+                                    result=incoming.get("result"),
+                                    error=incoming.get("error"),
+                                )
+                                continue
+
                             if message_type == "job.result" and incoming.get("jobId") == claimed_job.id:
                                 with database.session() as db:
                                     completed = complete_message_job(
@@ -1129,6 +1387,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     resolve_sensor_delivery(
                         incoming.get("deliveryId"),
                         delivered=incoming.get("deliveryState", "delivered") == "delivered",
+                    )
+                    with database.session() as db:
+                        touched = touch_hermes_host_connection(db, host_id=host_id, connection_nonce=connection_nonce)
+                    if touched is None:
+                        await websocket.close(code=4401)
+                        return
+                    continue
+
+                if incoming.get("type") == "rpc.response":
+                    resolve_connector_rpc_response(
+                        incoming.get("requestId"),
+                        success=bool(incoming.get("success", False)),
+                        result=incoming.get("result"),
+                        error=incoming.get("error"),
                     )
                     with database.session() as db:
                         touched = touch_hermes_host_connection(db, host_id=host_id, connection_nonce=connection_nonce)

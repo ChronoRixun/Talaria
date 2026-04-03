@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import getpass
 import sys
 
 import qrcode
@@ -87,6 +88,16 @@ def build_parser() -> argparse.ArgumentParser:
         "configure-mcp",
         help="Write Hermes Mobile MCP tools into the local Hermes config and validate them.",
     )
+    configure_realtime = subparsers.add_parser(
+        "configure-realtime",
+        help="Add or update the OpenAI Realtime configuration stored on this Hermes host.",
+    )
+    configure_realtime.add_argument("--clear", action="store_true", help="Remove the stored OpenAI API key and disable talk mode.")
+    configure_realtime.add_argument(
+        "--skip-validation",
+        action="store_true",
+        help="Store the API key without validating the Realtime session flow right now.",
+    )
     subparsers.add_parser("pair-phone", help="Generate a short-lived phone pairing code and QR.")
     subparsers.add_parser("run", help="Run the long-lived Hermes Mobile connector.")
     subparsers.add_parser("status", help="Show the current connector state.")
@@ -125,7 +136,7 @@ def run_wizard(connector: HermesMobileConnector) -> int:
         pass
 
     # Step 1: Validate Hermes CLI
-    print_header("Step 1 of 3 — Verify Hermes CLI")
+    print_header("Step 1 of 4 — Verify Hermes CLI")
     metadata = connector.metadata()
     if metadata.hermes_version is None:
         print(f"Could not find Hermes at: {metadata.hermes_command}")
@@ -136,7 +147,7 @@ def run_wizard(connector: HermesMobileConnector) -> int:
     print()
 
     # Step 2: Register
-    print_header("Step 2 of 3 — Register This Machine")
+    print_header("Step 2 of 4 — Register This Machine")
     print("Registering this machine with the Hermes Mobile relay...")
     try:
         state = connector.setup(configure_mcp=False)
@@ -161,6 +172,23 @@ def run_wizard(connector: HermesMobileConnector) -> int:
     else:
         print("Skipped native MCP config.")
         print("You can enable it later with: hermes-mobile configure-mcp")
+
+    should_configure_realtime = confirm(
+        "Configure OpenAI Realtime talk mode now?",
+        default=True,
+    )
+    if should_configure_realtime:
+        api_key = getpass.getpass("OpenAI API key: ").strip()
+        try:
+            state = connector.configure_realtime(api_key=api_key, validate=True)
+            talk_status = connector.talk_readiness_payload()
+            print("Realtime talk check: ok")
+            print(f"Selected model: {talk_status['selectedModel'] or 'pending'}")
+        except Exception as e:
+            print(f"Realtime talk check: warning — {e}")
+    else:
+        print("Skipped OpenAI Realtime talk setup.")
+        print("You can enable it later with: hermes-mobile configure-realtime")
 
     return _wizard_post_setup(connector)
 
@@ -256,6 +284,7 @@ def cmd_setup(args: argparse.Namespace, connector: HermesMobileConnector) -> int
         print("Native MCP check: ok")
     if not args.skip_mcp:
         print(connector.validate_mcp()[-1])
+    print("Talk mode stays optional. Run `hermes-mobile configure-realtime` when you want to enable OpenAI Realtime talk mode.")
     print("\nNext: hermes-mobile pair-phone")
     return 0
 
@@ -268,6 +297,24 @@ def cmd_configure_mcp(connector: HermesMobileConnector) -> int:
     return 0
 
 
+def cmd_configure_realtime(args: argparse.Namespace, connector: HermesMobileConnector) -> int:
+    if args.clear:
+        state = connector.configure_realtime(clear=True, validate=False)
+        print(f"Cleared OpenAI Realtime config for host {state.host_id}")
+        return 0
+
+    api_key = getpass.getpass("OpenAI API key: ").strip()
+    state = connector.configure_realtime(api_key=api_key, validate=not args.skip_validation)
+    print(f"Configured OpenAI Realtime for host {state.host_id}")
+    talk_status = connector.talk_readiness_payload()
+    print(f"Realtime talk: {'configured' if talk_status['configured'] else 'not configured'}")
+    if talk_status["selectedModel"]:
+        print(f"Selected model: {talk_status['selectedModel']}")
+    if talk_status["lastValidationError"]:
+        print(f"Validation: {talk_status['lastValidationError']}")
+    return 0
+
+
 def cmd_enroll(args: argparse.Namespace, connector: HermesMobileConnector) -> int:
     state = connector.enroll(
         code=args.code,
@@ -277,6 +324,7 @@ def cmd_enroll(args: argparse.Namespace, connector: HermesMobileConnector) -> in
     print(f"Enrolled host {state.host_id} against {state.relay_url}")
     if args.skip_mcp:
         print("Native MCP config skipped. Run `hermes-mobile configure-mcp` later if you want Hermes Mobile tools in Hermes.")
+    print("Run `hermes-mobile configure-realtime` when you want to enable OpenAI Realtime talk mode.")
     return 0
 
 
@@ -379,6 +427,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_setup(args, connector)
     if args.command == "configure-mcp":
         return cmd_configure_mcp(connector)
+    if args.command == "configure-realtime":
+        return cmd_configure_realtime(args, connector)
     if args.command == "enroll":
         return cmd_enroll(args, connector)
     if args.command == "pair-phone":
