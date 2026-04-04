@@ -6,12 +6,16 @@ struct MessageBubble: View {
 
     private var isUser: Bool { message.sender == .user || message.sender == .voiceUser }
     private var isHermes: Bool { message.sender == .hermes || message.sender == .voiceHermes }
+    private var isCompactionMessage: Bool { message.content.hasPrefix("[CONTEXT COMPACTION]") }
+    private var isBudgetWarning: Bool { message.content.contains("[BUDGET WARNING:") }
 
     var body: some View {
         if message.sender == .system && message.content.contains("[Voice session ended]") {
             VoiceSessionBanner(duration: message.voiceSessionDuration)
         } else if message.sender == .system {
             systemMessage
+        } else if isCompactionMessage {
+            compactionBanner
         } else if isUser {
             HStack(alignment: .top, spacing: Design.Spacing.xs) {
                 Spacer(minLength: Design.Spacing.xxl)
@@ -148,8 +152,12 @@ struct MessageBubble: View {
 
     @ViewBuilder
     private var streamingText: some View {
+        let displayContent = isBudgetWarning
+            ? Self.strippingBudgetWarnings(from: message.content)
+            : message.content
+
         MarkdownContentView(
-            content: message.content,
+            content: displayContent,
             isStreaming: message.isStreaming,
             showCursor: message.isStreaming
         )
@@ -176,5 +184,34 @@ struct MessageBubble: View {
             .padding(.vertical, Design.Spacing.xxs)
             .background(Design.Colors.surface)
             .clipShape(Capsule())
+    }
+
+    // MARK: - Context Compaction Banner
+
+    private var compactionBanner: some View {
+        HStack(spacing: Design.Spacing.sm) {
+            Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
+                .font(.system(size: Design.Size.iconSmall))
+                .foregroundStyle(Design.Colors.secondaryForeground)
+
+            Text("Context compacted")
+                .font(Design.Typography.caption)
+                .foregroundStyle(Design.Colors.secondaryForeground)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, Design.Spacing.sm)
+    }
+
+    // MARK: - Budget Warning Stripping
+
+    /// Strips `[BUDGET WARNING: ...]` lines injected by the Hermes agent into
+    /// tool result messages.  These are internal agent housekeeping and should
+    /// not be shown to the user verbatim.
+    static func strippingBudgetWarnings(from text: String) -> String {
+        text.replacingOccurrences(
+            of: #"\[BUDGET WARNING:[^\]]*\]"#,
+            with: "",
+            options: .regularExpression
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
