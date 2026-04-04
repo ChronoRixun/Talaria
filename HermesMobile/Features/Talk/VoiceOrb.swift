@@ -51,6 +51,7 @@ struct VoiceOrb: View {
             innerRotation = 0
         case .listening:
             withAnimation(Design.Motion.breathe) { pulseScale = 1.08 }
+            innerRotation = 0
         case .thinking:
             withAnimation(Design.Motion.pulse) { pulseScale = 1.04 }
             withAnimation(.linear(duration: 2).repeatForever(autoreverses: false)) {
@@ -58,6 +59,9 @@ struct VoiceOrb: View {
             }
         case .speaking:
             withAnimation(Design.Motion.breathe) { pulseScale = 1.12 }
+            innerRotation = 0
+        case .interrupted:
+            withAnimation(Design.Motion.gentle) { pulseScale = 1.0 }
             innerRotation = 0
         }
     }

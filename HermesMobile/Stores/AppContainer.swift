@@ -250,12 +250,6 @@ final class AppContainer {
         inboxStore.reset()
         await initialize()
 
-        // Request push notification permission at a meaningful moment (post-pairing)
-        let notificationCapability = permissionsStore.capabilities.first { $0.permissionType == .notifications }
-        if notificationCapability?.status == .notDetermined {
-            await permissionsStore.requestPermission(for: .notifications)
-        }
-
         // Start sensor data pipeline
         sensorUploadService?.start()
         await talkStore.refreshReadiness()

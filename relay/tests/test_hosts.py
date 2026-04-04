@@ -987,6 +987,50 @@ def test_phone_pairing_rejects_expired_code(tmp_path):
     assert "expired" in response.json()["detail"].lower()
 
 
+def test_phone_pairing_allows_exact_attempt_limit_before_rate_limiting(tmp_path):
+    import time
+
+    client = build_client_with_overrides(
+        tmp_path,
+        db_name="relay-attempt-limit.db",
+        phone_pairing_code_ttl_seconds=1,
+        phone_pairing_max_attempts_per_code=3,
+        phone_pairing_max_attempts_per_ip=10,
+    )
+
+    data = setup_connector(client)
+    pairing = create_phone_pairing_code(client, data["connectorCredential"])
+    code = pairing["code"]
+
+    time.sleep(2)
+
+    first = client.post(
+        "/v1/phone-pairing/redeem",
+        json=phone_pairing_payload(code=code, installation_id=str(uuid.uuid4())),
+    )
+    second = client.post(
+        "/v1/phone-pairing/redeem",
+        json=phone_pairing_payload(code=code, installation_id=str(uuid.uuid4())),
+    )
+    third = client.post(
+        "/v1/phone-pairing/redeem",
+        json=phone_pairing_payload(code=code, installation_id=str(uuid.uuid4())),
+    )
+    fourth = client.post(
+        "/v1/phone-pairing/redeem",
+        json=phone_pairing_payload(code=code, installation_id=str(uuid.uuid4())),
+    )
+
+    assert first.status_code == 400
+    assert "expired" in first.json()["detail"].lower()
+    assert second.status_code == 400
+    assert "expired" in second.json()["detail"].lower()
+    assert third.status_code == 400
+    assert "expired" in third.json()["detail"].lower()
+    assert fourth.status_code == 429
+    assert "too many attempts" in fourth.json()["detail"].lower()
+
+
 def test_talk_readiness_returns_error_when_host_offline(tmp_path):
     client = build_client_with_overrides(tmp_path, db_name="relay-talk-offline.db")
     data = setup_connector(client)

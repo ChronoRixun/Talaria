@@ -68,6 +68,13 @@ final class TalkStore {
         applySnapshot(voiceService.snapshot)
     }
 
+    /// Manually interrupt assistant speech (e.g., from a stop button).
+    /// Unlike VAD-triggered interruption, this sends cancel + clear + truncate.
+    func interruptAssistant() {
+        voiceService.manuallyInterruptAssistantOutput()
+        applySnapshot(voiceService.snapshot)
+    }
+
     func endSessionIfNeeded() async {
         guard isSessionActive else { return }
         await endSession()

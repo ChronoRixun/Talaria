@@ -87,6 +87,7 @@
 		8EBAC29E9DD13427CD69395E /* HostEnrollmentCode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10FCCF49653C4D623A96D6DA /* HostEnrollmentCode.swift */; };
 		8EE6335A5A83806277B4807D /* TranscriptView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACA9EAEA0FB9A191B973744D /* TranscriptView.swift */; };
 		9233A45BF9167549ADA63749 /* ConnectHermesScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50367EF4B21D0D34835F795F /* ConnectHermesScreen.swift */; };
+		A1B2C3D4E5F60101AABB9901 /* PermissionsOnboardingScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60101AABB9900 /* PermissionsOnboardingScreen.swift */; };
 		923974AC683C9F178265F311 /* InboxItemDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA772C34458FD57DAF067FBB /* InboxItemDetailSheet.swift */; };
 		9711A0154899E85584526483 /* LocationServiceProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = E963F520419ACAC16EF3BB13 /* LocationServiceProtocol.swift */; };
 		9BB3ED1B07E76217411E1383 /* HermesHostStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06E9521DE6CA159C9089AB10 /* HermesHostStatus.swift */; };
@@ -194,6 +195,7 @@
 		48CCADC5326C77064FBA74A8 /* MockSessionBootstrapService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockSessionBootstrapService.swift; sourceTree = "<group>"; };
 		501C5DE3651F484BE9B36D0A /* SessionBootstrapResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionBootstrapResponse.swift; sourceTree = "<group>"; };
 		50367EF4B21D0D34835F795F /* ConnectHermesScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectHermesScreen.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60101AABB9900 /* PermissionsOnboardingScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionsOnboardingScreen.swift; sourceTree = "<group>"; };
 		539E2CFF8AC26909D0C7EFC0 /* ResilientHermesClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResilientHermesClient.swift; sourceTree = "<group>"; };
 		552AD46315A71C0902D3FBCF /* View+Glass.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+Glass.swift"; sourceTree = "<group>"; };
 		5562189905DA6369B41F16A6 /* InboxScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxScreen.swift; sourceTree = "<group>"; };
@@ -414,6 +416,7 @@
 			children = (
 				9524CA486085A8EF6DF0E1B0 /* AppRootView.swift */,
 				50367EF4B21D0D34835F795F /* ConnectHermesScreen.swift */,
+				A1B2C3D4E5F60101AABB9900 /* PermissionsOnboardingScreen.swift */,
 				9AC1AD1AB19EF5AD0090CF6B /* SetupCodeScannerView.swift */,
 			);
 			path = Onboarding;
@@ -840,6 +843,7 @@
 				407CFBF26B282A2960795CE6 /* PermissionStatus.swift in Sources */,
 				0CD417A7D4F86CDEE8D563E8 /* PermissionType.swift in Sources */,
 				0BC371DA53649A79C69D09BA /* PermissionsScreen.swift in Sources */,
+				A1B2C3D4E5F60101AABB9901 /* PermissionsOnboardingScreen.swift in Sources */,
 				585427AAF0E7B38F1C57FC15 /* PermissionsStore.swift in Sources */,
 				1CB407EF5D79683130EF86DD /* RelayAPIClient.swift in Sources */,
 				B888DF20EF13BD44C49678F7 /* RelaySetupCodePayload.swift in Sources */,

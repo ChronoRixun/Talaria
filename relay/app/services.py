@@ -336,13 +336,13 @@ def redeem_phone_pairing_code(
     if pairing_code is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This phone pairing code is invalid.")
 
-    if pairing_code.attempt_count >= settings.phone_pairing_max_attempts_per_code:
-        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="This phone pairing code has too many attempts.")
-
     pairing_code.attempt_count += 1
     pairing_code.last_attempt_at = utcnow()
     db.commit()
     db.refresh(pairing_code)
+
+    if pairing_code.attempt_count > settings.phone_pairing_max_attempts_per_code:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="This phone pairing code has too many attempts.")
 
     if pairing_code.redeemed_at is not None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This phone pairing code has already been used.")

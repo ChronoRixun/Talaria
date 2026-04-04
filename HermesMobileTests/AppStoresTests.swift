@@ -204,6 +204,10 @@ struct AppStoresTests {
             currentConversation = conversation
             return conversation
         }
+
+        func injectVoiceTranscript(voiceSessionId: UUID) async throws -> Conversation {
+            currentConversation ?? Conversation(title: "Hermes")
+        }
     }
 
     @MainActor
@@ -256,6 +260,11 @@ struct AppStoresTests {
 
         func toggleMute() async {
             isMuted.toggle()
+        }
+
+        func manuallyInterruptAssistantOutput() {
+            voiceState = .listening
+            statusMessage = "Listening"
         }
 
         func emitAssistantTurn(_ text: String) {
@@ -456,6 +465,10 @@ struct AppStoresTests {
                 currentConversation = conversation
                 return conversation
             }
+
+            func injectVoiceTranscript(voiceSessionId: UUID) async throws -> Conversation {
+                currentConversation ?? Conversation(title: "Hermes")
+            }
         }
 
         let suiteName = "chat-store-stream-artifacts-\(UUID().uuidString)"
@@ -565,6 +578,153 @@ struct AppStoresTests {
         #expect(voiceService.connectionState == .ready)
         #expect(voiceService.statusMessage == "Hermes talk is ready.")
         #expect(voiceService.blockedReason == nil)
+    }
+
+    @Test @MainActor
+    func liveVoiceSessionServiceInterruptsAssistantPlaybackOnSpeechStart() async throws {
+        let sentEvents = MutableBox([[String: Any]]())
+        let apiClient = RelayAPIClient(
+            baseURLProvider: { "https://relay.example.com/v1" }
+        )
+        let voiceService = LiveVoiceSessionService(
+            apiClient: apiClient,
+            accessTokenProvider: { "token" },
+            realtimeEventTransportOverride: { data in
+                guard let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                    return false
+                }
+                sentEvents.value.append(payload)
+                return true
+            }
+        )
+
+        voiceService.connectionState = .connected
+        voiceService.handleDataChannelEvent(
+            [
+                "type": "response.created",
+                "response": ["id": "resp_123"],
+            ]
+        )
+        voiceService.handleDataChannelEvent(
+            [
+                "type": "conversation.item.created",
+                "item": [
+                    "id": "item_123",
+                    "role": "assistant",
+                    "type": "message",
+                ],
+            ]
+        )
+        voiceService.handleDataChannelEvent(
+            [
+                "type": "response.output_text.delta",
+                "delta": "Testing interruption handling.",
+            ]
+        )
+        voiceService.handleDataChannelEvent(["type": "output_audio_buffer.started"])
+        try? await Task.sleep(for: .milliseconds(25))
+
+        voiceService.handleDataChannelEvent(["type": "input_audio_buffer.speech_started"])
+
+        #expect(sentEvents.value.count == 3)
+        #expect(sentEvents.value[0]["type"] as? String == "response.cancel")
+        #expect(sentEvents.value[0]["response_id"] as? String == "resp_123")
+        #expect(sentEvents.value[1]["type"] as? String == "output_audio_buffer.clear")
+        #expect(sentEvents.value[2]["type"] as? String == "conversation.item.truncate")
+        #expect(sentEvents.value[2]["item_id"] as? String == "item_123")
+        #expect(sentEvents.value[2]["content_index"] as? Int == 0)
+        let audioEndMs = try #require(sentEvents.value[2]["audio_end_ms"] as? Int)
+        #expect(audioEndMs >= 0)
+        #expect(voiceService.voiceState == .listening)
+        #expect(voiceService.statusMessage == "Listening")
+        #expect(voiceService.transcriptItems.last?.isPartial == false)
+    }
+
+    @Test @MainActor
+    func liveVoiceSessionServiceDoesNotInterruptWhenAssistantIsNotSpeaking() async throws {
+        let sentEvents = MutableBox([[String: Any]]())
+        let apiClient = RelayAPIClient(
+            baseURLProvider: { "https://relay.example.com/v1" }
+        )
+        let voiceService = LiveVoiceSessionService(
+            apiClient: apiClient,
+            accessTokenProvider: { "token" },
+            realtimeEventTransportOverride: { data in
+                guard let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                    return false
+                }
+                sentEvents.value.append(payload)
+                return true
+            }
+        )
+
+        voiceService.connectionState = .connected
+        voiceService.handleDataChannelEvent(
+            [
+                "type": "response.created",
+                "response": ["id": "resp_456"],
+            ]
+        )
+        voiceService.handleDataChannelEvent(
+            [
+                "type": "conversation.item.created",
+                "item": [
+                    "id": "item_456",
+                    "role": "assistant",
+                    "type": "message",
+                ],
+            ]
+        )
+
+        voiceService.handleDataChannelEvent(["type": "input_audio_buffer.speech_started"])
+
+        #expect(sentEvents.value.isEmpty)
+        #expect(voiceService.voiceState == .listening)
+    }
+
+    @Test @MainActor
+    func liveVoiceSessionServiceRecoversFromInterruptionsWithoutEndingSession() async throws {
+        let apiClient = RelayAPIClient(
+            baseURLProvider: { "https://relay.example.com/v1" }
+        )
+        let voiceService = LiveVoiceSessionService(
+            apiClient: apiClient,
+            accessTokenProvider: { "token" }
+        )
+
+        voiceService.connectionState = .connected
+        voiceService.voiceState = .speaking
+
+        voiceService.handleAudioInterruptionBegan()
+
+        #expect(voiceService.voiceState == .interrupted)
+        #expect(voiceService.statusMessage == "Audio interrupted.")
+
+        voiceService.handleAudioInterruptionEnded(shouldResume: true)
+
+        #expect(voiceService.connectionState == .connected)
+        #expect(voiceService.voiceState == .listening)
+        #expect(voiceService.statusMessage == "Listening")
+    }
+
+    @Test @MainActor
+    func liveVoiceSessionServiceRecoversFromRouteChangesDuringActiveSession() async throws {
+        let apiClient = RelayAPIClient(
+            baseURLProvider: { "https://relay.example.com/v1" }
+        )
+        let voiceService = LiveVoiceSessionService(
+            apiClient: apiClient,
+            accessTokenProvider: { "token" }
+        )
+
+        voiceService.connectionState = .connected
+        voiceService.voiceState = .interrupted
+
+        voiceService.handleAudioRouteChange(.oldDeviceUnavailable)
+
+        #expect(voiceService.connectionState == .connected)
+        #expect(voiceService.voiceState == .listening)
+        #expect(voiceService.statusMessage == "Audio route changed.")
     }
 
     @Test @MainActor

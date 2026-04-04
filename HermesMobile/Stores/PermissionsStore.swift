@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 
 @MainActor
@@ -36,6 +37,8 @@ final class PermissionsStore {
             _ = await healthService.requestAuthorization()
         case .notifications:
             _ = await notificationService.requestAuthorization()
+        case .microphone:
+            await requestMicrophoneAuthorization()
         case .camera:
             _ = await mediaService.requestCameraAuthorization()
         case .photos:
@@ -84,9 +87,30 @@ final class PermissionsStore {
                 statusDetail: healthStatusDetail()
             ),
             DeviceCapability(permissionType: .notifications, status: notificationService.authorizationStatus),
+            DeviceCapability(permissionType: .microphone, status: microphoneAuthorizationStatus()),
             DeviceCapability(permissionType: .camera, status: mediaService.cameraAuthorizationStatus),
             DeviceCapability(permissionType: .photos, status: mediaService.photosAuthorizationStatus),
         ]
+    }
+
+    // MARK: - Microphone
+
+    private func microphoneAuthorizationStatus() -> PermissionStatus {
+        switch AVAudioApplication.shared.recordPermission {
+        case .granted: .authorized
+        case .denied: .denied
+        case .undetermined: .notDetermined
+        @unknown default: .notDetermined
+        }
+    }
+
+    private func requestMicrophoneAuthorization() async {
+        guard AVAudioApplication.shared.recordPermission == .undetermined else { return }
+        await withCheckedContinuation { continuation in
+            AVAudioApplication.requestRecordPermission { _ in
+                continuation.resume()
+            }
+        }
     }
 
     private func locationStatusDetail() -> String? {

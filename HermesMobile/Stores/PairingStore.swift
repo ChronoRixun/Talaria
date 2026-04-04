@@ -3,9 +3,12 @@ import Foundation
 @MainActor
 @Observable
 final class PairingStore {
+    private static let onboardingKey = "hermes.needsPermissionsOnboarding"
+
     var pairedRelayConfiguration: PairedRelayConfiguration?
     var isWorking = false
     var lastErrorMessage: String?
+    var needsPermissionsOnboarding = false
     var onPairingChanged: (@MainActor (Bool) async -> Void)?
 
     private let pairingService: any PairingServiceProtocol
@@ -24,6 +27,7 @@ final class PairingStore {
         self.persistence = persistence
         self.environmentProvider = environmentProvider
         self.pairedRelayConfiguration = persistence.loadPairedRelayConfiguration()
+        self.needsPermissionsOnboarding = UserDefaults.standard.bool(forKey: Self.onboardingKey)
     }
 
     var isPaired: Bool {
@@ -54,6 +58,7 @@ final class PairingStore {
             persistence.savePairedRelayConfiguration(result.configuration)
             pairedRelayConfiguration = result.configuration
             lastErrorMessage = nil
+            setNeedsPermissionsOnboarding(true)
             await sessionStore.applyPairedSession(state: result.state, tokens: result.tokens)
             await onPairingChanged?(true)
             return true
@@ -72,13 +77,23 @@ final class PairingStore {
         await clearLocalPairing(notify: true)
     }
 
+    func completePermissionsOnboarding() {
+        setNeedsPermissionsOnboarding(false)
+    }
+
     func clearLocalPairing(notify: Bool = true) async {
         persistence.clearPairedRelayConfiguration()
         pairedRelayConfiguration = nil
         lastErrorMessage = nil
+        setNeedsPermissionsOnboarding(false)
         await sessionStore.clearSession()
         if notify {
             await onPairingChanged?(false)
         }
+    }
+
+    private func setNeedsPermissionsOnboarding(_ value: Bool) {
+        needsPermissionsOnboarding = value
+        UserDefaults.standard.set(value, forKey: Self.onboardingKey)
     }
 }

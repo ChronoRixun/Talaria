@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import os
 
 #if canImport(WebRTC)
 import WebRTC
@@ -7,6 +8,7 @@ import WebRTC
 
 @MainActor
 final class LiveVoiceSessionService: NSObject, VoiceSessionServiceProtocol {
+    private static let logger = Logger(subsystem: "com.appfactory.HermesMobile", category: "LiveVoiceSessionService")
     private struct EmptyBody: Encodable {}
 
     private struct EmptyRelayResponse: Decodable {}
@@ -93,6 +95,7 @@ final class LiveVoiceSessionService: NSObject, VoiceSessionServiceProtocol {
     private let accessTokenProvider: @MainActor () async -> String?
     private let accessTokenRefresher: @MainActor () async -> String?
     private let urlSession: URLSession
+    private let realtimeEventTransportOverride: ((Data) -> Bool)?
     private let eventHub = TalkSessionEventHub()
     private var voiceSessionID: UUID?
     private var startedAt: Date?
@@ -100,6 +103,12 @@ final class LiveVoiceSessionService: NSObject, VoiceSessionServiceProtocol {
     private var currentAssistantItemID: UUID?
     private var currentUserItemID: UUID?
     private var assistantTextSource: String?
+    private var currentRealtimeResponseID: String?
+    private var currentAssistantConversationItemID: String?
+    private var currentAssistantContentIndex = 0
+    private var assistantAudioPlaybackStartedAtUptime: TimeInterval?
+    private var accumulatedAssistantAudioPlaybackMilliseconds = 0
+    private var ignoreCurrentAssistantFinalization = false
 
     #if canImport(WebRTC)
     private static let peerFactory = RTCPeerConnectionFactory()
@@ -113,16 +122,23 @@ final class LiveVoiceSessionService: NSObject, VoiceSessionServiceProtocol {
         apiClient: RelayAPIClient,
         accessTokenProvider: @escaping @MainActor () async -> String?,
         accessTokenRefresher: @escaping @MainActor () async -> String? = { nil },
-        urlSession: URLSession = .shared
+        urlSession: URLSession = .shared,
+        realtimeEventTransportOverride: ((Data) -> Bool)? = nil
     ) {
         self.apiClient = apiClient
         self.accessTokenProvider = accessTokenProvider
         self.accessTokenRefresher = accessTokenRefresher
         self.urlSession = urlSession
+        self.realtimeEventTransportOverride = realtimeEventTransportOverride
         super.init()
+        registerAudioSessionObservers()
         #if canImport(WebRTC)
         peerDelegate.owner = self
         #endif
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     func events() -> AsyncStream<TalkSessionEvent> {
@@ -215,6 +231,11 @@ final class LiveVoiceSessionService: NSObject, VoiceSessionServiceProtocol {
         currentAssistantItemID = nil
         currentUserItemID = nil
         assistantTextSource = nil
+        currentRealtimeResponseID = nil
+        currentAssistantConversationItemID = nil
+        currentAssistantContentIndex = 0
+        resetAssistantAudioPlaybackTracking()
+        ignoreCurrentAssistantFinalization = false
         #if canImport(WebRTC)
         dataChannel?.close()
         dataChannel = nil
@@ -281,6 +302,22 @@ final class LiveVoiceSessionService: NSObject, VoiceSessionServiceProtocol {
         sessionDuration = 0
     }
 
+    private func registerAudioSessionObservers() {
+        let center = NotificationCenter.default
+        center.addObserver(
+            self,
+            selector: #selector(handleAudioSessionInterruptionNotification(_:)),
+            name: AVAudioSession.interruptionNotification,
+            object: nil
+        )
+        center.addObserver(
+            self,
+            selector: #selector(handleAudioSessionRouteChangeNotification(_:)),
+            name: AVAudioSession.routeChangeNotification,
+            object: nil
+        )
+    }
+
     private func ensureMicrophonePermission() async -> Bool {
         switch AVAudioApplication.shared.recordPermission {
         case .granted:
@@ -295,6 +332,91 @@ final class LiveVoiceSessionService: NSObject, VoiceSessionServiceProtocol {
             }
         @unknown default:
             return false
+        }
+    }
+
+    private var hasActiveRealtimeSession: Bool {
+        voiceSessionID != nil || connectionState == .connected || connectionState == .connecting
+    }
+
+    @objc
+    private nonisolated func handleAudioSessionInterruptionNotification(_ notification: Notification) {
+        let rawType = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
+        let rawOptions = notification.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
+
+        Task { @MainActor [weak self] in
+            guard let self,
+                  let rawType,
+                  let interruptionType = AVAudioSession.InterruptionType(rawValue: rawType)
+            else {
+                return
+            }
+
+            switch interruptionType {
+            case .began:
+                self.handleAudioInterruptionBegan()
+            case .ended:
+                let options = AVAudioSession.InterruptionOptions(rawValue: rawOptions)
+                self.handleAudioInterruptionEnded(shouldResume: options.contains(.shouldResume))
+            @unknown default:
+                break
+            }
+        }
+    }
+
+    @objc
+    private nonisolated func handleAudioSessionRouteChangeNotification(_ notification: Notification) {
+        let rawReason = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt
+
+        Task { @MainActor [weak self] in
+            guard let self,
+                  let rawReason,
+                  let reason = AVAudioSession.RouteChangeReason(rawValue: rawReason)
+            else {
+                return
+            }
+            self.handleAudioRouteChange(reason)
+        }
+    }
+
+    func handleAudioInterruptionBegan() {
+        guard hasActiveRealtimeSession else { return }
+        stopAssistantAudioPlaybackTracking()
+        voiceState = .interrupted
+        statusMessage = "Audio interrupted."
+    }
+
+    func handleAudioInterruptionEnded(shouldResume: Bool) {
+        guard hasActiveRealtimeSession else { return }
+        guard shouldResume else {
+            statusMessage = "Audio interrupted."
+            return
+        }
+
+        do {
+            try configureAudioSession()
+            if connectionState == .connected || connectionState == .connecting {
+                voiceState = .listening
+                statusMessage = "Listening"
+            }
+        } catch {
+            Self.logger.warning("Failed to reactivate audio session after interruption: \(error.localizedDescription)")
+            connectionState = .failed
+            voiceState = .disconnected
+            statusMessage = "Audio session could not resume."
+        }
+    }
+
+    func handleAudioRouteChange(_ reason: AVAudioSession.RouteChangeReason) {
+        guard hasActiveRealtimeSession else { return }
+        switch reason {
+        case .newDeviceAvailable, .oldDeviceUnavailable, .override, .routeConfigurationChange, .categoryChange:
+            if voiceState == .interrupted {
+                voiceState = .listening
+            }
+            statusMessage = "Audio route changed."
+        default:
+            break
         }
     }
 
@@ -337,6 +459,89 @@ final class LiveVoiceSessionService: NSObject, VoiceSessionServiceProtocol {
         }
     }
 
+    private func configureAudioSession() throws {
+        let audioSession = AVAudioSession.sharedInstance()
+        try audioSession.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP])
+        try audioSession.setActive(true)
+    }
+
+    func handleDataChannelEvent(_ payload: [String: Any]) {
+        let type = payload["type"] as? String ?? ""
+        switch type {
+        case "input_audio_buffer.speech_started":
+            handleServerVADInterruption()
+            voiceState = .listening
+            statusMessage = "Listening"
+        case "conversation.item.created":
+            if let item = payload["item"] as? [String: Any],
+               let role = item["role"] as? String,
+               role == "assistant",
+               let itemID = item["id"] as? String {
+                currentAssistantConversationItemID = itemID
+                currentAssistantContentIndex = 0
+                resetAssistantAudioPlaybackTracking()
+                ignoreCurrentAssistantFinalization = false
+            }
+        case "conversation.item.truncated":
+            stopAssistantAudioPlaybackTracking()
+            currentAssistantConversationItemID = nil
+            currentRealtimeResponseID = nil
+            voiceState = .listening
+            statusMessage = "Listening"
+        case "output_audio_buffer.started":
+            startAssistantAudioPlaybackTracking()
+            voiceState = .speaking
+            statusMessage = "Hermes is speaking."
+        case "output_audio_buffer.stopped":
+            stopAssistantAudioPlaybackTracking()
+            currentRealtimeResponseID = nil
+            voiceState = .listening
+            statusMessage = "Listening"
+        case "output_audio_buffer.cleared":
+            stopAssistantAudioPlaybackTracking()
+            currentRealtimeResponseID = nil
+            voiceState = .listening
+            statusMessage = "Listening"
+        case "response.created":
+            currentRealtimeResponseID = ((payload["response"] as? [String: Any])?["id"] as? String)
+            ignoreCurrentAssistantFinalization = false
+            voiceState = .thinking
+            statusMessage = "Hermes is thinking."
+        case "response.done":
+            currentRealtimeResponseID = nil
+        case "response.audio_transcript.delta":
+            assistantTextSource = assistantTextSource ?? "audio"
+            if assistantTextSource == "audio" {
+                appendAssistantDelta(payload["delta"] as? String ?? "")
+            }
+        case "response.output_text.delta":
+            assistantTextSource = assistantTextSource ?? "text"
+            if assistantTextSource == "text" {
+                appendAssistantDelta(payload["delta"] as? String ?? "")
+            }
+        case "response.audio_transcript.done":
+            assistantTextSource = assistantTextSource ?? "audio"
+            if assistantTextSource == "audio" {
+                finalizeAssistantText(payload["transcript"] as? String ?? payload["text"] as? String)
+            }
+        case "response.output_text.done":
+            assistantTextSource = assistantTextSource ?? "text"
+            if assistantTextSource == "text" {
+                finalizeAssistantText(payload["transcript"] as? String ?? payload["text"] as? String)
+            }
+        case "conversation.item.input_audio_transcription.completed":
+            finalizeUserText(payload["transcript"] as? String ?? "")
+        case "error":
+            let message = ((payload["error"] as? [String: Any])?["message"] as? String) ?? "Realtime talk failed."
+            blockedReason = message
+            connectionState = .failed
+            voiceState = .disconnected
+            statusMessage = message
+        default:
+            break
+        }
+    }
+
     #if canImport(WebRTC)
     private func connectRealtime(bootstrap: TalkBootstrap) async throws {
         try configureAudioSession()
@@ -376,12 +581,6 @@ final class LiveVoiceSessionService: NSObject, VoiceSessionServiceProtocol {
         statusMessage = "Listening"
     }
 
-    private func configureAudioSession() throws {
-        let audioSession = AVAudioSession.sharedInstance()
-        try audioSession.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetooth, .allowBluetoothA2DP])
-        try audioSession.setActive(true)
-    }
-
     private func exchangeSDP(localSDP: String, clientSecret: String, model: String?) async throws -> String {
         let modelName = model ?? "gpt-realtime"
         guard let url = URL(string: "https://api.openai.com/v1/realtime/calls?model=\(modelName)") else {
@@ -399,54 +598,6 @@ final class LiveVoiceSessionService: NSObject, VoiceSessionServiceProtocol {
         }
         return String(decoding: data, as: UTF8.self)
     }
-
-    func handleDataChannelEvent(_ payload: [String: Any]) {
-        let type = payload["type"] as? String ?? ""
-        switch type {
-        case "input_audio_buffer.speech_started":
-            voiceState = .listening
-            statusMessage = "Listening"
-        case "output_audio_buffer.started":
-            voiceState = .speaking
-            statusMessage = "Hermes is speaking."
-        case "output_audio_buffer.stopped":
-            voiceState = .listening
-            statusMessage = "Listening"
-        case "response.created":
-            voiceState = .thinking
-            statusMessage = "Hermes is thinking."
-        case "response.audio_transcript.delta":
-            assistantTextSource = assistantTextSource ?? "audio"
-            if assistantTextSource == "audio" {
-                appendAssistantDelta(payload["delta"] as? String ?? "")
-            }
-        case "response.output_text.delta":
-            assistantTextSource = assistantTextSource ?? "text"
-            if assistantTextSource == "text" {
-                appendAssistantDelta(payload["delta"] as? String ?? "")
-            }
-        case "response.audio_transcript.done":
-            assistantTextSource = assistantTextSource ?? "audio"
-            if assistantTextSource == "audio" {
-                finalizeAssistantText(payload["transcript"] as? String ?? payload["text"] as? String)
-            }
-        case "response.output_text.done":
-            assistantTextSource = assistantTextSource ?? "text"
-            if assistantTextSource == "text" {
-                finalizeAssistantText(payload["transcript"] as? String ?? payload["text"] as? String)
-            }
-        case "conversation.item.input_audio_transcription.completed":
-            finalizeUserText(payload["transcript"] as? String ?? "")
-        case "error":
-            let message = ((payload["error"] as? [String: Any])?["message"] as? String) ?? "Realtime talk failed."
-            blockedReason = message
-            connectionState = .failed
-            voiceState = .disconnected
-            statusMessage = message
-        default:
-            break
-        }
-    }
     #endif
 
     private func appendAssistantDelta(_ delta: String) {
@@ -463,6 +614,16 @@ final class LiveVoiceSessionService: NSObject, VoiceSessionServiceProtocol {
     }
 
     private func finalizeAssistantText(_ finalText: String?) {
+        if ignoreCurrentAssistantFinalization && currentAssistantItemID == nil {
+            ignoreCurrentAssistantFinalization = false
+            currentRealtimeResponseID = nil
+            currentAssistantConversationItemID = nil
+            assistantTextSource = nil
+            voiceState = .listening
+            statusMessage = "Listening"
+            return
+        }
+
         let text = (finalText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let turnID: UUID?
         if let currentAssistantItemID,
@@ -485,7 +646,11 @@ final class LiveVoiceSessionService: NSObject, VoiceSessionServiceProtocol {
             turnID = nil
         }
         currentAssistantItemID = nil
+        currentAssistantConversationItemID = nil
+        currentRealtimeResponseID = nil
         assistantTextSource = nil
+        ignoreCurrentAssistantFinalization = false
+        resetAssistantAudioPlaybackTracking()
         if latencyMetrics.firstAssistantFinalizedAt == nil {
             latencyMetrics.firstAssistantFinalizedAt = .now
         }
@@ -523,6 +688,131 @@ final class LiveVoiceSessionService: NSObject, VoiceSessionServiceProtocol {
         persistFinalTurn(clientTurnID: turnID, speaker: .user, text: text)
         voiceState = .thinking
         statusMessage = "Hermes is thinking."
+    }
+
+    private func startAssistantAudioPlaybackTracking() {
+        if assistantAudioPlaybackStartedAtUptime == nil {
+            assistantAudioPlaybackStartedAtUptime = ProcessInfo.processInfo.systemUptime
+        }
+    }
+
+    private func stopAssistantAudioPlaybackTracking() {
+        accumulatedAssistantAudioPlaybackMilliseconds = currentAssistantAudioPlaybackMilliseconds()
+        assistantAudioPlaybackStartedAtUptime = nil
+    }
+
+    private func resetAssistantAudioPlaybackTracking() {
+        assistantAudioPlaybackStartedAtUptime = nil
+        accumulatedAssistantAudioPlaybackMilliseconds = 0
+    }
+
+    private func currentAssistantAudioPlaybackMilliseconds() -> Int {
+        guard let startedAt = assistantAudioPlaybackStartedAtUptime else {
+            return accumulatedAssistantAudioPlaybackMilliseconds
+        }
+        let elapsed = max(0, ProcessInfo.processInfo.systemUptime - startedAt)
+        return accumulatedAssistantAudioPlaybackMilliseconds + Int((elapsed * 1000).rounded())
+    }
+
+    /// Called when server VAD detects user speech (`input_audio_buffer.speech_started`).
+    ///
+    /// With `server_vad` + `interrupt_response: true`, the server **automatically**
+    /// cancels the current response and clears the output audio buffer. Sending
+    /// `response.cancel` or `output_audio_buffer.clear` from the client is redundant
+    /// and can cause errors if the response is already done.
+    ///
+    /// The client's only responsibility is to send `conversation.item.truncate` so
+    /// the server knows how much audio the user actually heard.
+    private func handleServerVADInterruption() {
+        guard voiceState == .speaking || assistantAudioPlaybackStartedAtUptime != nil else { return }
+        truncateAndCleanUpAssistantState()
+    }
+
+    /// Called when the user explicitly requests interruption (e.g., a stop button).
+    ///
+    /// Unlike VAD-triggered interruption, the server has NOT auto-cancelled, so we
+    /// must send the full sequence: cancel → clear → truncate.
+    func manuallyInterruptAssistantOutput() {
+        guard voiceState == .speaking || assistantAudioPlaybackStartedAtUptime != nil else { return }
+
+        if let responseID = currentRealtimeResponseID {
+            if !sendRealtimeEvent([
+                "type": "response.cancel",
+                "event_id": UUID().uuidString,
+                "response_id": responseID,
+            ]) {
+                Self.logger.warning("Failed to send response.cancel for response \(responseID)")
+            }
+        }
+
+        if !sendRealtimeEvent([
+            "type": "output_audio_buffer.clear",
+            "event_id": UUID().uuidString,
+        ]) {
+            Self.logger.warning("Failed to send output_audio_buffer.clear")
+        }
+
+        truncateAndCleanUpAssistantState()
+        voiceState = .listening
+        statusMessage = "Listening"
+    }
+
+    /// Shared cleanup: sends `conversation.item.truncate` and resets local tracking state.
+    private func truncateAndCleanUpAssistantState() {
+        if let itemID = currentAssistantConversationItemID {
+            let audioMs = currentAssistantAudioPlaybackMilliseconds()
+            if !sendRealtimeEvent([
+                "type": "conversation.item.truncate",
+                "event_id": UUID().uuidString,
+                "item_id": itemID,
+                "content_index": currentAssistantContentIndex,
+                "audio_end_ms": audioMs,
+            ]) {
+                Self.logger.warning("Failed to send conversation.item.truncate for item \(itemID) at \(audioMs)ms")
+            }
+        }
+
+        stopAssistantAudioPlaybackTracking()
+        freezeCurrentAssistantTurnForInterruption()
+        currentRealtimeResponseID = nil
+        currentAssistantConversationItemID = nil
+    }
+
+    private func freezeCurrentAssistantTurnForInterruption() {
+        if let currentAssistantItemID,
+           let index = transcriptItems.firstIndex(where: { $0.id == currentAssistantItemID }) {
+            transcriptItems[index].isPartial = false
+        }
+        currentAssistantItemID = nil
+        assistantTextSource = nil
+        ignoreCurrentAssistantFinalization = true
+    }
+
+    private func sendRealtimeEvent(_ payload: [String: Any]) -> Bool {
+        guard JSONSerialization.isValidJSONObject(payload) else {
+            Self.logger.warning("Realtime event payload was not valid JSON: \(String(describing: payload["type"]))")
+            return false
+        }
+
+        do {
+            let data = try JSONSerialization.data(withJSONObject: payload)
+            if let realtimeEventTransportOverride {
+                return realtimeEventTransportOverride(data)
+            }
+            #if canImport(WebRTC)
+            guard let dataChannel, dataChannel.readyState == .open else {
+                Self.logger.warning("Realtime event transport unavailable for event: \(String(describing: payload["type"]))")
+                return false
+            }
+            return dataChannel.sendData(RTCDataBuffer(data: data, isBinary: false))
+            #else
+            Self.logger.warning("Realtime event transport unavailable in non-WebRTC build for event: \(String(describing: payload["type"]))")
+            return false
+            #endif
+        } catch {
+            Self.logger.warning("Failed to encode realtime event \(String(describing: payload["type"])): \(error.localizedDescription)")
+            return false
+        }
     }
 }
 

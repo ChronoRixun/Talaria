@@ -5,6 +5,7 @@ enum VoiceState: String, Codable, Hashable, Sendable, CaseIterable {
     case listening
     case thinking
     case speaking
+    case interrupted
     case disconnected
 
     var displayLabel: String {
@@ -13,6 +14,7 @@ enum VoiceState: String, Codable, Hashable, Sendable, CaseIterable {
         case .listening: "Listening"
         case .thinking: "Thinking"
         case .speaking: "Speaking"
+        case .interrupted: "Interrupted"
         case .disconnected: "Disconnected"
         }
     }
@@ -23,6 +25,7 @@ enum VoiceState: String, Codable, Hashable, Sendable, CaseIterable {
         case .listening: "mic.fill"
         case .thinking: "brain"
         case .speaking: "speaker.wave.2.fill"
+        case .interrupted: "pause.circle.fill"
         case .disconnected: "wifi.slash"
         }
     }
@@ -33,6 +36,7 @@ enum VoiceState: String, Codable, Hashable, Sendable, CaseIterable {
         case .listening: .blue
         case .thinking: .purple
         case .speaking: .green
+        case .interrupted: .orange
         case .disconnected: .red
         }
     }

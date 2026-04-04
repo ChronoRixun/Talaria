@@ -101,6 +101,11 @@ final class MockVoiceSessionService: VoiceSessionServiceProtocol {
         isMuted.toggle()
     }
 
+    func manuallyInterruptAssistantOutput() {
+        voiceState = .listening
+        statusMessage = "Listening"
+    }
+
     private func publishSnapshot() {
         eventHub.publish(snapshot: snapshot)
     }

@@ -13,6 +13,14 @@ struct TalkModeScreen: View {
                 Spacer()
 
                 VoiceOrb(voiceState: talkStore.voiceState)
+                    .onTapGesture {
+                        if talkStore.voiceState == .speaking {
+                            talkStore.interruptAssistant()
+                        }
+                    }
+                    .accessibilityAction(named: "Stop speaking") {
+                        talkStore.interruptAssistant()
+                    }
 
                 TranscriptView(
                     transcriptItems: talkStore.transcriptItems,

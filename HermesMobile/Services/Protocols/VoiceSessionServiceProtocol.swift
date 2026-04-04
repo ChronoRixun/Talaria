@@ -41,4 +41,5 @@ protocol VoiceSessionServiceProtocol {
     func startSession() async
     func endSession() async
     func toggleMute() async
+    func manuallyInterruptAssistantOutput()
 }
