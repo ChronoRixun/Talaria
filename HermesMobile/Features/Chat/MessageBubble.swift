@@ -108,10 +108,15 @@ struct MessageBubble: View {
                     .padding(.vertical, Design.Spacing.xxs)
 
                 voiceModeLabel
-            } else if message.isStreaming && message.content.isEmpty {
+            } else if message.isStreaming && message.content.isEmpty && message.toolActivities.isEmpty {
                 streamingPlaceholder
             } else {
-                streamingText
+                if !message.content.isEmpty {
+                    streamingText
+                } else if message.isStreaming {
+                    // Content still empty but tool activities exist — show a subtle placeholder
+                    streamingPlaceholder
+                }
 
                 if !message.toolActivities.isEmpty {
                     ToolActivityRail(
