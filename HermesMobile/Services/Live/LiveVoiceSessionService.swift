@@ -471,6 +471,11 @@ final class LiveVoiceSessionService: NSObject, VoiceSessionServiceProtocol {
 
     func handleDataChannelEvent(_ payload: [String: Any]) {
         let type = payload["type"] as? String ?? ""
+        // Temporary debug: log all data channel events to see MCP flow
+        if type.contains("mcp") || type.contains("function") || type.contains("response.done") || type.contains("response.created") || type.contains("output_item") {
+            let status = ((payload["response"] as? [String: Any])?["status"] as? String) ?? ""
+            print("🔊 DC EVENT: \(type) \(status.isEmpty ? "" : "status=\(status)")")
+        }
         switch type {
         case "input_audio_buffer.speech_started":
             handleServerVADInterruption()
