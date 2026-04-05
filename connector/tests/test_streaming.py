@@ -314,32 +314,30 @@ def test_handle_job_cli_materializes_attachments_for_tool_access(tmp_path):
     assert "notes.txt" in captured["latest_user_message"]
 
 
-def test_handle_job_routes_attachment_jobs_to_cli_even_when_streaming_runtime_exists(tmp_path, monkeypatch):
+def test_handle_job_stages_attachments_then_streams(tmp_path, monkeypatch):
+    """Attachment jobs should stage files to disk, clear raw attachments, then go
+    through the streaming runtime — not the CLI path."""
     store = ConnectorStateStore(state_dir=tmp_path / "attachment-routing")
     store.save(make_enrolled_state())
     connector = HermesMobileConnector(state_store=store, executor=make_executor())
 
-    class FakeCLIRuntime:
-        def send_text_message(self, *, latest_user_message, history, session_id=None):  # noqa: ANN001
-            return type("Result", (), {"text": "Done", "session_id": "sess-cli"})()
+    class FakeStreamingRuntime:
+        supports_streaming = True
 
     async def fake_runtime_adapter_async(state):  # noqa: ANN001
-        raise AssertionError("Attachment jobs should not request the streaming/API runtime")
-
-    def fake_runtime_adapter(state):  # noqa: ANN001
-        return FakeCLIRuntime()
+        return FakeStreamingRuntime()
 
     captured: dict = {}
 
     async def fake_handle_job_streaming(websocket, job, runtime, workdir=None):  # noqa: ANN001
         captured["streaming"] = True
+        captured["attachments"] = job.get("attachments")
+        captured["user_message"] = job.get("latestUserMessage", "")
 
     async def fake_handle_job_cli(websocket, job, runtime):  # noqa: ANN001
         captured["cli"] = True
-        captured["runtime_type"] = type(runtime).__name__
 
     monkeypatch.setattr(connector, "runtime_adapter_for_state_async", fake_runtime_adapter_async)
-    monkeypatch.setattr(connector, "runtime_adapter_for_state", fake_runtime_adapter)
     monkeypatch.setattr(connector, "_handle_job_streaming", fake_handle_job_streaming)
     monkeypatch.setattr(connector, "_handle_job_cli", fake_handle_job_cli)
 
@@ -359,7 +357,11 @@ def test_handle_job_routes_attachment_jobs_to_cli_even_when_streaming_runtime_ex
 
     asyncio.run(connector._handle_job(FakeWebSocket(), job))  # noqa: SLF001
 
-    assert captured == {"cli": True, "runtime_type": "FakeCLIRuntime"}
+    assert captured.get("streaming") is True
+    assert captured.get("cli") is None
+    assert captured["attachments"] is None  # raw data cleared after staging
+    assert "vision_analyze" in captured["user_message"]
+    assert "photo.jpg" in captured["user_message"]
 
 
 # --------------------------------------------------------------------------

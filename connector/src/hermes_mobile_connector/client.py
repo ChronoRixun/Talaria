@@ -490,10 +490,22 @@ class HermesMobileConnector:
         state = self.state_store.load()
         workdir = state.runtime_config.hermes_workdir if state.runtime_config else None
 
-        if self._should_use_cli_runtime(job):
-            runtime = self.runtime_adapter_for_state(state)
-            await self._handle_job_cli(websocket, job, runtime)
-            return
+        # Stage image attachments to disk and replace them with vision context
+        # in the user message. The Hermes API server can't handle multipart
+        # content arrays, but the agent's vision_analyze tool works on local files.
+        # Do this BEFORE runtime selection so streaming still works for image jobs.
+        attachments = job.get("attachments") or []
+        if attachments:
+            attachment_context = self._build_cli_attachment_context(
+                job_id=str(job["id"]),
+                attachments=attachments,
+            )
+            if attachment_context:
+                msg = job.get("latestUserMessage", "")
+                job["latestUserMessage"] = (
+                    f"{msg}\n\n{attachment_context}" if msg.strip() else attachment_context
+                )
+            job["attachments"] = None  # staged to disk; don't pass raw data downstream
 
         runtime = await self.runtime_adapter_for_state_async(state)
         if not getattr(runtime, "supports_streaming", False):
@@ -672,12 +684,8 @@ class HermesMobileConnector:
         return "\n".join(lines)
 
     @staticmethod
-    def _should_use_cli_runtime(job: dict) -> bool:
-        # The local Hermes API server path still mishandles multipart attachment
-        # content and can expose the transport envelope to the model. Route
-        # attachment jobs through the CLI/runtime path, which stages files and
-        # references them explicitly for vision/text tools.
-        return bool(job.get("attachments"))
+    # _should_use_cli_runtime removed — attachment staging now happens in
+    # _handle_job before runtime selection, so all jobs go through streaming.
 
     @staticmethod
     def _is_retryable_job_error(error: Exception) -> bool:
