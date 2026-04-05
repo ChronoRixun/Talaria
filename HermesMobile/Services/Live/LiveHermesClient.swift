@@ -4,6 +4,7 @@ import os
 @MainActor
 final class LiveHermesClient: HermesClientProtocol {
     private static let logger = Logger(subsystem: "com.appfactory.HermesMobile", category: "LiveHermesClient")
+    private static let maxRequestBodyBytes = 1_000_000
     private struct ConversationResponse: Decodable {
         let conversation: RelayConversation
     }
@@ -116,14 +117,15 @@ final class LiveHermesClient: HermesClientProtocol {
 
     func send(message: String, attachments: [PendingAttachment] = [], clientMessageID: UUID) async -> Message {
         do {
+            let body = try self.makeCreateBody(
+                text: message,
+                attachments: attachments,
+                clientMessageID: clientMessageID
+            )
             let response: MessageResponse = try await performAuthorizedRequest { [self] token in
                 try await self.apiClient.post(
                     path: "messages",
-                    body: self.makeCreateBody(
-                        text: message,
-                        attachments: attachments,
-                        clientMessageID: clientMessageID
-                    ),
+                    body: body,
                     accessToken: token
                 )
             }
@@ -138,7 +140,7 @@ final class LiveHermesClient: HermesClientProtocol {
             return Message(sender: .system, content: "Hermes did not return a message.", status: .failed)
         } catch {
             connectionStatus = .error
-            return Message(sender: .system, content: "Hermes relay is unavailable right now.", status: .failed)
+            return Message(sender: .system, content: failureMessage(for: error), status: .failed)
         }
     }
 
@@ -152,14 +154,15 @@ final class LiveHermesClient: HermesClientProtocol {
                 }
 
                 do {
+                    let body = try self.makeCreateBody(
+                        text: content,
+                        attachments: attachments,
+                        clientMessageID: clientMessageID
+                    )
                     let response: MessageResponse = try await self.performAuthorizedRequest { [self] token in
                         try await self.apiClient.post(
                             path: "messages",
-                            body: self.makeCreateBody(
-                                text: content,
-                                attachments: attachments,
-                                clientMessageID: clientMessageID
-                            ),
+                            body: body,
                             accessToken: token
                         )
                     }
@@ -200,10 +203,11 @@ final class LiveHermesClient: HermesClientProtocol {
 
                     do {
                         let donePayload = try await self.streamJobEvents(jobId: jobId, continuation: continuation)
+                        let refreshedConversation = await self.reloadConversationForStreaming()
                         let finalMessage = self.resolveFinalMessage(
                             jobId: jobId,
                             donePayload: donePayload,
-                            conversation: self.currentConversation
+                            conversation: refreshedConversation ?? self.currentConversation
                         )
                         continuation.yield(.finished(finalMessage, donePayload?.usage, donePayload?.diff))
                         continuation.finish()
@@ -215,7 +219,7 @@ final class LiveHermesClient: HermesClientProtocol {
 
                 } catch {
                     self.connectionStatus = .error
-                    continuation.yield(.failed("Hermes relay is unavailable right now."))
+                    continuation.yield(.failed(self.failureMessage(for: error)))
                     continuation.finish()
                 }
             }
@@ -270,7 +274,7 @@ final class LiveHermesClient: HermesClientProtocol {
         text: String,
         attachments: [PendingAttachment],
         clientMessageID: UUID
-    ) -> MessageCreateBody {
+    ) throws -> MessageCreateBody {
         let payloads: [AttachmentPayload]? = attachments.isEmpty ? nil : attachments.map { att in
             AttachmentPayload(
                 type: att.kind.rawValue,
@@ -280,12 +284,14 @@ final class LiveHermesClient: HermesClientProtocol {
                 thumbnailData: att.thumbnailBase64
             )
         }
-        return MessageCreateBody(
+        let body = MessageCreateBody(
             conversationId: currentConversation?.id,
             text: text,
             clientMessageId: clientMessageID,
             attachments: payloads
         )
+        try validateRequestBodySize(for: body)
+        return body
     }
 
     private func fallbackConversation() -> Conversation {
@@ -463,6 +469,32 @@ final class LiveHermesClient: HermesClientProtocol {
         }
 
         return Message(sender: .hermes, content: "", jobID: jobId, status: .delivered)
+    }
+
+    private func validateRequestBodySize(for body: MessageCreateBody) throws {
+        let encoded = try RelayCoders.makeEncoder().encode(body)
+        guard encoded.count <= Self.maxRequestBodyBytes else {
+            throw RelayAPIClient.ClientError.requestFailed(
+                "The attachment was too large for Hermes to process. Try a smaller image."
+            )
+        }
+    }
+
+    private func failureMessage(for error: Error) -> String {
+        let rawError: String
+        if let clientError = error as? RelayAPIClient.ClientError {
+            rawError = clientError.errorDescription ?? error.localizedDescription
+        } else {
+            rawError = error.localizedDescription
+        }
+
+        if rawError.contains("413") || rawError.lowercased().contains("too large") {
+            return "The attachment was too large for Hermes to process. Try a smaller image."
+        }
+        if rawError.isEmpty {
+            return "Hermes relay is unavailable right now."
+        }
+        return rawError
     }
 
     private func decode<T: Decodable>(_ type: T.Type, from raw: String) -> T? {

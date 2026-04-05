@@ -81,13 +81,16 @@ final class ChatStore {
         streamingMessageID = placeholderID
 
         let stream = hermesClient.sendStreaming(message: trimmedContent, attachments: attachments, clientMessageID: clientMessageID)
+        var acceptedJobID: UUID?
+        var needsPollingFallback = false
 
         streamingTask = Task { [weak self] in
             guard let self else { return }
             for await update in stream {
                 if Task.isCancelled { break }
                 switch update {
-                case .messageSent:
+                case .messageSent(let jobID):
+                    acceptedJobID = jobID
                     if let idx = self.conversation?.messages.firstIndex(where: { $0.id == clientMessageID }) {
                         self.conversation?.messages[idx].status = .sent
                     }
@@ -133,19 +136,38 @@ final class ChatStore {
                     self.streamingMessageID = nil
                     self.pendingMessageSentAt = nil
 
-                case .failed:
+                case .failed(let errorMessage):
                     if let idx = self.conversation?.messages.firstIndex(where: { $0.id == placeholderID }) {
-                        self.conversation?.messages.remove(at: idx)
+                        if acceptedJobID == nil {
+                            self.conversation?.messages[idx] = Message(
+                                sender: .system,
+                                content: errorMessage,
+                                status: .failed
+                            )
+                        } else {
+                            self.conversation?.messages.remove(at: idx)
+                        }
                     }
                     self.streamingMessageID = nil
+                    if let idx = self.conversation?.messages.firstIndex(where: { $0.id == clientMessageID }) {
+                        self.conversation?.messages[idx].status = acceptedJobID == nil ? .failed : .sent
+                    }
+                    if acceptedJobID != nil {
+                        needsPollingFallback = true
+                    } else {
+                        self.pendingMessageSentAt = nil
+                    }
                 }
             }
         }
         await streamingTask?.value
         streamingTask = nil
 
-        // If streaming didn't finish cleanly, fall back to existing polling behavior
-        if streamingMessageID != nil {
+        // If streaming failed after the job was accepted, immediately refresh once
+        // and then fall back to polling only if the server still hasn't delivered.
+        if needsPollingFallback {
+            let refreshed = await hermesClient.loadConversation()
+            conversation = mergeConversationMetadata(from: conversation, into: refreshed)
             streamingMessageID = nil
             restartPendingPollingIfNeeded()
         }

@@ -554,3 +554,47 @@ def test_result_message_carries_job_id(tmp_path):
         # With connector adapter, message is delivered via SSE (not in POST response)
         assert data["replyState"] == "pending"
         assert "message" not in data
+
+
+def test_pending_message_response_does_not_leak_completed_result_into_conversation(tmp_path):
+    """Even if the connector completes before the POST returns, the pending payload
+    should not include the assistant result inside conversation.messages."""
+    with build_client(tmp_path) as client:
+        credential, access_token = setup_environment(
+            client, installation_id="aaaa1111-bbbb-cccc-dddd-eeeeeeee0008"
+        )
+
+        with client.websocket_connect(
+            "/v1/hosts/ws",
+            headers={"Authorization": f"Bearer {credential}"},
+        ) as websocket:
+            websocket.send_json(HELLO_PAYLOAD)
+            assert websocket.receive_json()["type"] == "ready"
+
+            holder: dict = {}
+
+            def send_msg():
+                holder["r"] = client.post(
+                    "/v1/messages",
+                    headers={"Authorization": f"Bearer {access_token}"},
+                    json={"text": "Pending response should not leak final message"},
+                )
+
+            thread = Thread(target=send_msg)
+            thread.start()
+            job = websocket.receive_json()["job"]
+            websocket.send_json({
+                "type": "job.result",
+                "jobId": job["id"],
+                "text": "Finished too quickly",
+                "sessionId": "sess-fast",
+            })
+            thread.join(timeout=5)
+
+        data = holder["r"].json()["data"]
+        assert data["replyState"] == "pending"
+        assert "message" not in data
+        assert all(
+            not (message.get("jobId") == job["id"] and message.get("role") != "user")
+            for message in data["conversation"]["messages"]
+        )

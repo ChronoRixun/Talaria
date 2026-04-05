@@ -17,9 +17,9 @@ struct PendingAttachment: Identifiable, Sendable {
         case file
     }
 
-    /// Maximum file size: 350 KB (before base64 encoding → ~470KB base64).
-    /// The Hermes API server has a 1MB total body limit including JSON wrapper,
-    /// message history, and base64 image data. 350KB raw leaves room for all of it.
+    /// Maximum file size: 350 KB (before base64 encoding -> ~470KB base64).
+    /// The Hermes API server accepts a 1 MB request body for the whole message payload,
+    /// so individual attachments still need additional aggregate request-size validation.
     static let maxFileSize = 350 * 1024
     static let maxAttachmentsPerMessage = 4
 

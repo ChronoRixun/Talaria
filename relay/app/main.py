@@ -383,6 +383,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         status_code = status.HTTP_202_ACCEPTED if job.status in {"queued", "running"} else status.HTTP_200_OK
         return payload, status_code
 
+    def strip_current_job_result_from_pending_payload(payload_data: dict, *, job_id: str) -> None:
+        payload_data.pop("message", None)
+        conversation_payload = payload_data.get("conversation")
+        if not isinstance(conversation_payload, dict):
+            return
+
+        messages = conversation_payload.get("messages")
+        if not isinstance(messages, list):
+            return
+
+        conversation_payload["messages"] = [
+            message
+            for message in messages
+            if not (message.get("jobId") == job_id and message.get("role") != "user")
+        ]
+
     _ROLE_MAP = {
         "voice_user": "user",
         "voice_hermes": "hermes",
@@ -1291,7 +1307,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # skips SSE and never sees streaming events.
         if request_settings.hermes_adapter == "connector":
             payload_data["replyState"] = "pending"
-            payload_data.pop("message", None)  # don't leak the result — SSE will deliver it
+            strip_current_job_result_from_pending_payload(payload_data, job_id=job.id)
             status_code = status.HTTP_202_ACCEPTED
         record_audit(
             db,

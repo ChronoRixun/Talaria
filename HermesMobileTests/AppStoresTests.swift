@@ -268,6 +268,11 @@ struct AppStoresTests {
             statusMessage = "Listening"
         }
 
+        @discardableResult
+        func sendImage(_ imageData: Data, mimeType: String, triggerResponse: Bool) -> Bool {
+            true
+        }
+
         func emitAssistantTurn(_ text: String) {
             transcriptItems.append(TranscriptItem(speaker: .hermes, text: text, isPartial: false))
         }
@@ -485,6 +490,260 @@ struct AppStoresTests {
         #expect(hermesMessage?.toolActivities.count == 1)
         #expect(hermesMessage?.codeDiff?.fileCount == 1)
         #expect(hermesMessage?.codeDiff?.summary == "1 file changed, 2 insertions(+), 1 deletion(-)")
+    }
+
+    @Test @MainActor
+    func chatStoreRefreshesConversationWhenStreamingFailsAfterJobAccepted() async throws {
+        final class StreamingFailureClient: HermesClientProtocol {
+            var connectionStatus: ConnectionStatus = .connected
+            var currentConversation: Conversation?
+            var loadConversationCallCount = 0
+            let jobID = UUID()
+            let userID = UUID()
+            let assistantID = UUID()
+
+            func connect() async {}
+            func disconnect() async {}
+
+            func send(message: String, attachments: [PendingAttachment] = [], clientMessageID: UUID) async -> Message {
+                Message(sender: .hermes, content: "unused", status: .delivered)
+            }
+
+            func sendStreaming(message: String, attachments: [PendingAttachment] = [], clientMessageID: UUID) -> AsyncStream<StreamingUpdate> {
+                currentConversation = Conversation(
+                    title: "Hermes",
+                    messages: [
+                        Message(id: userID, clientMessageID: clientMessageID, sender: .user, content: message, status: .sent),
+                    ]
+                )
+
+                return AsyncStream { continuation in
+                    Task { @MainActor in
+                        continuation.yield(.messageSent(jobID: jobID))
+                        continuation.yield(.failed("Stream interrupted"))
+                        continuation.finish()
+                    }
+                }
+            }
+
+            func loadConversation() async -> Conversation {
+                loadConversationCallCount += 1
+                let conversation = Conversation(
+                    title: "Hermes",
+                    messages: [
+                        Message(id: userID, sender: .user, content: "Fix it", status: .delivered),
+                        Message(id: assistantID, sender: .hermes, content: "Recovered after polling", jobID: jobID, status: .delivered),
+                    ]
+                )
+                currentConversation = conversation
+                return conversation
+            }
+
+            func clearConversation() async throws -> Conversation {
+                Conversation(title: "Hermes")
+            }
+
+            func injectVoiceTranscript(voiceSessionId: UUID) async throws -> Conversation {
+                currentConversation ?? Conversation(title: "Hermes")
+            }
+        }
+
+        let suiteName = "chat-store-stream-failure-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        let persistence = UserDefaultsAppPersistenceStore(defaults: defaults)
+        let hermesClient = StreamingFailureClient()
+        let chatStore = ChatStore(hermesClient: hermesClient, persistence: persistence)
+
+        await chatStore.sendMessage("Fix it")
+
+        #expect(hermesClient.loadConversationCallCount == 1)
+        #expect(chatStore.conversation?.messages.last?.content == "Recovered after polling")
+        #expect(chatStore.pendingMessageSentAt == nil)
+        #expect(chatStore.isStreaming == false)
+    }
+
+    @Test @MainActor
+    func liveHermesClientRefreshesConversationBeforeResolvingFinishedStreamMessage() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StubURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+
+        let conversationID = UUID()
+        let userMessageID = UUID()
+        let assistantMessageID = UUID()
+        let jobID = UUID()
+        let requestCount = MutableBox(0)
+
+        StubURLProtocol.requestHandler = { request in
+            requestCount.value += 1
+            let url = try #require(request.url)
+
+            switch url.absoluteString {
+            case "https://relay.example.com/v1/messages":
+                let response = HTTPURLResponse(url: url, statusCode: 202, httpVersion: nil, headerFields: nil)!
+                let data = #"""
+                {"data":{
+                  "replyState":"pending",
+                  "jobId":"\#(jobID.uuidString.lowercased())",
+                  "conversation":{
+                    "id":"\#(conversationID.uuidString)",
+                    "title":"Hermes",
+                    "updatedAt":"2026-04-05T18:00:00Z",
+                    "messages":[
+                      {
+                        "id":"\#(userMessageID.uuidString)",
+                        "clientMessageId":"\#(userMessageID.uuidString)",
+                        "role":"user",
+                        "text":"Look at this",
+                        "timestamp":"2026-04-05T18:00:00Z",
+                        "deliveryStatus":"sent"
+                      }
+                    ]
+                  },
+                  "userMessage":{
+                    "id":"\#(userMessageID.uuidString)",
+                    "clientMessageId":"\#(userMessageID.uuidString)",
+                    "role":"user",
+                    "text":"Look at this",
+                    "timestamp":"2026-04-05T18:00:00Z",
+                    "deliveryStatus":"sent",
+                    "jobId":"\#(jobID.uuidString.lowercased())"
+                  }
+                }}
+                """#.data(using: .utf8)!
+                return (response, data)
+
+            case "https://relay.example.com/v1/jobs/\(jobID.uuidString.lowercased())/events":
+                let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "text/event-stream"])!
+                let data = """
+                event: text_delta
+                data: {"jobId":"\(jobID.uuidString.lowercased())","delta":"Recovered ","kind":"text_delta"}
+
+                event: done
+                data: {"jobId":"\(jobID.uuidString.lowercased())","status":"completed"}
+
+                """.data(using: .utf8)!
+                return (response, data)
+
+            case "https://relay.example.com/v1/conversations/current":
+                let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!
+                let data = #"""
+                {"data":{
+                  "conversation":{
+                    "id":"\#(conversationID.uuidString)",
+                    "title":"Hermes",
+                    "updatedAt":"2026-04-05T18:00:01Z",
+                    "messages":[
+                      {
+                        "id":"\#(userMessageID.uuidString)",
+                        "clientMessageId":"\#(userMessageID.uuidString)",
+                        "role":"user",
+                        "text":"Look at this",
+                        "timestamp":"2026-04-05T18:00:00Z",
+                        "deliveryStatus":"delivered",
+                        "jobId":"\#(jobID.uuidString.lowercased())"
+                      },
+                      {
+                        "id":"\#(assistantMessageID.uuidString)",
+                        "role":"hermes",
+                        "text":"Recovered after refresh",
+                        "timestamp":"2026-04-05T18:00:01Z",
+                        "deliveryStatus":"delivered",
+                        "jobId":"\#(jobID.uuidString.lowercased())"
+                      }
+                    ]
+                  }
+                }}
+                """#.data(using: .utf8)!
+                return (response, data)
+
+            default:
+                Issue.record("Unexpected URL: \(url.absoluteString)")
+                throw URLError(.badURL)
+            }
+        }
+
+        defer {
+            StubURLProtocol.requestHandler = nil
+        }
+
+        let apiClient = RelayAPIClient(
+            baseURLProvider: { "https://relay.example.com/v1" },
+            session: session
+        )
+        let hermesClient = LiveHermesClient(
+            apiClient: apiClient,
+            accessTokenProvider: { "token" },
+            allowDemoFallback: false
+        )
+
+        var updates: [StreamingUpdate] = []
+        for await update in hermesClient.sendStreaming(
+            message: "Look at this",
+            attachments: [],
+            clientMessageID: userMessageID
+        ) {
+            updates.append(update)
+        }
+
+        let finishedMessage = try #require(
+            updates.compactMap { update -> Message? in
+                guard case .finished(let message, _, _) = update else { return nil }
+                return message
+            }.last
+        )
+        #expect(finishedMessage.content == "Recovered after refresh")
+        #expect(requestCount.value == 3)
+    }
+
+    @Test @MainActor
+    func liveHermesClientRejectsOversizedAggregateAttachmentPayloadBeforeSending() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StubURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        let requestCount = MutableBox(0)
+
+        StubURLProtocol.requestHandler = { request in
+            requestCount.value += 1
+            let url = try #require(request.url)
+            let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, #"{"data":{"conversation":{"id":"00000000-0000-0000-0000-000000000000","title":"Hermes","updatedAt":"2026-04-05T18:00:00Z","messages":[]}}}"#.data(using: .utf8)!)
+        }
+
+        defer {
+            StubURLProtocol.requestHandler = nil
+        }
+
+        let tempDirectory = FileManager.default.temporaryDirectory
+        let oversizedData = Data(repeating: 0x41, count: 300 * 1024)
+        var attachments: [PendingAttachment] = []
+
+        for index in 0 ..< 4 {
+            let url = tempDirectory.appendingPathComponent("oversized-\(index)-\(UUID().uuidString).txt")
+            try oversizedData.write(to: url)
+            attachments.append(try #require(PendingAttachment.file(at: url)))
+        }
+
+        let apiClient = RelayAPIClient(
+            baseURLProvider: { "https://relay.example.com/v1" },
+            session: session
+        )
+        let hermesClient = LiveHermesClient(
+            apiClient: apiClient,
+            accessTokenProvider: { "token" },
+            allowDemoFallback: false
+        )
+
+        let response = await hermesClient.send(
+            message: "Here are several attachments",
+            attachments: attachments,
+            clientMessageID: UUID()
+        )
+
+        #expect(requestCount.value == 0)
+        #expect(response.status == .failed)
+        #expect(response.content == "The attachment was too large for Hermes to process. Try a smaller image.")
     }
 
     @Test @MainActor
