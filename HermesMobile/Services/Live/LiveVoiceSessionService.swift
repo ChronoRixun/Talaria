@@ -287,10 +287,13 @@ final class LiveVoiceSessionService: NSObject, VoiceSessionServiceProtocol {
         ])
 
         if sent && triggerResponse {
-            _ = sendRealtimeEvent([
-                "type": "response.create",
-                "event_id": UUID().uuidString,
-            ])
+            // Only trigger response if no response is already in-flight
+            if currentRealtimeResponseID == nil {
+                _ = sendRealtimeEvent([
+                    "type": "response.create",
+                    "event_id": UUID().uuidString,
+                ])
+            }
             // Add thumbnail to transcript so the user sees what they sent
             transcriptItems.append(TranscriptItem(speaker: .user, text: "", imageData: imageData))
         }

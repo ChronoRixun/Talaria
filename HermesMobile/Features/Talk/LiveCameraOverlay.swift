@@ -108,14 +108,13 @@ final class CameraCaptureManager: NSObject {
     private var videoOutput: AVCaptureVideoDataOutput?
     private var frameTimer: Timer?
     private var latestCompressedFrame: Data?
-    private var isFirstFrame = true
+    // isFirstFrame removed — camera frames always send with triggerResponse: false
     private var isRunning = false
     private let captureQueue = DispatchQueue(label: "hermes.camera.capture", qos: .userInitiated)
 
     func start(front: Bool) {
         guard !isRunning else { return }
         isRunning = true
-        isFirstFrame = true
 
         session.beginConfiguration()
         session.sessionPreset = .medium // 480p — good balance of quality and size
@@ -169,10 +168,7 @@ final class CameraCaptureManager: NSObject {
 
     private func captureAndSendFrame() {
         guard let imageData = latestCompressedFrame else { return }
-
-        let isFirst = isFirstFrame
-        if isFirst { isFirstFrame = false }
-        onFrameCaptured?(imageData, isFirst)
+        onFrameCaptured?(imageData, false)
     }
 
     /// Convert a sample buffer to a 512px JPEG at 0.5 quality (~20-40KB).

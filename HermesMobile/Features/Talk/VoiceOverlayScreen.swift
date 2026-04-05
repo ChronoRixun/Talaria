@@ -86,8 +86,9 @@ struct VoiceOverlayScreen: View {
         }
         .fullScreenCover(isPresented: $showLiveCameraOverlay) {
             LiveCameraOverlay(
-                onFrameCaptured: { frameData, isFirst in
-                    talkStore.sendImage(frameData, triggerResponse: isFirst)
+                onFrameCaptured: { frameData, _ in
+                    // Send frames silently — model responds when user speaks
+                    talkStore.sendImage(frameData, triggerResponse: false)
                 },
                 onDismiss: {
                     showLiveCameraOverlay = false
@@ -226,15 +227,6 @@ struct VoiceOverlayScreen: View {
 
                 Spacer()
 
-                // Session timer
-                if talkStore.isSessionActive {
-                    Text(formattedDuration)
-                        .font(Design.Typography.caption.monospacedDigit())
-                        .foregroundStyle(Design.Colors.secondaryForeground)
-                }
-
-                Spacer()
-
                 // Close button
                 Button {
                     Task {
@@ -268,11 +260,5 @@ struct VoiceOverlayScreen: View {
             }
         }
         .padding(.horizontal, Design.Spacing.xl)
-    }
-
-    private var formattedDuration: String {
-        let minutes = Int(talkStore.sessionDuration) / 60
-        let seconds = Int(talkStore.sessionDuration) % 60
-        return String(format: "%d:%02d", minutes, seconds)
     }
 }
