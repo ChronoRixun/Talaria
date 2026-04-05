@@ -41,32 +41,11 @@ struct VoiceOverlayScreen: View {
                     }
                     .padding(.bottom, Design.Spacing.sm)
 
-                // Status info below orb
-                if !talkStore.isSessionActive {
-                    VStack(spacing: Design.Spacing.xs) {
-                        if let blocked = talkStore.blockedReason {
-                            Text(blocked)
-                                .font(Design.Typography.callout)
-                                .foregroundStyle(Design.Colors.secondaryForeground)
-                                .multilineTextAlignment(.center)
-                        } else if let status = talkStore.statusMessage {
-                            Text(status)
-                                .font(Design.Typography.callout)
-                                .foregroundStyle(Design.Colors.secondaryForeground)
-                                .multilineTextAlignment(.center)
-                        } else if talkStore.voiceState == .disconnected {
-                            Text("Unable to connect to voice")
-                                .font(Design.Typography.callout)
-                                .foregroundStyle(Design.Colors.secondaryForeground)
-                            Text("Check that your Hermes host is online\nand has an OpenAI API key configured.")
-                                .font(Design.Typography.caption)
-                                .foregroundStyle(Design.Colors.secondaryForeground.opacity(0.7))
-                                .multilineTextAlignment(.center)
-                        }
-                    }
+                // Status label — always visible, adapts to state
+                orbStatusLabel
                     .padding(.horizontal, Design.Spacing.xl)
-                    .transition(.opacity)
-                }
+                    .animation(Design.Motion.quickResponse, value: talkStore.connectionState)
+                    .animation(Design.Motion.quickResponse, value: talkStore.voiceState)
 
                 Spacer()
 
@@ -128,6 +107,71 @@ struct VoiceOverlayScreen: View {
                 .font(Design.Typography.caption)
                 .foregroundStyle(Design.Colors.secondaryForeground)
                 .frame(maxWidth: .infinity)
+        }
+    }
+
+    // MARK: - Orb Status
+
+    @ViewBuilder
+    private var orbStatusLabel: some View {
+        switch (talkStore.connectionState, talkStore.voiceState) {
+        case (.failed, _), (.blocked, _):
+            // Error states
+            VStack(spacing: Design.Spacing.xs) {
+                if let blocked = talkStore.blockedReason {
+                    Text(blocked)
+                        .font(Design.Typography.callout)
+                        .foregroundStyle(Design.Colors.secondaryForeground)
+                        .multilineTextAlignment(.center)
+                } else {
+                    Text("Unable to connect")
+                        .font(Design.Typography.callout)
+                        .foregroundStyle(Design.Colors.secondaryForeground)
+                }
+            }
+
+        case (.checking, _), (.idle, _):
+            HStack(spacing: Design.Spacing.xs) {
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(Design.Colors.secondaryForeground)
+                Text("Checking\u{2026}")
+                    .font(Design.Typography.callout)
+                    .foregroundStyle(Design.Colors.secondaryForeground)
+            }
+
+        case (.connecting, _):
+            HStack(spacing: Design.Spacing.xs) {
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(Design.Colors.secondaryForeground)
+                Text("Connecting\u{2026}")
+                    .font(Design.Typography.callout)
+                    .foregroundStyle(Design.Colors.secondaryForeground)
+            }
+
+        case (.connected, .listening):
+            Text("Listening")
+                .font(Design.Typography.callout)
+                .foregroundStyle(Design.Colors.secondaryForeground)
+
+        case (.connected, .thinking):
+            Text(talkStore.statusMessage ?? "Thinking\u{2026}")
+                .font(Design.Typography.callout)
+                .foregroundStyle(Design.Colors.secondaryForeground)
+
+        case (.connected, .speaking):
+            Text("Tap orb to interrupt")
+                .font(Design.Typography.caption)
+                .foregroundStyle(Design.Colors.secondaryForeground.opacity(0.7))
+
+        case (_, .disconnected):
+            Text("Disconnected")
+                .font(Design.Typography.callout)
+                .foregroundStyle(Design.Colors.secondaryForeground)
+
+        default:
+            EmptyView()
         }
     }
 
