@@ -7,6 +7,7 @@ ACK from the connector path. MCP tools query this store directly.
 from __future__ import annotations
 
 import sqlite3
+import threading
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -179,6 +180,7 @@ class SensorStore:
     def __init__(self, db_path: str | Path) -> None:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.RLock()
         self._conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode = WAL")
@@ -187,6 +189,11 @@ class SensorStore:
         self._conn.execute("PRAGMA busy_timeout = 5000")
         self._conn.executescript(SCHEMA_SQL)
         self._migrate_schema()
+
+    def _commit(self) -> None:
+        """Thread-safe commit."""
+        with self._lock:
+            self._conn.commit()
 
     def close(self) -> None:
         self._conn.close()
@@ -207,7 +214,7 @@ class SensorStore:
             for column_name, definition in columns.items():
                 if column_name not in existing:
                     self._conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}")
-        self._conn.commit()
+        self._commit()
 
     # ── Location ─────────────────────────────────────────────────
 
@@ -233,7 +240,7 @@ class SensorStore:
             "accuracy=excluded.accuracy, address=excluded.address, recorded_at=excluded.recorded_at, updated_at=excluded.updated_at",
             (reading.latitude, reading.longitude, reading.altitude, reading.accuracy, reading.address, recorded_at, now),
         )
-        self._conn.commit()
+        self._commit()
         self.prune_location_history()
         return row_id
 
@@ -309,7 +316,7 @@ class SensorStore:
             self._upsert_latest_metric(sample, updated_at=now)
             stored += 1
 
-        self._conn.commit()
+        self._commit()
         self.prune_health_samples()
         self._rollup_daily_aggregates()
         return stored
@@ -463,27 +470,22 @@ class SensorStore:
         now = utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         today = utcnow().strftime("%Y-%m-%d")
 
+        # Use parameterized placeholders for metric names (no f-string SQL injection risk)
+        cumulative = list(self._CUMULATIVE_METRICS)
+        placeholders = ",".join("?" * len(cumulative))
+
         # Cumulative metrics: daily value = MAX of the day's snapshots
-        cumulative_list = ",".join(f"'{m}'" for m in self._CUMULATIVE_METRICS)
         self._conn.execute(
             f"""
             INSERT OR REPLACE INTO health_daily
                 (metric, date, sum_value, avg_value, min_value, max_value, count, unit, updated_at)
-            SELECT
-                metric,
-                date(start_at) AS day,
-                MAX(value),   -- daily total = highest running-total snapshot
-                AVG(value),
-                MIN(value),
-                MAX(value),
-                COUNT(*),
-                unit,
-                ?
+            SELECT metric, date(start_at) AS day, MAX(value), AVG(value), MIN(value),
+                   MAX(value), COUNT(*), unit, ?
             FROM health_samples
-            WHERE date(start_at) < ? AND metric IN ({cumulative_list})
+            WHERE date(start_at) < ? AND metric IN ({placeholders})
             GROUP BY metric, date(start_at)
             """,
-            (now, today),
+            (now, today, *cumulative),
         )
 
         # Point metrics: avg/min/max are meaningful, sum is not
@@ -491,24 +493,16 @@ class SensorStore:
             f"""
             INSERT OR REPLACE INTO health_daily
                 (metric, date, sum_value, avg_value, min_value, max_value, count, unit, updated_at)
-            SELECT
-                metric,
-                date(start_at) AS day,
-                NULL,          -- sum is meaningless for point metrics
-                AVG(value),
-                MIN(value),
-                MAX(value),
-                COUNT(*),
-                unit,
-                ?
+            SELECT metric, date(start_at) AS day, NULL, AVG(value), MIN(value),
+                   MAX(value), COUNT(*), unit, ?
             FROM health_samples
-            WHERE date(start_at) < ? AND metric NOT IN ({cumulative_list})
+            WHERE date(start_at) < ? AND metric NOT IN ({placeholders})
             GROUP BY metric, date(start_at)
             """,
-            (now, today),
+            (now, today, *cumulative),
         )
 
-        self._conn.commit()
+        self._commit()
 
     # ── Maintenance ──────────────────────────────────────────────
 
@@ -516,7 +510,7 @@ class SensorStore:
         cutoff_dt = utcnow() - timedelta(days=retention_days)
         cutoff = cutoff_dt.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         cursor = self._conn.execute("DELETE FROM location_history WHERE recorded_at < ?", (cutoff,))
-        self._conn.commit()
+        self._commit()
         return cursor.rowcount
 
     def prune_health_samples(self, retention_days: int = 90) -> int:
@@ -529,5 +523,5 @@ class SensorStore:
         )
         # Also prune daily aggregates older than retention
         self._conn.execute("DELETE FROM health_daily WHERE date < ?", (cutoff_date,))
-        self._conn.commit()
+        self._commit()
         return cursor.rowcount

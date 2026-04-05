@@ -428,7 +428,8 @@ class HermesMobileConnector:
                 if sensor_ack is not None:
                     await websocket.send(json.dumps(sensor_ack))
                     continue
-                raise RuntimeError(f"Unsupported relay message: {message_type}")
+                logger.warning("Ignoring unknown relay message type: %s", message_type)
+                continue
 
     def _handle_sensor_message(self, message: dict) -> dict | None:
         """Store a sensor message locally and return an ACK payload when handled."""
@@ -507,12 +508,19 @@ class HermesMobileConnector:
                 )
             job["attachments"] = None  # staged to disk; don't pass raw data downstream
 
-        runtime = await self.runtime_adapter_for_state_async(state)
-        if not getattr(runtime, "supports_streaming", False):
-            await self._handle_job_cli(websocket, job, runtime)
-            return
+        try:
+            runtime = await self.runtime_adapter_for_state_async(state)
+            if not getattr(runtime, "supports_streaming", False):
+                await self._handle_job_cli(websocket, job, runtime)
+                return
 
-        await self._handle_job_streaming(websocket, job, runtime, workdir=workdir)
+            await self._handle_job_streaming(websocket, job, runtime, workdir=workdir)
+        finally:
+            # Clean up staged attachment files after job completes
+            staging_dir = self.state_store.state_dir / "attachment_staging" / str(job["id"])
+            if staging_dir.exists():
+                import shutil
+                shutil.rmtree(staging_dir, ignore_errors=True)
 
     async def _handle_job_streaming(
         self, websocket, job: dict, runtime, *, workdir: str | None = None,

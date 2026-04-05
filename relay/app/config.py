@@ -50,6 +50,7 @@ class Settings:
     connector_rpc_timeout_seconds: float = 30.0
     talk_delegate_timeout_seconds: float = 90.0
     sse_keepalive_seconds: int = 30
+    connector_setup_secret: str | None = None
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -82,4 +83,5 @@ class Settings:
             connector_sensor_ack_timeout_seconds=float(os.getenv("CONNECTOR_SENSOR_ACK_TIMEOUT_SECONDS", "3.0")),
             connector_rpc_timeout_seconds=float(os.getenv("CONNECTOR_RPC_TIMEOUT_SECONDS", "30.0")),
             talk_delegate_timeout_seconds=float(os.getenv("TALK_DELEGATE_TIMEOUT_SECONDS", "90.0")),
+            connector_setup_secret=os.getenv("CONNECTOR_SETUP_SECRET") or None,
         )

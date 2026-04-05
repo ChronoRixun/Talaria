@@ -218,18 +218,24 @@ def query_sensor_data(sql: str, limit: int = 100) -> str:
 
     store = _get_store()
     try:
-        conn = store._conn
-        # Always wrap in a subquery with enforced LIMIT, regardless of user's LIMIT
-        safe_sql = f"SELECT * FROM ({sql.rstrip().rstrip(';')}) LIMIT {effective_limit}"
-
-        cursor = conn.execute(safe_sql)
-        columns = [desc[0] for desc in cursor.description] if cursor.description else []
-        rows = cursor.fetchall()
-        return json.dumps({
-            "columns": columns,
-            "rows": [dict(zip(columns, row)) for row in rows],
-            "count": len(rows),
-        })
+        # Open a separate read-only connection for user queries.
+        # Even if the SQL contains injection (DROP, INSERT, ATTACH, etc.),
+        # the read-only mode prevents any writes at the SQLite level.
+        import sqlite3
+        ro_conn = sqlite3.connect(f"file:{store.db_path}?mode=ro", uri=True)
+        ro_conn.row_factory = sqlite3.Row
+        try:
+            safe_sql = f"SELECT * FROM ({sql.rstrip().rstrip(';')}) LIMIT {effective_limit}"
+            cursor = ro_conn.execute(safe_sql)
+            columns = [desc[0] for desc in cursor.description] if cursor.description else []
+            rows = cursor.fetchall()
+            return json.dumps({
+                "columns": columns,
+                "rows": [dict(zip(columns, row)) for row in rows],
+                "count": len(rows),
+            })
+        finally:
+            ro_conn.close()
     except Exception as e:
         return json.dumps({"error": str(e)})
     finally:

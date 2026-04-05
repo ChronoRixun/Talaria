@@ -342,6 +342,9 @@ final class LiveVoiceSessionService: NSObject, VoiceSessionServiceProtocol {
         do {
             return try await operation()
         } catch RelayAPIClient.ClientError.unauthorized {
+            // accessTokenRefresher() persists the new token to SessionStore.
+            // The retry calls accessTokenProvider() which reads from the same store,
+            // so it will pick up the refreshed token automatically.
             guard let refreshedToken = await accessTokenRefresher(), !refreshedToken.isEmpty else {
                 throw RelayAPIClient.ClientError.unauthorized("Expired or invalid access token.")
             }

@@ -1,4 +1,5 @@
 @preconcurrency import AVFoundation
+import ImageIO
 import SwiftUI
 import UIKit
 
@@ -215,13 +216,15 @@ final class CameraCaptureManager: NSObject {
         frameTimer?.invalidate()
         frameTimer = nil
 
+        // All session changes must happen on the same queue to avoid races
         let capturedSession = session
         captureQueue.async {
+            capturedSession.beginConfiguration()
+            for input in capturedSession.inputs { capturedSession.removeInput(input) }
+            for output in capturedSession.outputs { capturedSession.removeOutput(output) }
+            capturedSession.commitConfiguration()
             capturedSession.stopRunning()
         }
-
-        for input in session.inputs { session.removeInput(input) }
-        for output in session.outputs { session.removeOutput(output) }
         videoOutput = nil
         latestCompressedFrame = nil
         isRunning = false
@@ -241,23 +244,36 @@ final class CameraCaptureManager: NSObject {
         onFrameCaptured?(imageData, false)
     }
 
+    // Reuse a single CIContext — creating one per frame is expensive (GPU resource)
+    nonisolated(unsafe) private static let sharedCIContext = CIContext()
+
     /// Convert a sample buffer to a 512px JPEG at 0.5 quality (~20-40KB).
+    /// Uses Core Graphics for thread-safe resizing (UIGraphicsImageRenderer is not safe on background queues).
     nonisolated private static func compressFrame(_ buffer: CMSampleBuffer) -> Data? {
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(buffer) else { return nil }
         let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
-        let context = CIContext()
-        guard let cgImage = context.createCGImage(ciImage, from: ciImage.extent) else { return nil }
+        guard let cgImage = sharedCIContext.createCGImage(ciImage, from: ciImage.extent) else { return nil }
 
-        let image = UIImage(cgImage: cgImage)
-        let maxDimension: CGFloat = 512
-        let scale = min(maxDimension / max(image.size.width, image.size.height), 1.0)
-        let newSize = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        let maxDim: CGFloat = 512
+        let w = CGFloat(cgImage.width), h = CGFloat(cgImage.height)
+        let scale = min(maxDim / max(w, h), 1.0)
+        let newW = Int(w * scale), newH = Int(h * scale)
 
-        let renderer = UIGraphicsImageRenderer(size: newSize)
-        let resized = renderer.image { _ in
-            image.draw(in: CGRect(origin: .zero, size: newSize))
-        }
-        return resized.jpegData(compressionQuality: 0.5)
+        // Thread-safe Core Graphics resize
+        guard let colorSpace = cgImage.colorSpace ?? CGColorSpace(name: CGColorSpace.sRGB),
+              let ctx = CGContext(data: nil, width: newW, height: newH,
+                                  bitsPerComponent: 8, bytesPerRow: 0, space: colorSpace,
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        ctx.interpolationQuality = .medium
+        ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: newW, height: newH))
+        guard let resized = ctx.makeImage() else { return nil }
+
+        // JPEG encode via ImageIO (thread-safe)
+        let data = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(data as CFMutableData, "public.jpeg" as CFString, 1, nil) else { return nil }
+        CGImageDestinationAddImage(dest, resized, [kCGImageDestinationLossyCompressionQuality: 0.5] as CFDictionary)
+        guard CGImageDestinationFinalize(dest) else { return nil }
+        return data as Data
     }
 }
 

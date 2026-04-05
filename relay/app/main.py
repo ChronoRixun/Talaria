@@ -208,7 +208,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if not queues:
             # No subscribers yet — buffer the event on a replay list so late
             # SSE subscribers can catch up.
-            app.state.job_event_buffers.setdefault(job_id, []).append(event)
+            buffer = app.state.job_event_buffers.setdefault(job_id, [])
+            if len(buffer) < 500:  # cap buffer to prevent unbounded memory growth
+                buffer.append(event)
             return
         for queue in queues:
             try:
@@ -475,6 +477,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         db: Session = Depends(get_db),
         request_settings: Settings = Depends(get_settings),
     ) -> dict:
+        # If a setup secret is configured, require it. Open access in dev when unset.
+        if request_settings.connector_setup_secret:
+            provided = getattr(payload, "installationSecret", None) or payload.connector.__dict__.get("installationSecret")
+            if provided != request_settings.connector_setup_secret:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid or missing installation secret.")
+
         user, host, connector_token = setup_connector_account(
             db,
             settings=request_settings,

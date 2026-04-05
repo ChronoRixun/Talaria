@@ -229,9 +229,9 @@ async def _handle_tools_call(
             "content": [{"type": "text", "text": text}],
             "isError": False,
         })
-    except Exception as exc:
+    except Exception:
         logger.exception("hermes_delegate failed")
         return _ok(req_id, {
-            "content": [{"type": "text", "text": f"Delegation failed: {exc}"}],
+            "content": [{"type": "text", "text": "The delegation request failed. Please try again."}],
             "isError": True,
         })

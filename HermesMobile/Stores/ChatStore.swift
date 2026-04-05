@@ -94,27 +94,31 @@ final class ChatStore {
                     acceptedJobID = jobID
 
                 case .textDelta(let delta):
-                    if let idx = self.conversation?.messages.firstIndex(where: { $0.id == placeholderID }) {
-                        self.conversation?.messages[idx].content += delta
-                        self.conversation?.messages[idx].toolActivity = nil
-                        for i in self.conversation!.messages[idx].toolActivities.indices {
-                            self.conversation?.messages[idx].toolActivities[i].isActive = false
+                    if var conv = self.conversation,
+                       let idx = conv.messages.firstIndex(where: { $0.id == placeholderID }) {
+                        conv.messages[idx].content += delta
+                        conv.messages[idx].toolActivity = nil
+                        for i in conv.messages[idx].toolActivities.indices {
+                            conv.messages[idx].toolActivities[i].isActive = false
                         }
+                        self.conversation = conv
                     }
 
                 case .toolActivity(let label):
-                    if let idx = self.conversation?.messages.firstIndex(where: { $0.id == placeholderID }) {
-                        for i in self.conversation!.messages[idx].toolActivities.indices {
-                            self.conversation?.messages[idx].toolActivities[i].isActive = false
+                    if var conv = self.conversation,
+                       let idx = conv.messages.firstIndex(where: { $0.id == placeholderID }) {
+                        for i in conv.messages[idx].toolActivities.indices {
+                            conv.messages[idx].toolActivities[i].isActive = false
                         }
                         let activity = ToolActivity(label: label)
-                        self.conversation?.messages[idx].toolActivities.append(activity)
-                        self.conversation?.messages[idx].toolActivity = label
+                        conv.messages[idx].toolActivities.append(activity)
+                        conv.messages[idx].toolActivity = label
+                        self.conversation = conv
                     }
 
                 case .finished(let finalMessage, let usage, let diff):
                     if let idx = self.conversation?.messages.firstIndex(where: { $0.id == placeholderID }) {
-                        let activities = self.conversation!.messages[idx].toolActivities
+                        let activities = self.conversation?.messages[idx].toolActivities ?? []
                         var resolved = finalMessage
                         resolved.toolActivities = activities
                         resolved.codeDiff = diff
@@ -180,6 +184,9 @@ final class ChatStore {
     }
 
     func clearConversation() async throws {
+        streamingTask?.cancel()
+        streamingTask = nil
+        streamingMessageID = nil
         let fresh = try await hermesClient.clearConversation()
         conversation = fresh
         pendingMessageSentAt = nil
@@ -342,7 +349,8 @@ final class ChatStore {
                 attempts += 1
                 try? await Task.sleep(for: .seconds(2))
                 guard !Task.isCancelled else { break }
-                self.conversation = await self.hermesClient.loadConversation()
+                let fresh = await self.hermesClient.loadConversation()
+                self.conversation = self.mergeConversationMetadata(from: self.conversation, into: fresh)
                 if let conversation = self.conversation {
                     self.persistence.saveConversationCache(conversation)
                 }
