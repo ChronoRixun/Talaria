@@ -96,9 +96,11 @@ def build_talk_mcp_app(relay_app: FastAPI):
         try:
             # FastMCP.streamable_http_app() serves at /mcp but the ASGI mount
             # strips the prefix, leaving "/". Rewrite so the inner app sees /mcp.
-            path = scope.get("path", "/")
-            if path == "/" or path == "":
-                scope = dict(scope, path="/mcp")
+            import logging as _log
+            _mcp_log = _log.getLogger("relay.talk_mcp")
+            # The ASGI mount may or may not strip the prefix depending on
+            # how Starlette handles raw callables. Normalize to /mcp regardless.
+            scope = dict(scope, path="/mcp")
             await inner_app(scope, receive, send)
         finally:
             _current_context.reset(token)
