@@ -88,6 +88,7 @@
 		9BB3ED1B07E76217411E1383 /* HermesHostStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06E9521DE6CA159C9089AB10 /* HermesHostStatus.swift */; };
 		9C98ECE89B5BCBF8C516E719 /* InboxServiceProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B0D65894E05A8CB60246986 /* InboxServiceProtocol.swift */; };
 		9ED2C6ABCCF0320249860C44 /* MediaServiceProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AC675ACB6407262E9D2363E /* MediaServiceProtocol.swift */; };
+		A0580A5DDE956E58669DAE6E /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = A81D1840456136290E452975 /* WebRTC */; };
 		A5A396EDE71010521DDB83DC /* SettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41F982E7FF317AD2BDA8879C /* SettingsStore.swift */; };
 		A5C1CBE7C0C19B80EC44830A /* TalkStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A16440BD7ECCFF064BD6232 /* TalkStore.swift */; };
 		A6051FFCA60EC1F263EF9FA8 /* MockHermesHostService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1ABD6B7D4D5606CBC4DF62B6 /* MockHermesHostService.swift */; };
@@ -291,6 +292,17 @@
 		F77FB3058B069312B9716844 /* CodeBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeBlockView.swift; sourceTree = "<group>"; };
 		F9AAD43838EF351D00563C90 /* DemoData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoData.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		3B4045931914FF03439E2B2A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A0580A5DDE956E58669DAE6E /* WebRTC in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		09759B69E64061C464874378 /* Features */ = {
@@ -644,6 +656,7 @@
 			buildPhases = (
 				C30EAA427FABE72439E74689 /* Sources */,
 				8E5F38C741065CFEF6FF717A /* Resources */,
+				3B4045931914FF03439E2B2A /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -651,6 +664,7 @@
 			);
 			name = HermesMobile;
 			packageProductDependencies = (
+				A81D1840456136290E452975 /* WebRTC */,
 			);
 			productName = HermesMobile;
 			productReference = E11909D98B0F5781E0DA91D1 /* HermesMobile.app */;
@@ -704,6 +718,9 @@
 			);
 			mainGroup = 9C206139AC908A0338E738A2;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				E3AFCB80C83190A26F7FEC48 /* XCRemoteSwiftPackageReference "WebRTC" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 885E8F8307636D94085EA353 /* Products */;
 			projectDirPath = "";
@@ -1182,6 +1199,25 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		E3AFCB80C83190A26F7FEC48 /* XCRemoteSwiftPackageReference "WebRTC" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/stasel/WebRTC.git";
+			requirement = {
+				kind = exactVersion;
+				version = 130.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A81D1840456136290E452975 /* WebRTC */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E3AFCB80C83190A26F7FEC48 /* XCRemoteSwiftPackageReference "WebRTC" */;
+			productName = WebRTC;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 2358AE5B1FB017C5923C2FD9 /* Project object */;
 }
