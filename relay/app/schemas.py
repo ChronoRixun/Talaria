@@ -68,6 +68,7 @@ class HostConnectorInfo(BaseModel):
 
 class ConnectorSetupRequest(BaseModel):
     connector: HostConnectorInfo
+    installationSecret: str | None = None
 
 
 class HostRedeemRequest(BaseModel):

@@ -479,8 +479,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     ) -> dict:
         # If a setup secret is configured, require it. Open access in dev when unset.
         if request_settings.connector_setup_secret:
-            provided = getattr(payload, "installationSecret", None) or payload.connector.__dict__.get("installationSecret")
-            if provided != request_settings.connector_setup_secret:
+            if payload.installationSecret != request_settings.connector_setup_secret:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid or missing installation secret.")
 
         user, host, connector_token = setup_connector_account(

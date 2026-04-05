@@ -191,9 +191,8 @@ class SensorStore:
         self._migrate_schema()
 
     def _commit(self) -> None:
-        """Thread-safe commit."""
-        with self._lock:
-            self._conn.commit()
+        """Commit — call within a locked context."""
+        self._conn.commit()
 
     def close(self) -> None:
         self._conn.close()
@@ -219,6 +218,10 @@ class SensorStore:
     # ── Location ─────────────────────────────────────────────────
 
     def store_location(self, reading: LocationReading) -> str:
+        with self._lock:
+            return self._store_location_locked(reading)
+
+    def _store_location_locked(self, reading: LocationReading) -> str:
         row_id = str(uuid4())
         recorded_at = reading.recorded_at or utcnow_iso()
         now = utcnow_iso()
@@ -297,6 +300,10 @@ class SensorStore:
     # ── Health ───────────────────────────────────────────────────
 
     def store_health_samples(self, samples: list[HealthSample]) -> int:
+        with self._lock:
+            return self._store_health_samples_locked(samples)
+
+    def _store_health_samples_locked(self, samples: list[HealthSample]) -> int:
         now = utcnow_iso()
         stored = 0
         for sample in samples:
