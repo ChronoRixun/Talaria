@@ -61,6 +61,8 @@ targets:
         NSCameraUsageDescription: "Hermes uses the camera to capture photos and documents for analysis."
         NSPhotoLibraryUsageDescription: "Hermes accesses your photo library to help organize and search your photos."
         NSMicrophoneUsageDescription: "Hermes uses the microphone for voice conversations in Talk Mode."
+        UIBackgroundModes:
+          - processing
 
   HermesMobileTests:
     type: bundle.unit-test

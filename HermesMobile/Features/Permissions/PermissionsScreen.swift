@@ -14,7 +14,14 @@ struct PermissionsScreen: View {
 
                     ForEach(permissionsStore.capabilities) { capability in
                         PermissionCard(capability: capability) {
-                            Task { await permissionsStore.requestPermission(for: capability.permissionType) }
+                            if capability.status == .denied {
+                                // iOS won't re-prompt after denial — open Settings instead
+                                if let url = URL(string: UIApplication.openSettingsURLString) {
+                                    UIApplication.shared.open(url)
+                                }
+                            } else {
+                                Task { await permissionsStore.requestPermission(for: capability.permissionType) }
+                            }
                         }
                     }
                 }

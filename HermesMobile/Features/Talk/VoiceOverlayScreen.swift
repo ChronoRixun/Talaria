@@ -148,10 +148,29 @@ struct VoiceOverlayScreen: View {
     private var orbStatusLabel: some View {
         switch (talkStore.connectionState, talkStore.voiceState) {
         case (.failed, _), (.blocked, _):
-            Text(talkStore.blockedReason ?? "Unable to connect")
-                .font(Design.Typography.callout)
-                .foregroundStyle(Design.Colors.secondaryForeground)
-                .multilineTextAlignment(.center)
+            VStack(spacing: Design.Spacing.sm) {
+                Text(talkStore.blockedReason ?? "Unable to connect")
+                    .font(Design.Typography.callout)
+                    .foregroundStyle(Design.Colors.secondaryForeground)
+                    .multilineTextAlignment(.center)
+
+                // Show "Open Settings" for permission-related blocks
+                if let reason = talkStore.blockedReason,
+                   reason.localizedCaseInsensitiveContains("microphone") || reason.localizedCaseInsensitiveContains("permission") {
+                    Button {
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            UIApplication.shared.open(url)
+                        }
+                    } label: {
+                        Text("Open Settings")
+                            .font(Design.Typography.callout.weight(.medium))
+                            .padding(.horizontal, Design.Spacing.lg)
+                            .padding(.vertical, Design.Spacing.xs)
+                            .background(Design.Colors.surface)
+                            .clipShape(Capsule())
+                    }
+                }
+            }
 
         case (.checking, _), (.idle, _), (.connecting, _), (.ready, _):
             HStack(spacing: Design.Spacing.xs) {

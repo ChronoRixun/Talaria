@@ -183,7 +183,7 @@ final class AppContainer {
                 locationService: liveLocationService,
                 healthService: liveHealthService,
                 notificationService: notificationService,
-                mediaService: MockMediaService()
+                mediaService: processEnvironment["UITEST_PAIRING_MODE"] != nil ? MockMediaService() : LiveMediaService()
             ),
             settingsStore: settingsStore,
             talkStore: TalkStore(voiceService: voiceService),
@@ -230,6 +230,7 @@ final class AppContainer {
         guard pairingStore.isPaired else { return }
         guard await sessionStore.currentAccessToken() != nil else { return }
 
+        await permissionsStore.reloadCapabilities()
         await hostStore.refresh()
         await sensorUploadService?.handleAppDidBecomeActive()
         await talkStore.refreshReadiness()

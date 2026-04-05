@@ -58,11 +58,27 @@ struct LiveCameraOverlay: View {
                 Spacer()
 
                 if permissionDenied {
-                    Text("Camera access is required.\nGo to Settings to enable it.")
-                        .font(Design.Typography.callout)
-                        .foregroundStyle(.white.opacity(0.7))
-                        .multilineTextAlignment(.center)
-                        .padding(.bottom, Design.Spacing.xxl)
+                    VStack(spacing: Design.Spacing.sm) {
+                        Text("Camera access is required.")
+                            .font(Design.Typography.callout)
+                            .foregroundStyle(.white.opacity(0.7))
+                            .multilineTextAlignment(.center)
+
+                        Button {
+                            if let url = URL(string: UIApplication.openSettingsURLString) {
+                                UIApplication.shared.open(url)
+                            }
+                        } label: {
+                            Text("Open Settings")
+                                .font(Design.Typography.callout.weight(.medium))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, Design.Spacing.lg)
+                                .padding(.vertical, Design.Spacing.sm)
+                                .background(.ultraThinMaterial)
+                                .clipShape(Capsule())
+                        }
+                    }
+                    .padding(.bottom, Design.Spacing.xxl)
                 } else {
                     // Subtle status
                     Text("Camera active \u{2022} voice continues")
