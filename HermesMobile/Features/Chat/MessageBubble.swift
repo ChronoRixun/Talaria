@@ -216,7 +216,7 @@ struct MessageBubble: View {
                 attachmentCell(attachment)
             }
         }
-        .frame(maxWidth: 240)
+        .frame(maxWidth: 140)
     }
 
     @ViewBuilder
@@ -240,7 +240,7 @@ struct MessageBubble: View {
             Image(uiImage: uiImage)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
-                .frame(maxWidth: 200, maxHeight: 200)
+                .frame(maxWidth: 120, maxHeight: 120)
                 .clipShape(RoundedRectangle(cornerRadius: Design.CornerRadius.md))
         } else {
             HStack(spacing: Design.Spacing.xxs) {
