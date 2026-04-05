@@ -1,72 +1,95 @@
 """MCP endpoint for voice mode tool delegation.
 
-Exposes a single ``hermes_delegate`` tool that OpenAI's Realtime API can call
-server-side during a voice session.  The tool proxies the request through the
-relay to the user's connected Hermes host.
+Implements the MCP Streamable HTTP protocol directly (no FastMCP dependency)
+for a single tool: ``hermes_delegate``.  OpenAI's Realtime API calls this
+server-side during voice sessions to delegate requests to the Hermes agent.
 
-The implementation uses FastMCP with a proper ASGI lifespan so the internal
-task group is initialised before any HTTP requests arrive.
+The protocol is JSON-RPC 2.0 over HTTP:
+  POST /mcp  → JSON-RPC request  → JSON-RPC response
+  GET  /mcp  → SSE stream (not used; returns 405)
 """
 
 from __future__ import annotations
 
-import asyncio
-import contextvars
+import json
 import logging
-from contextlib import asynccontextmanager
-from dataclasses import dataclass
+import uuid
 from urllib.parse import parse_qs
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
-from mcp.server.fastmcp import FastMCP
-from starlette.applications import Starlette
 
 from .services import get_voice_session_for_tool_token, record_voice_turn
 
 logger = logging.getLogger(__name__)
 
+# --------------------------------------------------------------------------- #
+#  Tool definition advertised via tools/list
+# --------------------------------------------------------------------------- #
 
-@dataclass(frozen=True)
-class TalkMCPContext:
-    voice_session_id: str
-    user_id: str
-    host_id: str
+HERMES_DELEGATE_TOOL = {
+    "name": "hermes_delegate",
+    "description": "Delegate a voice request to the connected Hermes host. "
+                   "Use this when the user asks for something that requires "
+                   "tool access, file reads, memory lookups, or any action "
+                   "beyond what your cached context provides.",
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "prompt": {
+                "type": "string",
+                "description": "The natural-language request to send to Hermes.",
+            },
+        },
+        "required": ["prompt"],
+    },
+}
+
+MCP_SERVER_INFO = {
+    "name": "hermes-mobile-talk",
+    "version": "1.0.0",
+}
+
+MCP_CAPABILITIES = {
+    "tools": {"listChanged": False},
+}
 
 
-_current_context: contextvars.ContextVar[TalkMCPContext | None] = contextvars.ContextVar(
-    "hermes_mobile_talk_mcp_context",
-    default=None,
-)
+# --------------------------------------------------------------------------- #
+#  JSON-RPC helpers
+# --------------------------------------------------------------------------- #
 
+def _jsonrpc_result(id, result):
+    return {"jsonrpc": "2.0", "id": id, "result": result}
+
+
+def _jsonrpc_error(id, code, message):
+    return {"jsonrpc": "2.0", "id": id, "error": {"code": code, "message": message}}
+
+
+# --------------------------------------------------------------------------- #
+#  Build the ASGI sub-app
+# --------------------------------------------------------------------------- #
 
 def build_talk_mcp_app(relay_app: FastAPI):
-    mcp = FastMCP(
-        "hermes-mobile-talk",
-        instructions="Relay-hosted bridge for Hermes Mobile talk mode.",
-        stateless_http=True,
-    )
+    """Return a raw ASGI app that speaks MCP Streamable HTTP."""
 
-    @mcp.tool(description="Delegate a voice request to the connected Hermes host.")
-    async def hermes_delegate(prompt: str) -> str:
-        context = _current_context.get()
-        if context is None:
-            raise RuntimeError("Talk session context is unavailable.")
-
+    async def _handle_hermes_delegate(prompt: str, *, voice_session, user_id: str) -> str:
+        """Execute the hermes_delegate tool."""
         with relay_app.state.database.session() as db:
             record_voice_turn(
                 db,
-                voice_session_id=context.voice_session_id,
+                voice_session_id=voice_session.id,
                 role="user",
                 source="tool",
                 text=prompt,
             )
 
         result = await relay_app.state.send_connector_rpc(
-            context.user_id,
+            user_id,
             method="talk.delegate",
             params={
-                "voiceSessionId": context.voice_session_id,
+                "voiceSessionId": voice_session.id,
                 "prompt": prompt,
             },
             timeout_seconds=relay_app.state.settings.talk_delegate_timeout_seconds,
@@ -76,109 +99,140 @@ def build_talk_mcp_app(relay_app: FastAPI):
         with relay_app.state.database.session() as db:
             record_voice_turn(
                 db,
-                voice_session_id=context.voice_session_id,
+                voice_session_id=voice_session.id,
                 role="assistant",
                 source="tool",
-                text=text or "Hermes returned an empty voice delegation result.",
+                text=text or "Hermes returned an empty delegation result.",
             )
         return text
 
-    # Get the raw Starlette app that FastMCP builds.
-    inner_app = mcp.streamable_http_app()
+    async def _handle_jsonrpc(body: dict, *, voice_session, user_id: str) -> dict:
+        """Route a single JSON-RPC request."""
+        method = body.get("method", "")
+        req_id = body.get("id")
+        params = body.get("params", {})
 
-    # We need to run the inner app's lifespan (which initialises the MCP task
-    # group) inside our own wrapper.  Build a thin ASGI layer that:
-    #   1. On lifespan startup — boots the inner app's lifespan.
-    #   2. On HTTP requests — authenticates the token and rewrites the path.
-    _inner_started = asyncio.Event()
-    _shutdown_event = asyncio.Event()
+        if method == "initialize":
+            return _jsonrpc_result(req_id, {
+                "protocolVersion": "2025-03-26",
+                "serverInfo": MCP_SERVER_INFO,
+                "capabilities": MCP_CAPABILITIES,
+            })
 
-    async def _run_inner_lifespan() -> None:
-        """Simulate an ASGI lifespan for the inner app."""
-        startup_complete = asyncio.Event()
-        shutdown_triggered = asyncio.Event()
+        if method == "notifications/initialized":
+            # Client acknowledgement — no response needed for notifications
+            return None
 
-        async def receive():
-            if not startup_complete.is_set():
-                startup_complete.set()
-                return {"type": "lifespan.startup"}
-            await shutdown_triggered.wait()
-            return {"type": "lifespan.shutdown"}
+        if method == "tools/list":
+            return _jsonrpc_result(req_id, {"tools": [HERMES_DELEGATE_TOOL]})
 
-        async def send(message):
-            if message["type"] == "lifespan.startup.complete":
-                _inner_started.set()
-            elif message["type"] == "lifespan.shutdown.complete":
-                pass
+        if method == "tools/call":
+            tool_name = params.get("name", "")
+            arguments = params.get("arguments", {})
 
-        scope = {"type": "lifespan", "asgi": {"version": "3.0"}}
-        task = asyncio.create_task(inner_app(scope, receive, send))
+            if tool_name != "hermes_delegate":
+                return _jsonrpc_error(req_id, -32601, f"Unknown tool: {tool_name}")
 
-        # Wait until the inner app signals startup complete.
-        await _inner_started.wait()
+            prompt = arguments.get("prompt", "").strip()
+            if not prompt:
+                return _jsonrpc_error(req_id, -32602, "Missing required argument: prompt")
 
-        # Keep running until our own shutdown is requested.
-        await _shutdown_event.wait()
-        shutdown_triggered.set()
-        await task
+            try:
+                result_text = await _handle_hermes_delegate(
+                    prompt, voice_session=voice_session, user_id=user_id,
+                )
+                return _jsonrpc_result(req_id, {
+                    "content": [{"type": "text", "text": result_text}],
+                    "isError": False,
+                })
+            except Exception as exc:
+                logger.exception("hermes_delegate failed")
+                return _jsonrpc_result(req_id, {
+                    "content": [{"type": "text", "text": f"Delegation failed: {exc}"}],
+                    "isError": True,
+                })
 
-    _lifespan_task: asyncio.Task | None = None
+        if method == "ping":
+            return _jsonrpc_result(req_id, {})
 
-    async def protected_app(scope, receive, send) -> None:
-        nonlocal _lifespan_task
+        return _jsonrpc_error(req_id, -32601, f"Method not found: {method}")
 
-        if scope["type"] == "lifespan":
-            # Boot the inner app's lifespan on first lifespan event.
-            _lifespan_task = asyncio.create_task(_run_inner_lifespan())
-            # Forward our own lifespan to stay alive.
-            while True:
-                message = await receive()
-                if message["type"] == "lifespan.startup":
-                    await _inner_started.wait()
-                    await send({"type": "lifespan.startup.complete"})
-                elif message["type"] == "lifespan.shutdown":
-                    _shutdown_event.set()
-                    if _lifespan_task:
-                        await _lifespan_task
-                    await send({"type": "lifespan.shutdown.complete"})
-                    return
-            return
-
+    async def mcp_app(scope, receive, send) -> None:
         if scope["type"] != "http":
-            await inner_app(scope, receive, send)
             return
 
-        # Ensure the inner app's task group is ready.
-        if not _inner_started.is_set():
-            if _lifespan_task is None:
-                _lifespan_task = asyncio.create_task(_run_inner_lifespan())
-            await asyncio.wait_for(_inner_started.wait(), timeout=10.0)
-
-        # Authenticate via query-string token.
-        token_values = parse_qs(scope.get("query_string", b"").decode("utf-8")).get("token", [])
+        # -- Authenticate via query-string token -------------------------
+        qs = scope.get("query_string", b"").decode("utf-8")
+        token_values = parse_qs(qs).get("token", [])
         relay_tool_token = token_values[0] if token_values else None
+
         if not relay_tool_token:
-            await JSONResponse({"error": "Missing talk tool token."}, status_code=401)(scope, receive, send)
+            await JSONResponse(
+                {"error": "Missing talk tool token."}, status_code=401,
+            )(scope, receive, send)
             return
 
         with relay_app.state.database.session() as db:
             voice_session = get_voice_session_for_tool_token(db, relay_tool_token=relay_tool_token)
         if voice_session is None:
-            await JSONResponse({"error": "Invalid or expired talk tool token."}, status_code=401)(scope, receive, send)
+            await JSONResponse(
+                {"error": "Invalid or expired talk tool token."}, status_code=401,
+            )(scope, receive, send)
             return
 
-        token = _current_context.set(
-            TalkMCPContext(
-                voice_session_id=voice_session.id,
-                user_id=voice_session.user_id,
-                host_id=voice_session.host_id,
-            )
-        )
-        try:
-            # Rewrite path to /mcp so the inner FastMCP route matches.
-            scope = dict(scope, path="/mcp")
-            await inner_app(scope, receive, send)
-        finally:
-            _current_context.reset(token)
+        user_id = voice_session.user_id
 
-    return protected_app
+        # -- Read the request body ---------------------------------------
+        body_parts = []
+        while True:
+            message = await receive()
+            body_parts.append(message.get("body", b""))
+            if not message.get("more_body", False):
+                break
+        raw_body = b"".join(body_parts)
+
+        method = scope.get("method", "GET")
+
+        if method == "GET":
+            # SSE stream — not needed for our single-tool server.
+            # Return 200 with empty event stream that closes immediately.
+            await JSONResponse(
+                {"jsonrpc": "2.0", "error": {"code": -32600, "message": "SSE not supported; use POST."}},
+                status_code=405,
+            )(scope, receive, send)
+            return
+
+        if method != "POST":
+            await JSONResponse({"error": "Method not allowed"}, status_code=405)(scope, receive, send)
+            return
+
+        # -- Parse JSON-RPC ----------------------------------------------
+        try:
+            body = json.loads(raw_body) if raw_body else {}
+        except json.JSONDecodeError:
+            await JSONResponse(
+                _jsonrpc_error(None, -32700, "Parse error"), status_code=400,
+            )(scope, receive, send)
+            return
+
+        # Handle batch requests (array of JSON-RPC messages)
+        if isinstance(body, list):
+            responses = []
+            for item in body:
+                resp = await _handle_jsonrpc(item, voice_session=voice_session, user_id=user_id)
+                if resp is not None:  # skip notifications
+                    responses.append(resp)
+            if responses:
+                await JSONResponse(responses, status_code=200)(scope, receive, send)
+            else:
+                await JSONResponse(None, status_code=204)(scope, receive, send)
+            return
+
+        response = await _handle_jsonrpc(body, voice_session=voice_session, user_id=user_id)
+        if response is None:
+            # Notification — no response
+            await JSONResponse(None, status_code=204)(scope, receive, send)
+        else:
+            await JSONResponse(response, status_code=200)(scope, receive, send)
+
+    return mcp_app
