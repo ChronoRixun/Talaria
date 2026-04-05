@@ -9,6 +9,7 @@ struct VoiceOverlayScreen: View {
 
     @State private var showAttachmentSheet = false
     @State private var showLiveCameraOverlay = false
+    @State private var isExplicitlyDismissing = false
 
     var body: some View {
         ZStack {
@@ -65,9 +66,11 @@ struct VoiceOverlayScreen: View {
             }
         }
         .onDisappear {
-            // Only tear down the session if the voice overlay is truly being dismissed,
-            // NOT when a sub-screen (camera overlay, photo picker) appears on top.
-            if talkStore.isSessionActive && !showLiveCameraOverlay && !showAttachmentSheet {
+            // Only tear down if the user explicitly closed the voice overlay.
+            // Do NOT end session when sheets/covers appear on top (iOS fires
+            // onDisappear for those too).
+            guard isExplicitlyDismissing else { return }
+            if talkStore.isSessionActive {
                 Task { await talkStore.endSession() }
             }
         }
@@ -230,6 +233,7 @@ struct VoiceOverlayScreen: View {
                 // Close button
                 Button {
                     Task {
+                        isExplicitlyDismissing = true
                         await talkStore.endSession()
                         router.isVoiceOverlayPresented = false
                     }
@@ -247,6 +251,7 @@ struct VoiceOverlayScreen: View {
 
                 // Close button when not active (e.g. failed to start)
                 Button {
+                    isExplicitlyDismissing = true
                     router.isVoiceOverlayPresented = false
                 } label: {
                     Image(systemName: "xmark")
