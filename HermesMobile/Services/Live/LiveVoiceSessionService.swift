@@ -146,6 +146,10 @@ final class LiveVoiceSessionService: NSObject, VoiceSessionServiceProtocol {
     }
 
     func refreshReadiness() async {
+        // Don't disrupt an active or connecting session with a readiness check.
+        if connectionState == .connected || connectionState == .connecting {
+            return
+        }
         connectionState = .checking
         do {
             let response: TalkReadinessResponse = try await performAuthorizedRequest { [self] in
