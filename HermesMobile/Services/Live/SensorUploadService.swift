@@ -1,3 +1,4 @@
+import CoreLocation
 import Foundation
 
 struct SensorOutboxState: Codable, Hashable, Sendable {
@@ -259,16 +260,34 @@ final class SensorUploadService {
     }
 
     private func uploadLocation(_ pending: SensorOutboxState.PendingLocation) async -> Bool {
+        // Reverse geocode to get a human-readable address
+        let address = await reverseGeocode(latitude: pending.latitude, longitude: pending.longitude)
+
         let body = SensorLocationBody(
             latitude: pending.latitude,
             longitude: pending.longitude,
             altitude: pending.altitude,
             accuracy: pending.accuracy,
-            address: nil,
+            address: address,
             recordedAt: iso8601Formatter.string(from: pending.recordedAt)
         )
 
         return await performAuthorizedUpload(path: "device/sensor/location", body: body)
+    }
+
+    private func reverseGeocode(latitude: Double, longitude: Double) async -> String? {
+        let location = CLLocation(latitude: latitude, longitude: longitude)
+        let geocoder = CLGeocoder()
+        do {
+            let placemarks = try await geocoder.reverseGeocodeLocation(location)
+            guard let place = placemarks.first else { return nil }
+            // Build a concise address: "Name, Street, City, State"
+            let parts = [place.name, place.thoroughfare, place.locality, place.administrativeArea]
+                .compactMap { $0 }
+            return parts.isEmpty ? nil : parts.joined(separator: ", ")
+        } catch {
+            return nil // Geocoding failed — send without address
+        }
     }
 
     private func uploadHealth(_ samples: [SensorOutboxState.PendingHealthSample]) async -> Bool {

@@ -395,6 +395,143 @@ final class LiveHealthService: HealthServiceProtocol {
             )
         }
 
+        // Resting heart rate — latest sample in last 24h
+        if let restingHR = HKQuantityType.quantityType(forIdentifier: .restingHeartRate) {
+            descriptors["resting_heart_rate"] = HealthMetricDescriptor(
+                metric: "resting_heart_rate",
+                sampleType: restingHR,
+                startDateProvider: { Date().addingTimeInterval(-86_400) },
+                builder: { service, startDate in
+                    guard let (value, date) = await service.queryLatestSample(
+                        .restingHeartRate, unit: .count().unitDivided(by: .minute()), from: startDate
+                    ) else { return nil }
+                    return .init(metric: "resting_heart_rate", value: value, unit: "bpm", startAt: date, endAt: nil)
+                }
+            )
+        }
+
+        // Blood oxygen — latest sample in last 24h
+        if let spo2 = HKQuantityType.quantityType(forIdentifier: .oxygenSaturation) {
+            descriptors["blood_oxygen"] = HealthMetricDescriptor(
+                metric: "blood_oxygen",
+                sampleType: spo2,
+                startDateProvider: { Date().addingTimeInterval(-86_400) },
+                builder: { service, startDate in
+                    guard let (value, date) = await service.queryLatestSample(
+                        .oxygenSaturation, unit: .percent(), from: startDate
+                    ) else { return nil }
+                    return .init(metric: "blood_oxygen", value: value * 100, unit: "%", startAt: date, endAt: nil)
+                }
+            )
+        }
+
+        // Respiratory rate — latest sample in last 24h
+        if let respRate = HKQuantityType.quantityType(forIdentifier: .respiratoryRate) {
+            descriptors["respiratory_rate"] = HealthMetricDescriptor(
+                metric: "respiratory_rate",
+                sampleType: respRate,
+                startDateProvider: { Date().addingTimeInterval(-86_400) },
+                builder: { service, startDate in
+                    guard let (value, date) = await service.queryLatestSample(
+                        .respiratoryRate, unit: .count().unitDivided(by: .minute()), from: startDate
+                    ) else { return nil }
+                    return .init(metric: "respiratory_rate", value: value, unit: "breaths/min", startAt: date, endAt: nil)
+                }
+            )
+        }
+
+        // Body mass — latest sample in last 7 days
+        if let bodyMass = HKQuantityType.quantityType(forIdentifier: .bodyMass) {
+            descriptors["body_mass"] = HealthMetricDescriptor(
+                metric: "body_mass",
+                sampleType: bodyMass,
+                startDateProvider: { Date().addingTimeInterval(-7 * 86_400) },
+                builder: { service, startDate in
+                    guard let (value, date) = await service.queryLatestSample(
+                        .bodyMass, unit: .gramUnit(with: .kilo), from: startDate
+                    ) else { return nil }
+                    return .init(metric: "body_mass", value: value, unit: "kg", startAt: date, endAt: nil)
+                }
+            )
+        }
+
+        // Exercise time — cumulative sum today
+        if let exercise = HKQuantityType.quantityType(forIdentifier: .appleExerciseTime) {
+            descriptors["workout_minutes"] = HealthMetricDescriptor(
+                metric: "workout_minutes",
+                sampleType: exercise,
+                startDateProvider: { Calendar.current.startOfDay(for: Date()) },
+                builder: { service, startDate in
+                    guard let value = await service.queryCumulativeSum(
+                        .appleExerciseTime, unit: .minute(), from: startDate, to: Date()
+                    ) else { return nil }
+                    return .init(metric: "workout_minutes", value: value, unit: "minutes", startAt: startDate, endAt: Date())
+                }
+            )
+        }
+
+        // Stand hours — cumulative sum today
+        if let stand = HKQuantityType.quantityType(forIdentifier: .appleStandTime) {
+            descriptors["stand_hours"] = HealthMetricDescriptor(
+                metric: "stand_hours",
+                sampleType: stand,
+                startDateProvider: { Calendar.current.startOfDay(for: Date()) },
+                builder: { service, startDate in
+                    guard let value = await service.queryCumulativeSum(
+                        .appleStandTime, unit: .minute(), from: startDate, to: Date()
+                    ) else { return nil }
+                    return .init(metric: "stand_hours", value: value / 60.0, unit: "hours", startAt: startDate, endAt: Date())
+                }
+            )
+        }
+
+        // Sleep duration — sum of asleep intervals in last 24h
+        let sleepType = HKCategoryType(.sleepAnalysis)
+        descriptors["sleep_duration"] = HealthMetricDescriptor(
+            metric: "sleep_duration",
+            sampleType: sleepType,
+            startDateProvider: { Date().addingTimeInterval(-86_400) },
+            builder: { service, startDate in
+                guard let hours = await service.querySleepDuration(from: startDate) else { return nil }
+                return .init(metric: "sleep_duration", value: hours, unit: "hours", startAt: startDate, endAt: Date())
+            }
+        )
+
         return descriptors
+    }
+
+    // MARK: - Sleep Query
+
+    private func querySleepDuration(from startDate: Date) async -> Double? {
+        let sleepType = HKCategoryType(.sleepAnalysis)
+        let predicate = HKQuery.predicateForSamples(withStart: startDate, end: Date())
+        let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+
+        return await withCheckedContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: sleepType,
+                predicate: predicate,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: [sort]
+            ) { _, results, _ in
+                guard let samples = results as? [HKCategorySample] else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                // Sum intervals where the user was actually asleep
+                let asleepValues: Set<Int> = [
+                    HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue,
+                    HKCategoryValueSleepAnalysis.asleepCore.rawValue,
+                    HKCategoryValueSleepAnalysis.asleepDeep.rawValue,
+                    HKCategoryValueSleepAnalysis.asleepREM.rawValue,
+                ]
+                let totalSeconds = samples
+                    .filter { asleepValues.contains($0.value) }
+                    .reduce(0.0) { $0 + $1.endDate.timeIntervalSince($1.startDate) }
+                let hours = totalSeconds / 3600.0
+                continuation.resume(returning: hours > 0 ? hours : nil)
+            }
+            store?.execute(query)
+        }
     }
 }

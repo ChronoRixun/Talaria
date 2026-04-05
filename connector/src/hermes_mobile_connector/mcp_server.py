@@ -167,6 +167,78 @@ def get_health_metrics_list() -> str:
         store.close()
 
 
+@mcp.tool()
+def get_sensor_schema() -> str:
+    """Return the SQLite schema for the sensor database.
+
+    Shows all table definitions, column types, and indexes.
+    Use this to understand the data structure before writing
+    custom queries with query_sensor_data.
+    """
+    store = _get_store()
+    try:
+        conn = store._conn
+        cursor = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type IN ('table', 'index') AND sql IS NOT NULL ORDER BY type, name"
+        )
+        statements = [row[0] for row in cursor.fetchall()]
+        return json.dumps({"schema": statements})
+    finally:
+        store.close()
+
+
+@mcp.tool()
+def query_sensor_data(sql: str, limit: int = 100) -> str:
+    """Run a read-only SQL query against the sensor database.
+
+    Use this for custom analysis, trend queries, aggregations, or
+    building dashboards. The database contains tables: location_current,
+    location_history, health_samples, health_latest, health_daily.
+
+    Args:
+        sql: A SELECT query. Only SELECT statements are allowed.
+        limit: Maximum rows to return (default 100, max 1000).
+
+    Example queries:
+        - "SELECT metric, AVG(value) FROM health_samples WHERE metric='steps' GROUP BY date(start_at)"
+        - "SELECT * FROM location_history ORDER BY recorded_at DESC LIMIT 10"
+        - "SELECT metric, value, unit FROM health_latest"
+    """
+    # Safety checks
+    stripped = sql.strip().upper()
+    if not stripped.startswith("SELECT"):
+        return json.dumps({"error": "Only SELECT queries are allowed."})
+
+    forbidden = {"DROP", "DELETE", "INSERT", "UPDATE", "ALTER", "CREATE", "ATTACH", "DETACH", "PRAGMA"}
+    first_words = set(stripped.split()[:3])
+    if first_words & forbidden:
+        return json.dumps({"error": "Destructive or administrative statements are not allowed."})
+
+    effective_limit = min(max(limit, 1), 1000)
+
+    store = _get_store()
+    try:
+        conn = store._conn
+        # Add LIMIT if not already present
+        if "LIMIT" not in stripped:
+            safe_sql = f"{sql.rstrip().rstrip(';')} LIMIT {effective_limit}"
+        else:
+            safe_sql = sql
+
+        cursor = conn.execute(safe_sql)
+        columns = [desc[0] for desc in cursor.description] if cursor.description else []
+        rows = cursor.fetchall()
+        return json.dumps({
+            "columns": columns,
+            "rows": [dict(zip(columns, row)) for row in rows],
+            "count": len(rows),
+        })
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+    finally:
+        store.close()
+
+
 def main() -> None:
     mcp.run()
 

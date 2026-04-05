@@ -30,6 +30,10 @@
 	<string>Hermes uses the microphone for voice conversations in Talk Mode.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Hermes accesses your photo library to help organize and search your photos.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>processing</string>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
 </dict>

@@ -156,6 +156,20 @@ CREATE TABLE IF NOT EXISTS health_latest (
     end_at      TEXT,
     updated_at  TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS health_daily (
+    metric     TEXT NOT NULL,
+    date       TEXT NOT NULL,
+    sum_value  REAL,
+    avg_value  REAL,
+    min_value  REAL,
+    max_value  REAL,
+    count      INTEGER NOT NULL DEFAULT 0,
+    unit       TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    PRIMARY KEY (metric, date)
+);
+CREATE INDEX IF NOT EXISTS idx_health_daily_date ON health_daily(date DESC);
 """
 
 
@@ -297,6 +311,7 @@ class SensorStore:
 
         self._conn.commit()
         self.prune_health_samples()
+        self._rollup_daily_aggregates()
         return stored
 
     def _collapse_windowed_duplicate(self, sample: HealthSample) -> bool:
@@ -427,16 +442,45 @@ class SensorStore:
             },
         }
 
+    # ── Daily Aggregates ─────────────────────────────────────────
+
+    def _rollup_daily_aggregates(self) -> None:
+        """Roll up health_samples into health_daily for completed days."""
+        now = utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        today = utcnow().strftime("%Y-%m-%d")
+
+        # Aggregate all dates EXCEPT today (today's data is still accumulating)
+        self._conn.execute(
+            """
+            INSERT OR REPLACE INTO health_daily (metric, date, sum_value, avg_value, min_value, max_value, count, unit, updated_at)
+            SELECT
+                metric,
+                date(start_at) AS day,
+                SUM(value),
+                AVG(value),
+                MIN(value),
+                MAX(value),
+                COUNT(*),
+                unit,
+                ?
+            FROM health_samples
+            WHERE date(start_at) < ?
+            GROUP BY metric, date(start_at)
+            """,
+            (now, today),
+        )
+        self._conn.commit()
+
     # ── Maintenance ──────────────────────────────────────────────
 
-    def prune_location_history(self, retention_days: int = 30) -> int:
+    def prune_location_history(self, retention_days: int = 90) -> int:
         cutoff_dt = utcnow() - timedelta(days=retention_days)
         cutoff = cutoff_dt.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         cursor = self._conn.execute("DELETE FROM location_history WHERE recorded_at < ?", (cutoff,))
         self._conn.commit()
         return cursor.rowcount
 
-    def prune_health_samples(self, retention_days: int = 30) -> int:
+    def prune_health_samples(self, retention_days: int = 90) -> int:
         cutoff_dt = utcnow() - timedelta(days=retention_days)
         cutoff = cutoff_dt.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         cursor = self._conn.execute(
