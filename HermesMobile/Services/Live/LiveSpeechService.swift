@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import Speech
 
@@ -30,7 +31,7 @@ final class LiveSpeechService {
         }
     }
 
-    func startListening() throws {
+    func startListening() async throws {
         guard let speechRecognizer, speechRecognizer.isAvailable else {
             throw SpeechError.unavailable
         }
@@ -39,6 +40,11 @@ final class LiveSpeechService {
         // Cancel any previous task
         recognitionTask?.cancel()
         recognitionTask = nil
+
+        // Configure audio session for recording — must not conflict with WebRTC
+        let audioSession = AVAudioSession.sharedInstance()
+        try audioSession.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth])
+        try audioSession.setActive(true)
 
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
@@ -83,6 +89,9 @@ final class LiveSpeechService {
         recognitionTask?.cancel()
         recognitionTask = nil
         isListening = false
+
+        // Deactivate the audio session so it doesn't conflict with WebRTC
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
     enum SpeechError: LocalizedError {

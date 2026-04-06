@@ -257,7 +257,7 @@ struct ChatInputBar: View {
                 guard speechService.authorizationStatus == .authorized else { return }
 
                 do {
-                    try speechService.startListening()
+                    try await speechService.startListening()
                 } catch {
                     // Speech recognition unavailable — silently ignore
                 }
