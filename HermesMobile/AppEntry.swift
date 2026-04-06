@@ -21,8 +21,8 @@ final class HermesAppDelegate: NSObject, UIApplicationDelegate {
     ) {
         let token = deviceToken.map { String(format: "%02.2hhx", $0) }.joined()
         Task { @MainActor in
-            // Store the push token for future relay registration
             UserDefaults.standard.set(token, forKey: "hermes.apns.deviceToken")
+            await AppContainer.sharedDefault().registerPushTokenIfNeeded(token)
         }
     }
 

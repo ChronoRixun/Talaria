@@ -138,6 +138,15 @@ struct ChatInputBar: View {
         .animation(Design.Motion.quickResponse, value: isSlashMode)
         .animation(Design.Motion.quickResponse, value: isStreaming)
         .animation(Design.Motion.quickResponse, value: canSend)
+        .onAppear {
+            speechService.onAutoStop = { finalTranscript in
+                if text.isEmpty {
+                    text = finalTranscript
+                } else {
+                    text += " " + finalTranscript
+                }
+            }
+        }
     }
 
     // MARK: - Attachment Preview Strip

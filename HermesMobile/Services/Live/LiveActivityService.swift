@@ -6,7 +6,6 @@ import Foundation
 @Observable
 final class LiveActivityService {
     private var currentActivity: Activity<HermesActivityAttributes>?
-    private var updateTimer: Timer?
     private var startedAt: Date?
 
     var isAvailable: Bool {
@@ -17,8 +16,8 @@ final class LiveActivityService {
 
     func startVoiceSession() {
         guard isAvailable else { return }
-        let attributes = HermesActivityAttributes(agentName: "Hermes")
         let now = Date.now
+        let attributes = HermesActivityAttributes(agentName: "Hermes")
         let state = HermesActivityAttributes.ContentState(
             status: "Listening", toolName: nil, elapsedSeconds: 0, startDate: now, sessionType: "voice"
         )
@@ -28,8 +27,7 @@ final class LiveActivityService {
                 content: .init(state: state, staleDate: nil),
                 pushType: nil
             )
-            startedAt = .now
-            startUpdateTimer()
+            startedAt = now
         } catch {
             // Live Activities not supported or disabled — silently ignore
         }
@@ -47,8 +45,8 @@ final class LiveActivityService {
 
     func startToolCall(toolName: String) {
         guard isAvailable, currentActivity == nil else { return }
-        let attributes = HermesActivityAttributes(agentName: "Hermes")
         let now = Date.now
+        let attributes = HermesActivityAttributes(agentName: "Hermes")
         let state = HermesActivityAttributes.ContentState(
             status: "Working...", toolName: toolName, elapsedSeconds: 0, startDate: now, sessionType: "tool"
         )
@@ -58,8 +56,7 @@ final class LiveActivityService {
                 content: .init(state: state, staleDate: nil),
                 pushType: nil
             )
-            startedAt = .now
-            startUpdateTimer()
+            startedAt = now
         } catch {
             // Silently ignore
         }
@@ -77,18 +74,15 @@ final class LiveActivityService {
 
     func endActivity() {
         guard let activity = currentActivity else { return }
-        updateTimer?.invalidate()
-        updateTimer = nil
         startedAt = nil
         currentActivity = nil
 
         let finalContent = ActivityContent(
             state: HermesActivityAttributes.ContentState(
-                status: "Done", toolName: nil, elapsedSeconds: 0, sessionType: "voice"
+                status: "Done", toolName: nil, elapsedSeconds: 0, startDate: nil, sessionType: "voice"
             ),
             staleDate: nil
         )
-        // Capture the activity ID and end it in a detached task to avoid sendability issues
         let activityID = activity.id
         Task.detached {
             for activity in Activity<HermesActivityAttributes>.activities where activity.id == activityID {
@@ -110,34 +104,12 @@ final class LiveActivityService {
         }
     }
 
-    private func startUpdateTimer() {
-        updateTimer?.invalidate()
-        updateTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.tickElapsedTime()
-            }
-        }
-    }
+    // MARK: - App Lifecycle
 
-    private func tickElapsedTime() {
-        guard let activity = currentActivity, activity.activityState == .active else { return }
-        let elapsed = Int(Date().timeIntervalSince(startedAt ?? .now))
-        let currentState = activity.content.state
-        let state = HermesActivityAttributes.ContentState(
-            status: currentState.status,
-            toolName: currentState.toolName,
-            elapsedSeconds: elapsed,
-            startDate: startedAt,
-            sessionType: currentState.sessionType
-        )
-        updateActivity(with: state)
-    }
-
-    /// Called when the app returns to foreground — re-sync the elapsed time
-    /// and restart the timer (Timers are suspended while backgrounded).
+    /// Called when the app returns to foreground. No timer to restart —
+    /// the widget uses Text(timerInterval:) which ticks natively via the OS.
     func handleAppDidBecomeActive() {
-        guard currentActivity != nil, startedAt != nil else { return }
-        tickElapsedTime()
-        startUpdateTimer()
+        // No-op: Text(timerInterval:) handles the clock without updates.
+        // State updates (status, toolName) are pushed when they change.
     }
 }

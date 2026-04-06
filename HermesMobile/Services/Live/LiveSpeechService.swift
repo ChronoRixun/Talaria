@@ -11,6 +11,10 @@ final class LiveSpeechService {
     private(set) var transcript = ""
     private(set) var authorizationStatus: SFSpeechRecognizerAuthorizationStatus = .notDetermined
 
+    /// Called when the recognizer auto-stops (final result or error).
+    /// The caller should commit the transcript to its text field.
+    var onAutoStop: ((_ finalTranscript: String) -> Void)?
+
     private let speechRecognizer = SFSpeechRecognizer(locale: Locale.current)
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
@@ -73,7 +77,13 @@ final class LiveSpeechService {
                     self.transcript = result.bestTranscription.formattedString
                 }
                 if error != nil || (result?.isFinal == true) {
+                    let finalTranscript = self.transcript
                     self.stopListening()
+                    // Notify the caller so it can commit the transcript
+                    // (the UI switches from transcript to text binding on stop).
+                    if !finalTranscript.isEmpty {
+                        self.onAutoStop?(finalTranscript)
+                    }
                 }
             }
         }

@@ -149,6 +149,7 @@
 		FC8CA757C10C10EFF9152E1D /* InlineDiffView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C0C759CDC6D4A2C62DFBE6B /* InlineDiffView.swift */; };
 		FE7522860C6E4CDA2A7AEB11 /* VoiceOrb.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C0CE3739DE97A0EED8BF86C /* VoiceOrb.swift */; };
 		FF1CE050B0F7CC3E16212121 /* ChatScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AB61078198CA1379D8F50ED /* ChatScreen.swift */; };
+		D1E2F3A4B5C6D7E8F9A0B1C2 /* HermesMobileWidgets.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = CB1E16EC7AC1A55E87ED87EA /* HermesMobileWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -166,7 +167,28 @@
 			remoteGlobalIDString = E084E7061D97A1CB68FAED6E;
 			remoteInfo = HermesMobile;
 		};
+		A1B2C3D4E5F60718293A4B5C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 2358AE5B1FB017C5923C2FD9 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A0BF011ADBF960517B174268;
+			remoteInfo = HermesMobileWidgets;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		E2F3A4B5C6D7E8F9A0B1C2D3 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				D1E2F3A4B5C6D7E8F9A0B1C2 /* HermesMobileWidgets.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		014F7454548D4B275B575E61 /* MockSecureStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockSecureStore.swift; sourceTree = "<group>"; };
@@ -720,10 +742,12 @@
 				C30EAA427FABE72439E74689 /* Sources */,
 				8E5F38C741065CFEF6FF717A /* Resources */,
 				3B4045931914FF03439E2B2A /* Frameworks */,
+				E2F3A4B5C6D7E8F9A0B1C2D3 /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				F1A2B3C4D5E6F70819203142 /* PBXTargetDependency */,
 			);
 			name = HermesMobile;
 			packageProductDependencies = (
@@ -993,6 +1017,11 @@
 			isa = PBXTargetDependency;
 			target = E084E7061D97A1CB68FAED6E /* HermesMobile */;
 			targetProxy = C0035DFAE736CD216744D2C4 /* PBXContainerItemProxy */;
+		};
+		F1A2B3C4D5E6F70819203142 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A0BF011ADBF960517B174268 /* HermesMobileWidgets */;
+			targetProxy = A1B2C3D4E5F60718293A4B5C /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 

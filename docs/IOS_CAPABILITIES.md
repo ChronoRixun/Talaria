@@ -50,9 +50,9 @@ A living document tracking every iOS capability integrated into Hermes iOS — w
 
 **What it does:** Shows persistent, real-time Hermes status on the Lock Screen and Dynamic Island during voice sessions, tool calls, or active agent work.
 
-**Data model:** `HermesActivityAttributes`
+**Data model:** `HermesActivityAttributes` (conforms to `Sendable`)
 - Static: `agentName` ("Hermes")
-- Dynamic: `status` (string), `toolName` (optional), `elapsedSeconds`, `sessionType` (voice/chat/tool)
+- Dynamic: `status` (string), `toolName` (optional), `elapsedSeconds`, `startDate` (for native `Text(timerInterval:)` clock), `sessionType` (voice/chat/tool)
 
 ### Current Status
 
@@ -62,7 +62,7 @@ A living document tracking every iOS capability integrated into Hermes iOS — w
 | `HermesActivityAttributes.swift` | Wired | ActivityAttributes + ContentState with Sendable, startDate for native timer |
 | `HermesLiveActivity.swift` | Wired | Lock Screen + Dynamic Island layouts with `Text(timerInterval:)` live clock |
 | `HermesWidgetBundle.swift` | Wired | Widget bundle entry point |
-| `LiveActivityService.swift` | Wired | Manages lifecycle — start/update/end with timer re-sync on foreground |
+| `LiveActivityService.swift` | Wired | Manages lifecycle — start/update/end; no polling timer (native clock via startDate) |
 | `TalkStore` | Wired | Starts on voice connect, updates on state change, ends on session close |
 | `ChatStore` | Wired | Starts on tool call, ends on finish/fail/cancel/clear |
 | Info.plist | Configured | `NSSupportsLiveActivities: true`, `NSSupportsLiveActivitiesFrequentUpdates: true` |
@@ -75,8 +75,8 @@ A living document tracking every iOS capability integrated into Hermes iOS — w
 - [x] Add `activity.update()` in `ChatStore` during streaming (tool activity labels)
 - [x] Add cleanup on stream failure, cancellation, and conversation clear
 - [x] Use `Text(timerInterval:)` for native live-ticking timer on Lock Screen
+- [x] Embed widget extension in main app bundle (Copy Files → PlugIns in pbxproj)
 - [ ] Test on physical device (Dynamic Island requires iPhone 14 Pro+)
-- [ ] Embed widget extension in main app bundle (Xcode → General → Frameworks)
 
 ### Use Case Ideas
 - **Voice session indicator**: Lock Screen shows "Hermes is listening" with elapsed time — user knows the session is active without opening the app
@@ -99,14 +99,15 @@ A living document tracking every iOS capability integrated into Hermes iOS — w
 | `UIBackgroundModes: location` | Configured | In project.yml |
 | `CLBackgroundActivitySession` | Built | Already in `LiveLocationService.swift` |
 | `requestBackgroundAuthorization()` | Built | Two-stage flow (When In Use → Always) |
-| Significant location change | Partially built | `CLServiceSession` used but `startMonitoringSignificantLocationChanges` not explicitly called |
-| Permissions UI | Partial | Location permission exists but doesn't distinguish When In Use vs Always |
+| `CLBackgroundActivitySession` | Built | Created when `syncPreference == .backgroundAllowed && auth == .always` |
+| Permissions UI | Partial | Location permission exists but UI doesn't expose the background toggle |
+| Default sync preference | Foreground-only | `LocationSyncPreference` defaults to foreground; background requires explicit opt-in |
 
 ### Next Steps
-- [ ] Add explicit significant location change monitoring as low-power supplement
-- [ ] Update permissions UI to show "While Using" vs "Always" status
-- [ ] Test background location on physical device (verify blue bar behavior)
+- [ ] Add settings UI toggle for "Background Location" that calls `updateLocationSyncPreference(.backgroundAllowed)` and `requestBackgroundLocationAccess()`
+- [ ] Test background location on physical device (verify blue indicator bar)
 - [ ] Verify location uploads continue when app is backgrounded
+- [ ] Consider iOS 26's `CLBackgroundActivitySession` guidance for While In Use apps
 
 ### Use Case Ideas
 - **Automatic context**: Hermes always knows where you are — "Am I near a grocery store?" works even after the app was backgrounded hours ago
@@ -128,13 +129,13 @@ A living document tracking every iOS capability integrated into Hermes iOS — w
 | `registerForRemoteNotifications()` | Wired | Called in AppDelegate on launch |
 | Device token storage | Wired | Stored in UserDefaults as `hermes.apns.deviceToken` |
 | `didReceiveRemoteNotification` | Wired | Triggers `handleAppDidBecomeActive()` for data refresh |
-| Token upload to relay | **NOT BUILT** | Relay has no endpoint to receive push tokens |
-| APNs server-side sending | **NOT BUILT** | Relay cannot send push notifications yet |
+| Token upload to relay | Wired | `POST /v1/push/register` called from AppDelegate with deviceId, token, environment, bundleId |
+| Relay endpoint | Wired | `POST /v1/push/register` stores token in SQLite, returns `registered: true` |
+| APNs server-side sending | **NOT BUILT** | Relay stores tokens but cannot send push notifications yet |
 | APNs certificate/key | **NOT CONFIGURED** | Need Apple Developer Portal → Keys → APNs |
 
 ### Next Steps
-- [ ] Add `POST /v1/device/push-token` endpoint on the relay
-- [ ] Send token to relay during/after pairing
+- [x] Send token to relay during/after pairing
 - [ ] Generate APNs key in Apple Developer Portal
 - [ ] Implement APNs client in relay (use `aioapns` or `httpx` with HTTP/2)
 - [ ] Add connector RPC for "send proactive message" → relay sends silent push → app wakes → refreshes conversation
