@@ -93,3 +93,35 @@ struct HermesLiveActivity: Widget {
         return String(format: "%d:%02d", m, s)
     }
 }
+
+// MARK: - Previews
+
+#Preview("Lock Screen — Listening", as: .content, using: HermesActivityAttributes()) {
+    HermesLiveActivity()
+} contentStates: {
+    HermesActivityAttributes.ContentState(status: "Listening", toolName: nil, elapsedSeconds: 12, sessionType: "voice")
+}
+
+#Preview("Lock Screen — Tool Call", as: .content, using: HermesActivityAttributes()) {
+    HermesLiveActivity()
+} contentStates: {
+    HermesActivityAttributes.ContentState(status: "Working on that...", toolName: "hermes_delegate", elapsedSeconds: 45, sessionType: "voice")
+}
+
+#Preview("Dynamic Island Compact", as: .dynamicIsland(.compact), using: HermesActivityAttributes()) {
+    HermesLiveActivity()
+} contentStates: {
+    HermesActivityAttributes.ContentState(status: "Listening", toolName: nil, elapsedSeconds: 8, sessionType: "voice")
+}
+
+#Preview("Dynamic Island Expanded", as: .dynamicIsland(.expanded), using: HermesActivityAttributes()) {
+    HermesLiveActivity()
+} contentStates: {
+    HermesActivityAttributes.ContentState(status: "Working on that...", toolName: "hermes_delegate", elapsedSeconds: 32, sessionType: "voice")
+}
+
+#Preview("Dynamic Island Minimal", as: .dynamicIsland(.minimal), using: HermesActivityAttributes()) {
+    HermesLiveActivity()
+} contentStates: {
+    HermesActivityAttributes.ContentState(status: "Thinking", toolName: nil, elapsedSeconds: 5, sessionType: "voice")
+}
