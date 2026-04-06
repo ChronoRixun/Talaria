@@ -44,20 +44,53 @@ struct ConnectHermesScreen: View {
         }
     }
 
+    // Hermes caduceus — braille art from the Hermes Agent TUI
+    private static let caduceus = """
+    ⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⡀⠀⣀⣀⠀⢀⣀⡀⠀⠀⠀⠀⠀⠀⠀⠀
+    ⠀⠀⠀⠀⠀⢀⣠⣴⣾⣿⣿⣇⠸⣿⣿⠇⣸⣿⣿⣷⣦⣄⡀⠀⠀⠀⠀⠀
+    ⢀⣠⣴⣶⠿⠋⣩⡿⣿⡿⠻⣿⡇⢠⡄⢸⣿⠟⢿⣿⢿⣍⠙⠿⣶⣦⣄⡀
+    ⠀⠉⠉⠁⠶⠟⠋⠀⠉⠀⢀⣈⣁⡈⢁⣈⣁⡀⠀⠉⠀⠙⠻⠶⠈⠉⠉⠀
+    ⠀⠀⠀⠀⠀⠀⠀⠀⠀⣴⣿⡿⠛⢁⡈⠛⢿⣿⣦⠀⠀⠀⠀⠀⠀⠀⠀⠀
+    ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠿⣿⣦⣤⣈⠁⢠⣴⣿⠿⠀⠀⠀⠀⠀⠀⠀⠀⠀
+    ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠉⠻⢿⣿⣦⡉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+    ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⢷⣦⣈⠛⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+    ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⣴⠦⠈⠙⠿⣦⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+    ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠸⣿⣤⡈⠁⢤⣿⠇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+    ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠛⠷⠄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+    ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⠑⢶⣄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+    ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⠁⢰⡆⠈⡿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+    ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠳⠈⣡⠞⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+    """
+
     private var heroSection: some View {
-        VStack(alignment: .leading, spacing: Design.Spacing.sm) {
-            Text("Connect Your Hermes")
+        VStack(spacing: Design.Spacing.md) {
+            // Caduceus art
+            Text(Self.caduceus)
+                .font(.system(size: 14, design: .monospaced))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 1.0, green: 0.84, blue: 0.0),     // #FFD700 gold
+                            Color(red: 0.80, green: 0.50, blue: 0.20),   // #CD7F32 bronze
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+
+            Text("Hermes Mobile")
                 .font(Design.Typography.heroTitle)
                 .foregroundStyle(Design.Colors.foreground)
 
-            Text("On the machine running Hermes, finish connector setup and run `hermes-mobile pair-phone`. Scan the QR code to connect — it includes both the relay URL and pairing code automatically.")
+            Text("Run `hermes-mobile pair-phone` on your Hermes host, then scan the QR code to connect.")
                 .font(Design.Typography.body)
                 .foregroundStyle(Design.Colors.secondaryForeground)
+                .multilineTextAlignment(.center)
         }
-        .padding(Design.Spacing.lg)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Design.Colors.surface)
-        .clipShape(RoundedRectangle(cornerRadius: Design.CornerRadius.xl))
+        .padding(.vertical, Design.Spacing.lg)
+        .padding(.horizontal, Design.Spacing.md)
     }
 
     private var relayConfigurationCard: some View {
