@@ -33,6 +33,12 @@ targets:
   HermesMobile:
     type: application
     platform: iOS
+    entitlements:
+      path: HermesMobile/HermesMobile.entitlements
+      properties:
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.access: []
+        com.apple.developer.healthkit.background-delivery: true
     sources:
       - path: HermesMobile
         excludes:
@@ -60,6 +66,7 @@ targets:
         UILaunchScreen: {}
         NSLocationWhenInUseUsageDescription: "Hermes uses your location to provide contextual recommendations and nearby suggestions."
         NSHealthShareUsageDescription: "Hermes reads your health data to offer personalized wellness insights."
+        NSHealthUpdateUsageDescription: "Hermes does not write health data, but this permission is required by the system."
         NSCameraUsageDescription: "Hermes uses the camera to capture photos and documents for analysis."
         NSPhotoLibraryUsageDescription: "Hermes accesses your photo library to help organize and search your photos."
         NSMicrophoneUsageDescription: "Hermes uses the microphone for voice conversations in Talk Mode."
