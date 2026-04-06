@@ -1,3 +1,4 @@
+import Speech
 import SwiftUI
 
 struct ChatInputBar: View {
@@ -12,6 +13,8 @@ struct ChatInputBar: View {
 
     @Environment(TalkStore.self) private var talkStore
     @Environment(TabRouter.self) private var router
+
+    @State private var speechService = LiveSpeechService()
 
     private var canSend: Bool {
         let hasText = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -61,11 +64,16 @@ struct ChatInputBar: View {
                 }
 
                 // Text input area
-                TextField("Reply to Hermes", text: $text, axis: .vertical)
+                TextField(
+                    speechService.isListening ? "Listening..." : "Reply to Hermes",
+                    text: speechService.isListening ? .constant(speechService.transcript) : $text,
+                    axis: .vertical
+                )
                     .font(Design.Typography.body)
                     .foregroundStyle(Design.Colors.foreground)
                     .lineLimit(1...5)
                     .focused(isFocused)
+                    .disabled(speechService.isListening)
                     .padding(.horizontal, Design.Spacing.md)
                     .padding(.top, pendingAttachments.isEmpty ? Design.Spacing.sm : Design.Spacing.xs)
                     .padding(.bottom, Design.Spacing.xs)
@@ -84,6 +92,21 @@ struct ChatInputBar: View {
                     .accessibilityLabel("Add attachment")
 
                     Spacer()
+
+                    // Dictation mic button
+                    if !isStreaming {
+                        Button {
+                            toggleDictation()
+                        } label: {
+                            Image(systemName: speechService.isListening ? "mic.fill" : "mic")
+                                .font(.system(size: Design.Size.iconMedium, weight: .medium))
+                                .foregroundStyle(speechService.isListening ? .red : Design.Colors.secondaryForeground)
+                                .frame(width: 36, height: 36)
+                                .background(speechService.isListening ? Design.Colors.surface : .clear)
+                                .clipShape(Circle())
+                        }
+                        .accessibilityLabel(speechService.isListening ? "Stop dictation" : "Start dictation")
+                    }
 
                     // Talk mode button (right side, before send)
                     if !isStreaming && !canSend {
@@ -208,6 +231,37 @@ struct ChatInputBar: View {
             }
             .accessibilityLabel("Send message")
             .transition(.scale.combined(with: .opacity))
+        }
+    }
+
+    // MARK: - Dictation
+
+    private func toggleDictation() {
+        if speechService.isListening {
+            speechService.stopListening()
+            // Append final transcript to the text field
+            if !speechService.transcript.isEmpty {
+                if text.isEmpty {
+                    text = speechService.transcript
+                } else {
+                    text += " " + speechService.transcript
+                }
+            }
+        } else {
+            Task {
+                // Request permission if needed
+                if speechService.authorizationStatus == .notDetermined {
+                    let status = await speechService.requestAuthorization()
+                    guard status == .authorized else { return }
+                }
+                guard speechService.authorizationStatus == .authorized else { return }
+
+                do {
+                    try speechService.startListening()
+                } catch {
+                    // Speech recognition unavailable — silently ignore
+                }
+            }
         }
     }
 }
