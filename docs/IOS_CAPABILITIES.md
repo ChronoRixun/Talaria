@@ -22,20 +22,21 @@ A living document tracking every iOS capability integrated into Hermes iOS — w
 
 | Component | State | Detail |
 |-----------|-------|--------|
-| `LiveMotionService.swift` | Built | CMMotionActivityManager wrapper with auth + monitoring |
-| `SensorUploadService` | Ready | Accepts `motionService` optional, wires callback to enqueue activity as health metric |
-| `AppContainer` | **NOT WIRED** | LiveMotionService is never instantiated or injected |
-| `PermissionType` | **MISSING** | No `.motion` case in the enum, no onboarding UI |
-| MCP tool `get_user_activity` | Built | Queries `health_latest WHERE metric = 'user_activity'`, returns label + freshness |
-| MCP registration | **NOT EXPOSED** | `get_user_activity` missing from `MCP_TOOL_NAMES` in `mcp_registration.py` |
-| Voice context | Built | `talk_support.py` includes "User is currently walking" when fresh |
+| `LiveMotionService.swift` | Wired | CMMotionActivityManager wrapper with auth + monitoring |
+| `SensorUploadService` | Wired | Receives `motionService`, enqueues activity as health metric |
+| `AppContainer` | Wired | LiveMotionService instantiated and injected into SensorUploadService + PermissionsStore |
+| `PermissionType` | Wired | `.motion` case with icon, color, label, onboarding support |
+| MCP tool `get_user_activity` | Wired | Queries `health_latest WHERE metric = 'user_activity'`, returns label + freshness |
+| MCP registration | Wired | `get_user_activity`, `get_sensor_schema`, `query_sensor_data` in `MCP_TOOL_NAMES` |
+| Voice context | Wired | `talk_support.py` includes "User is currently walking" when fresh |
 
 ### Next Steps
-- [ ] Add `LiveMotionService` instantiation to `AppContainer.makeDefault()`
-- [ ] Pass it to `SensorUploadService` init
-- [ ] Add `.motion` to `PermissionType` enum + onboarding permissions
-- [ ] Add `"get_user_activity"` to `MCP_TOOL_NAMES` in `mcp_registration.py`
+- [x] Add `LiveMotionService` instantiation to `AppContainer.makeDefault()`
+- [x] Pass it to `SensorUploadService` init
+- [x] Add `.motion` to `PermissionType` enum + onboarding permissions
+- [x] Add `"get_user_activity"` to `MCP_TOOL_NAMES` in `mcp_registration.py`
 - [ ] Run `hermes-mobile configure-mcp` to update the Hermes config
+- [ ] Test on physical device (verify permission prompt + activity updates)
 
 ### Use Case Ideas
 - **Context-aware responses**: "You've been sitting for 2 hours — time for a walk?" (proactive health nudge)
@@ -57,19 +58,25 @@ A living document tracking every iOS capability integrated into Hermes iOS — w
 
 | Component | State | Detail |
 |-----------|-------|--------|
-| Widget Extension target | Built | `HermesMobileWidgets` in project.yml, compiles clean |
-| `HermesActivityAttributes.swift` | Built | ActivityAttributes with ContentState |
-| `HermesLiveActivity.swift` | Built | Lock Screen + Dynamic Island (compact, expanded, minimal) layouts |
-| `HermesWidgetBundle.swift` | Built | Widget bundle entry point |
-| `Activity.request()` in main app | **NOT WIRED** | No code starts/updates/ends Live Activities |
+| Widget Extension target | Wired | `HermesMobileWidgets` in project.yml, dependency in main app |
+| `HermesActivityAttributes.swift` | Wired | ActivityAttributes + ContentState with Sendable, startDate for native timer |
+| `HermesLiveActivity.swift` | Wired | Lock Screen + Dynamic Island layouts with `Text(timerInterval:)` live clock |
+| `HermesWidgetBundle.swift` | Wired | Widget bundle entry point |
+| `LiveActivityService.swift` | Wired | Manages lifecycle — start/update/end with timer re-sync on foreground |
+| `TalkStore` | Wired | Starts on voice connect, updates on state change, ends on session close |
+| `ChatStore` | Wired | Starts on tool call, ends on finish/fail/cancel/clear |
 | Info.plist | Configured | `NSSupportsLiveActivities: true`, `NSSupportsLiveActivitiesFrequentUpdates: true` |
+| Xcode Previews | Wired | `LiveActivityPreviews.swift` in main app target (Lock Screen + Dynamic Island mockups) |
 
 ### Next Steps
-- [ ] Add `Activity<HermesActivityAttributes>.request()` call in `TalkStore.startSession()`
-- [ ] Add `activity.update()` on voice state changes (thinking, speaking, tool call)
-- [ ] Add `activity.end()` in `TalkStore.endSession()`
-- [ ] Add `activity.update()` in `ChatStore` during streaming (tool activity labels)
+- [x] Add `Activity<HermesActivityAttributes>.request()` call in `TalkStore.startSession()`
+- [x] Add `activity.update()` on voice state changes (thinking, speaking, tool call)
+- [x] Add `activity.end()` in `TalkStore.endSession()`
+- [x] Add `activity.update()` in `ChatStore` during streaming (tool activity labels)
+- [x] Add cleanup on stream failure, cancellation, and conversation clear
+- [x] Use `Text(timerInterval:)` for native live-ticking timer on Lock Screen
 - [ ] Test on physical device (Dynamic Island requires iPhone 14 Pro+)
+- [ ] Embed widget extension in main app bundle (Xcode → General → Frameworks)
 
 ### Use Case Ideas
 - **Voice session indicator**: Lock Screen shows "Hermes is listening" with elapsed time — user knows the session is active without opening the app
@@ -151,13 +158,18 @@ A living document tracking every iOS capability integrated into Hermes iOS — w
 | Component | State | Detail |
 |-----------|-------|--------|
 | `UIBackgroundModes: audio` | Configured | In project.yml |
-| WebRTC audio session | Built | `.playAndRecord` category, `.voiceChat` mode |
-| Voice session continuity | **UNTESTED** | Should work with background audio mode, needs verification |
+| WebRTC audio session | Wired | `.playAndRecord` category, `.default` mode, `forceSpeakerIfNeeded()` |
+| Voice session continuity | Wired | App no longer kills session on background — WebRTC stays alive |
+| Audio interruption handling | Wired | Reconfigures audio session on interruption end |
+| Speaker re-assertion | Wired | `forceSpeakerIfNeeded()` after WebRTC connect + 500ms delay + route changes |
+| Live Activity in background | Wired | Dynamic Island shows compact status while app is backgrounded |
 
 ### Next Steps
-- [ ] Test: start voice session → switch to another app → verify audio continues
-- [ ] Handle interruptions (phone call, Siri) gracefully in background
-- [ ] Consider adding "voice active" indicator in status bar
+- [x] Remove session kill on app background (was in AppEntry.swift scenePhase handler)
+- [x] Handle interruptions (phone call, Siri) gracefully
+- [x] Fix speaker volume (forceSpeakerIfNeeded after WebRTC resets audio route)
+- [ ] Test on physical device: start voice → switch app → verify audio continues
+- [ ] Test: Dynamic Island shows compact view while backgrounded
 
 ### Use Case Ideas
 - **Hands-free operation**: Start a Hermes voice conversation → switch to Maps for navigation → continue talking to Hermes
@@ -175,13 +187,16 @@ A living document tracking every iOS capability integrated into Hermes iOS — w
 | Component | State | Detail |
 |-----------|-------|--------|
 | `NSSpeechRecognitionUsageDescription` | Configured | In project.yml |
-| `LiveSpeechService` | **NOT BUILT** | No service implementation |
-| On-device recognition | Not integrated | Available via `SFSpeechRecognizer(locale:).supportsOnDeviceRecognition` |
-| Permission request | **NOT BUILT** | No `SFSpeechRecognizer.requestAuthorization()` call |
+| `LiveSpeechService.swift` | Built | SFSpeechRecognizer wrapper with on-device recognition support |
+| On-device recognition | Built | Uses `supportsOnDeviceRecognition` when available |
+| Permission request | Built | `SFSpeechRecognizer.requestAuthorization()` in service |
+| Chat composer mic button | Wired | Dictation button in ChatInputBar with live transcript |
+| Audio session | Built | Configured with `.allowBluetoothHFP` (non-deprecated) |
 
 ### Next Steps
-- [ ] Create `LiveSpeechService.swift` wrapping `SFSpeechRecognizer`
-- [ ] Implement on-device real-time transcription from audio buffer
+- [x] Create `LiveSpeechService.swift` wrapping `SFSpeechRecognizer`
+- [x] Implement on-device real-time transcription from audio buffer
+- [x] Add mic button to chat input bar for dictation
 - [ ] Add `.speechRecognition` to `PermissionType` enum
 - [ ] Integrate as fallback when OpenAI Realtime is unavailable
 - [ ] Consider using for local "wake word" detection without a full Realtime session

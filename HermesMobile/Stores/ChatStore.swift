@@ -156,6 +156,7 @@ final class ChatStore {
                         }
                     }
                     self.streamingMessageID = nil
+                    self.chatLiveActivity.endActivity()
                     if let idx = self.conversation?.messages.firstIndex(where: { $0.id == clientMessageID }) {
                         self.conversation?.messages[idx].status = acceptedJobID == nil ? .failed : .sending
                     }
@@ -192,6 +193,7 @@ final class ChatStore {
         streamingTask?.cancel()
         streamingTask = nil
         streamingMessageID = nil
+        chatLiveActivity.endActivity()
         let fresh = try await hermesClient.clearConversation()
         conversation = fresh
         pendingMessageSentAt = nil
@@ -203,6 +205,7 @@ final class ChatStore {
     func cancelStreaming() {
         streamingTask?.cancel()
         streamingTask = nil
+        chatLiveActivity.endActivity()
 
         // Finalize current streaming message with content received so far
         if let sid = streamingMessageID,

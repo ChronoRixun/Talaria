@@ -78,7 +78,14 @@ struct HermesLiveActivity: Widget {
 
             Spacer()
 
-            if context.state.elapsedSeconds > 0 {
+            // Use the native timer when a start date is available —
+            // this ticks in real-time without needing Live Activity updates.
+            if let start = context.state.startDate {
+                Text(timerInterval: start...Date.distantFuture, countsDown: false)
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.trailing)
+            } else if context.state.elapsedSeconds > 0 {
                 Text(formatDuration(context.state.elapsedSeconds))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)

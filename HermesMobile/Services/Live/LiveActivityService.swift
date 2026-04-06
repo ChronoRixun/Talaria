@@ -18,8 +18,9 @@ final class LiveActivityService {
     func startVoiceSession() {
         guard isAvailable else { return }
         let attributes = HermesActivityAttributes(agentName: "Hermes")
+        let now = Date.now
         let state = HermesActivityAttributes.ContentState(
-            status: "Listening", toolName: nil, elapsedSeconds: 0, sessionType: "voice"
+            status: "Listening", toolName: nil, elapsedSeconds: 0, startDate: now, sessionType: "voice"
         )
         do {
             currentActivity = try Activity.request(
@@ -37,7 +38,7 @@ final class LiveActivityService {
     func updateVoiceState(_ status: String, toolName: String? = nil) {
         let elapsed = Int(Date().timeIntervalSince(startedAt ?? .now))
         let state = HermesActivityAttributes.ContentState(
-            status: status, toolName: toolName, elapsedSeconds: elapsed, sessionType: "voice"
+            status: status, toolName: toolName, elapsedSeconds: elapsed, startDate: startedAt, sessionType: "voice"
         )
         updateActivity(with: state)
     }
@@ -47,8 +48,9 @@ final class LiveActivityService {
     func startToolCall(toolName: String) {
         guard isAvailable, currentActivity == nil else { return }
         let attributes = HermesActivityAttributes(agentName: "Hermes")
+        let now = Date.now
         let state = HermesActivityAttributes.ContentState(
-            status: "Working...", toolName: toolName, elapsedSeconds: 0, sessionType: "tool"
+            status: "Working...", toolName: toolName, elapsedSeconds: 0, startDate: now, sessionType: "tool"
         )
         do {
             currentActivity = try Activity.request(
@@ -66,7 +68,7 @@ final class LiveActivityService {
     func updateToolProgress(_ status: String, toolName: String? = nil) {
         let elapsed = Int(Date().timeIntervalSince(startedAt ?? .now))
         let state = HermesActivityAttributes.ContentState(
-            status: status, toolName: toolName, elapsedSeconds: elapsed, sessionType: "tool"
+            status: status, toolName: toolName, elapsedSeconds: elapsed, startDate: startedAt, sessionType: "tool"
         )
         updateActivity(with: state)
     }
@@ -125,6 +127,7 @@ final class LiveActivityService {
             status: currentState.status,
             toolName: currentState.toolName,
             elapsedSeconds: elapsed,
+            startDate: startedAt,
             sessionType: currentState.sessionType
         )
         updateActivity(with: state)
