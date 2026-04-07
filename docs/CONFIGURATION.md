@@ -86,6 +86,77 @@ Recommended approach:
 - connector: shell env / service env
 - iOS app: local plist/build-setting override for hosted relay values
 
+## Optional: APNs (Push Notifications)
+
+Push notifications allow the relay to wake the app in the background for proactive messages and data refresh. **This is fully optional** — without it, the app refreshes when you open it. No functionality is lost, just proactivity.
+
+### Setup (per developer)
+
+1. Go to [Apple Developer Portal → Keys](https://developer.apple.com/account/resources/authkeys/list)
+2. Create a new key with "Apple Push Notifications service (APNs)" enabled
+3. Download the `.p8` file and note the Key ID and your Team ID
+4. Configure the relay with these environment variables:
+   ```
+   APNS_KEY_PATH=/path/to/AuthKey_XXXXXXXXXX.p8
+   APNS_KEY_ID=XXXXXXXXXX
+   APNS_TEAM_ID=YYYYYYYYYY
+   APNS_BUNDLE_ID=io.hermesmobile.HermesMobile  # or your custom bundle ID
+   APNS_ENVIRONMENT=development  # or "production" for TestFlight/App Store
+   ```
+5. The iOS app automatically registers its device token with the relay on launch — no app-side configuration needed.
+
+**Note:** The relay's APNs sending implementation is not yet built. The token registration pipeline is complete (iOS → relay stores token). Server-side push delivery is a future task.
+
+### Without APNs
+
+If you don't configure APNs, the app still works normally:
+- Sensor data syncs when the app is in the foreground or on background location updates
+- Conversations refresh when you open the app
+- Voice mode, health, location, and all other features work without push
+
+## Optional: CarPlay
+
+CarPlay provides hands-free voice conversations with Hermes while driving. **This requires an entitlement from Apple** and is the only feature that cannot be self-configured without Apple's approval.
+
+### Setup (per developer)
+
+1. Go to [https://developer.apple.com/contact/carplay/](https://developer.apple.com/contact/carplay/)
+2. Request the **Voice-Based Conversational** category entitlement
+3. Describe your app: "AI assistant companion app with voice-based conversational interface"
+4. Wait for Apple's approval (typically 1-2 weeks)
+5. Once approved, the entitlement is tied to your App ID in the Developer Portal
+6. Add it to your local provisioning profile — the code already includes the CarPlay scene delegate and voice control template
+
+### Without CarPlay
+
+If you don't have the CarPlay entitlement:
+- The `CarPlaySceneDelegate` is never called by the system — it's inert
+- No build errors, no runtime errors, no configuration needed
+- Voice mode works normally on the phone
+- All other features are unaffected
+
+### Build Flags
+
+Both APNs and CarPlay are additive features with graceful degradation. No build flags or conditional compilation are needed — the code paths are simply never activated if the infrastructure isn't configured.
+
+## Signing and Local Overrides
+
+The tracked `project.pbxproj` has `DEVELOPMENT_TEAM = ""` and generic bundle IDs. When you open the project in Xcode:
+
+1. Select your development team in Signing & Capabilities
+2. Xcode updates the pbxproj with your team ID — **do not commit this change**
+3. Your local signing config stays as an unstaged modification
+
+If you use XcodeGen, you can add a local `.xcconfig` file (gitignored) to override signing:
+
+```
+// Local.xcconfig (not tracked)
+DEVELOPMENT_TEAM = YOUR_TEAM_ID
+CODE_SIGN_IDENTITY = Apple Development
+```
+
+Then reference it in project.yml or pass it via `xcodegen generate --config Local.xcconfig`.
+
 ## Personal Setup Checklist
 
 If you are already running a private deployment, verify:
@@ -94,3 +165,5 @@ If you are already running a private deployment, verify:
 2. Your connector service environment includes `HERMES_MOBILE_RELAY_URL`.
 3. If `CONNECTOR_SETUP_SECRET` is enabled on the relay, it is also present in the connector environment before running `hermes-mobile setup`.
 4. If you want the app to expose your hosted relay as an option, set `APP_HOSTED_RELAY_ENABLED=true` and `APP_HOSTED_RELAY_URL` locally in your app config.
+5. (Optional) APNs: Generate a `.p8` key and configure the relay environment variables.
+6. (Optional) CarPlay: Request the voice-based conversational entitlement from Apple.
