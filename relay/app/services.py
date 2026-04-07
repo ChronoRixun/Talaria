@@ -772,6 +772,43 @@ def upsert_push_registration(
     return registration
 
 
+def update_device_app_state(
+    db: Session,
+    *,
+    device: Device,
+    state: str,
+) -> Device:
+    device.app_state = state
+    device.app_state_updated_at = utcnow()
+    device.last_seen_at = utcnow()
+    db.commit()
+    db.refresh(device)
+    return device
+
+
+def active_push_registrations_for_user(
+    db: Session,
+    *,
+    user_id: str,
+) -> list[tuple[Device, PushRegistration]]:
+    rows = db.execute(
+        select(Device, PushRegistration)
+        .join(PushRegistration, PushRegistration.device_id == Device.id)
+        .where(
+            Device.user_id == user_id,
+            Device.is_active.is_(True),
+            PushRegistration.is_active.is_(True),
+        )
+    ).all()
+    return [(device, registration) for device, registration in rows]
+
+
+def device_is_foreground(device: Device, *, stale_seconds: int) -> bool:
+    if device.app_state != "foreground" or device.app_state_updated_at is None:
+        return False
+    return normalize_datetime(device.app_state_updated_at) >= utcnow() - timedelta(seconds=stale_seconds)
+
+
 def create_inbox_item(
     db: Session,
     *,

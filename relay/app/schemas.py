@@ -94,6 +94,10 @@ class PushRegisterRequest(BaseModel):
     bundleId: str
 
 
+class DeviceAppStateRequest(BaseModel):
+    state: str = Field(pattern="^(foreground|background)$")
+
+
 class AttachmentPayload(BaseModel):
     type: str = Field(min_length=1, max_length=16)    # "image" or "file"
     filename: str = Field(min_length=1, max_length=256)

@@ -7,12 +7,13 @@ from app.hermes_adapter import HermesChatResult
 from app.main import create_app
 
 
-def build_client(tmp_path):
+def build_client(tmp_path, **overrides):
     settings = Settings(
         environment="test",
         public_base_url="http://testserver/v1",
         database_url=f"sqlite:///{tmp_path / 'relay.db'}",
         internal_api_key="test-internal-key",
+        **overrides,
     )
     app = create_app(settings)
     return TestClient(app)
@@ -117,6 +118,73 @@ def test_push_and_inbox_roundtrip(tmp_path):
         )
         assert actions_response.status_code == 200
         assert actions_response.json()["data"]["actions"][0]["actionId"] == "approve"
+
+
+def test_device_app_state_roundtrip(tmp_path):
+    with build_client(tmp_path) as client:
+        register_data = register_device(client)
+        access_token = register_data["auth"]["accessToken"]
+
+        response = client.post(
+            "/v1/device/app-state",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"state": "foreground"},
+        )
+        assert response.status_code == 200
+        assert response.json()["data"]["state"] == "foreground"
+
+
+def test_chat_reply_triggers_push_when_device_is_backgrounded(tmp_path):
+    class StubAPNsClient:
+        def __init__(self) -> None:
+            self.alerts = []
+
+        async def send_alert_push(self, token: str, *, title: str, body: str, category: str | None = None) -> bool:
+            self.alerts.append({
+                "token": token,
+                "title": title,
+                "body": body,
+                "category": category,
+            })
+            return True
+
+    with build_client(tmp_path, hermes_adapter="mock") as client:
+        client.app.state.apns_client = StubAPNsClient()
+        register_data = register_device(client)
+        access_token = register_data["auth"]["accessToken"]
+        device_id = register_data["deviceId"]
+
+        push_response = client.post(
+            "/v1/push/register",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={
+                "deviceId": device_id,
+                "apnsToken": "deadbeef",
+                "pushEnvironment": "sandbox",
+                "bundleId": "io.hermesmobile.HermesMobile",
+            },
+        )
+        assert push_response.status_code == 200
+
+        state_response = client.post(
+            "/v1/device/app-state",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"state": "background"},
+        )
+        assert state_response.status_code == 200
+
+        message_response = client.post(
+            "/v1/messages",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"text": "Hello Hermes"},
+        )
+        assert message_response.status_code == 200
+
+        alerts = client.app.state.apns_client.alerts
+        assert len(alerts) == 1
+        assert alerts[0]["token"] == "deadbeef"
+        assert alerts[0]["title"] == "Hermes"
+        assert "Hello Hermes" in alerts[0]["body"]
 
 
 def test_chat_roundtrip_uses_relay_conversation(tmp_path):

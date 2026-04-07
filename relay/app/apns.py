@@ -17,8 +17,11 @@ import json
 import logging
 import time
 from pathlib import Path
+import tempfile
 
 import httpx
+
+from .config import Settings
 
 logger = logging.getLogger("hermes.relay.apns")
 
@@ -186,25 +189,14 @@ class APNsClient:
             await self._client.aclose()
 
 
-def create_apns_client_from_env() -> APNsClient | None:
-    """Create an APNs client from environment variables, or None if not configured.
-
-    Supports two modes:
-    - File-based: set APNS_KEY_PATH to the .p8 file path
-    - Inline: set APNS_KEY_CONTENTS to the raw .p8 key text (for Fly.io/Heroku/Docker)
-    """
-    import os
-    import tempfile
-
-    key_id = os.getenv("APNS_KEY_ID")
-    team_id = os.getenv("APNS_TEAM_ID")
-
-    if not all([key_id, team_id]):
+def create_apns_client(settings: Settings) -> APNsClient | None:
+    """Create an APNs client from typed settings, or None if not configured."""
+    if not all([settings.apns_key_id, settings.apns_team_id]):
         logger.info("APNs not configured (missing APNS_KEY_ID or APNS_TEAM_ID)")
         return None
 
-    key_path = os.getenv("APNS_KEY_PATH")
-    key_contents = os.getenv("APNS_KEY_CONTENTS")
+    key_path = settings.apns_key_path
+    key_contents = settings.apns_key_contents
 
     if not key_path and not key_contents:
         logger.info("APNs not configured (missing APNS_KEY_PATH or APNS_KEY_CONTENTS)")
@@ -218,18 +210,19 @@ def create_apns_client_from_env() -> APNsClient | None:
         key_path = tmp.name
         logger.info("APNs key loaded from APNS_KEY_CONTENTS env var")
 
-    bundle_id = os.getenv("APNS_BUNDLE_ID", "io.hermesmobile.HermesMobile")
-    environment = os.getenv("APNS_ENVIRONMENT", "development")
-
     try:
         client = APNsClient(
             key_path=key_path,
-            key_id=key_id,
-            team_id=team_id,
-            bundle_id=bundle_id,
-            environment=environment,
+            key_id=settings.apns_key_id,
+            team_id=settings.apns_team_id,
+            bundle_id=settings.apns_bundle_id,
+            environment=settings.apns_environment,
         )
-        logger.info(f"APNs client initialized ({environment}, bundle: {bundle_id})")
+        logger.info(
+            "APNs client initialized (%s, bundle: %s)",
+            settings.apns_environment,
+            settings.apns_bundle_id,
+        )
         return client
     except FileNotFoundError as e:
         logger.warning(f"APNs key file not found: {e}")

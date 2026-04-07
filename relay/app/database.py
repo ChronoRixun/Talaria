@@ -33,6 +33,12 @@ class Database:
         inspector = inspect(self.engine)
 
         with self.engine.begin() as connection:
+            device_columns = {column["name"] for column in inspector.get_columns("devices")}
+            if "app_state" not in device_columns:
+                connection.execute(text("ALTER TABLE devices ADD COLUMN app_state TEXT"))
+            if "app_state_updated_at" not in device_columns:
+                connection.execute(text("ALTER TABLE devices ADD COLUMN app_state_updated_at DATETIME"))
+
             conversation_columns = {column["name"] for column in inspector.get_columns("conversations")}
             if "hermes_session_id" not in conversation_columns:
                 connection.execute(text("ALTER TABLE conversations ADD COLUMN hermes_session_id TEXT"))

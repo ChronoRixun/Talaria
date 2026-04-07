@@ -38,10 +38,10 @@ final class HermesAppDelegate: NSObject, UIApplicationDelegate {
         didReceiveRemoteNotification userInfo: [AnyHashable: Any],
         fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
     ) {
-        // Handle silent push: trigger sensor upload and conversation refresh
+        // Handle silent push without marking the app foreground.
         Task { @MainActor in
             let container = AppContainer.sharedDefault()
-            await container.handleAppDidBecomeActive()
+            await container.handleRemoteNotificationWake()
             completionHandler(.newData)
         }
     }
@@ -70,6 +70,8 @@ struct HermesMobileApp: App {
                 .onChange(of: scenePhase) { _, newPhase in
                     if newPhase == .active {
                         Task { await container.handleAppDidBecomeActive() }
+                    } else if newPhase == .background {
+                        Task { await container.reportAppStateIfNeeded("background") }
                     }
                     // Note: voice sessions are NOT ended on background.
                     // The "audio" background mode keeps WebRTC alive so

@@ -279,6 +279,20 @@ final class AppContainer {
         await sensorUploadService?.handleAppDidBecomeActive()
         talkStore.handleAppDidBecomeActive()
         await talkStore.refreshReadiness()
+        await reportAppStateIfNeeded("foreground")
+        updateWidgetData()
+    }
+
+    func handleRemoteNotificationWake() async {
+        guard pairingStore.isPaired else { return }
+        guard await sessionStore.currentAccessToken() != nil else { return }
+
+        await permissionsStore.reloadCapabilities()
+        await hostStore.refresh()
+        await registerStoredPushTokenIfNeeded()
+        await sensorUploadService?.handleAppDidBecomeActive()
+        talkStore.handleAppDidBecomeActive()
+        await talkStore.refreshReadiness()
         updateWidgetData()
     }
 
@@ -290,6 +304,7 @@ final class AppContainer {
         await sensorUploadService?.handleSystemLaunch()
         await registerStoredPushTokenIfNeeded()
         await talkStore.refreshReadiness()
+        await reportAppStateIfNeeded("foreground")
     }
 
     private func handlePairingActivated() async {
@@ -438,6 +453,24 @@ final class AppContainer {
             // Fallback to built-in list — catalog is a nice-to-have
             chatStore.commandCatalog = SlashCommand.allBuiltIn
         }
+    }
+
+    func reportAppStateIfNeeded(_ state: String) async {
+        guard pairingStore.isPaired, let apiClient, let accessToken = await sessionStore.currentAccessToken() else {
+            return
+        }
+
+        struct AppStateBody: Encodable {
+            let state: String
+        }
+
+        struct AppStateResponse: Decodable {}
+
+        _ = try? await apiClient.post(
+            path: "device/app-state",
+            body: AppStateBody(state: state),
+            accessToken: accessToken
+        ) as AppStateResponse
     }
 
     /// Snapshots current app state into the App Group shared container

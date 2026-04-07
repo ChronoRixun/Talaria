@@ -4,6 +4,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import inspect
 import logging
 import uuid
 
@@ -17,6 +18,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .apns import create_apns_client
 from .config import Settings
 from .database import Database
 from .hermes_adapter import build_hermes_adapter
@@ -26,6 +28,7 @@ from .rate_limit import PhonePairingRateLimiter
 from .schemas import (
     ConnectorSetupRequest,
     DeviceRegisterRequest,
+    DeviceAppStateRequest,
     HostEnrollmentCodeCreateRequest,
     HostRedeemRequest,
     InboxActionRequest,
@@ -55,7 +58,9 @@ from .services import (
     create_inbox_item,
     create_message_job,
     current_hermes_host_for_user,
+    active_push_registrations_for_user,
     deactivate_hermes_host_connection,
+    device_is_foreground,
     end_voice_session,
     ensure_default_user,
     fail_message_job,
@@ -88,6 +93,7 @@ from .services import (
     serialize_voice_turn,
     setup_connector_account,
     touch_hermes_host_connection,
+    update_device_app_state,
     upsert_device,
     upsert_push_registration,
     mark_voice_session_started,
@@ -147,14 +153,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     database = Database(settings.database_url)
 
-    from .apns import create_apns_client_from_env
-
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         database.create_all()
-
-        # Initialize APNs client (optional — None if not configured)
-        app.state.apns_client = create_apns_client_from_env()
+        app.state.apns_client = create_apns_client(settings)
 
         async def _cleanup_stale_job_queues():
             """Periodically remove event queues for completed/failed jobs."""
@@ -176,10 +178,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     logger.warning("Error in job queue cleanup", exc_info=True)
 
         cleanup_task = asyncio.create_task(_cleanup_stale_job_queues())
-        yield
-        cleanup_task.cancel()
-        if app.state.apns_client:
-            await app.state.apns_client.close()
+        try:
+            yield
+        finally:
+            cleanup_task.cancel()
+            if app.state.apns_client:
+                close_method = getattr(app.state.apns_client, "close", None)
+                if callable(close_method):
+                    close_result = close_method()
+                    if inspect.isawaitable(close_result):
+                        await close_result
 
     app = FastAPI(title=settings.service_name, version=settings.version, lifespan=lifespan)
     app.state.settings = settings
@@ -268,6 +276,35 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if session is None or session.connection_nonce != connection_nonce:
             return
         app.state.connector_sessions.pop(user_id, None)
+
+    async def maybe_send_message_push(
+        *,
+        db: Session,
+        user_id: str,
+        conversation_id: str,
+        message_id: str,
+        message_text: str,
+    ) -> None:
+        apns_client = app.state.apns_client
+        if apns_client is None:
+            return
+
+        preview = " ".join(message_text.split()).strip()
+        if not preview:
+            return
+        preview = preview[:160]
+
+        for device, registration in active_push_registrations_for_user(db, user_id=user_id):
+            if device_is_foreground(device, stale_seconds=settings.app_presence_stale_seconds):
+                continue
+
+            ok = await apns_client.send_alert_push(
+                registration.apns_token,
+                title="Hermes",
+                body=preview,
+            )
+            if not ok:
+                logger.warning("APNs delivery failed for device %s", device.id)
 
     def resolve_sensor_delivery(delivery_id: str | None, *, delivered: bool) -> None:
         if delivery_id is None:
@@ -1235,6 +1272,31 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             }
         )
 
+    @app.post("/v1/device/app-state")
+    def device_app_state(
+        payload: DeviceAppStateRequest,
+        auth: AuthContext = Depends(get_auth_context),
+        db: Session = Depends(get_db),
+    ) -> dict:
+        device = update_device_app_state(db, device=auth.device, state=payload.state)
+        record_audit(
+            db,
+            actor_type="app",
+            actor_id=auth.device.id,
+            action="device.app_state",
+            entity_type="device",
+            entity_id=device.id,
+            payload={"state": payload.state},
+        )
+        db.commit()
+        return success(
+            {
+                "deviceId": device.id,
+                "state": device.app_state,
+                "updatedAt": device.app_state_updated_at,
+            }
+        )
+
     @app.post("/v1/push/send")
     async def send_push(
         request: Request,
@@ -1425,6 +1487,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 job_id=job.id,
                 adapter=app.state.hermes_adapter,
             )
+            db.expire_all()
+            completed_job = get_message_job(db, job_id=job.id)
+            if completed_job is not None and completed_job.status == "completed" and completed_job.result_message_id:
+                result_message = db.get(Message, completed_job.result_message_id)
+                if result_message is not None:
+                    await maybe_send_message_push(
+                        db=db,
+                        user_id=auth.user.id,
+                        conversation_id=conversation.id,
+                        message_id=result_message.id,
+                        message_text=result_message.text,
+                    )
 
         db.expire_all()
         payload_data, status_code = build_message_response_payload(db, conversation_id=conversation.id, job_id=job.id)
@@ -1753,6 +1827,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                                         if completed.result_message_id and db.get(Message, completed.result_message_id) is not None
                                         else None
                                     )
+                                    if completed.result_message_id:
+                                        completed_message = db.get(Message, completed.result_message_id)
+                                        if completed_message is not None:
+                                            await maybe_send_message_push(
+                                                db=db,
+                                                user_id=completed.user_id,
+                                                conversation_id=completed.conversation_id,
+                                                message_id=completed_message.id,
+                                                message_text=completed_message.text,
+                                            )
                                 done_event_data: dict = {
                                     "jobId": claimed_job.id,
                                     "status": "completed",

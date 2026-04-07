@@ -51,6 +51,13 @@ class Settings:
     talk_delegate_timeout_seconds: float = 90.0
     sse_keepalive_seconds: int = 30
     connector_setup_secret: str | None = None
+    apns_key_path: str | None = None
+    apns_key_contents: str | None = None
+    apns_key_id: str | None = None
+    apns_team_id: str | None = None
+    apns_bundle_id: str = "io.hermesmobile.HermesMobile"
+    apns_environment: str = "development"
+    app_presence_stale_seconds: int = 120
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -84,4 +91,11 @@ class Settings:
             connector_rpc_timeout_seconds=float(os.getenv("CONNECTOR_RPC_TIMEOUT_SECONDS", "30.0")),
             talk_delegate_timeout_seconds=float(os.getenv("TALK_DELEGATE_TIMEOUT_SECONDS", "90.0")),
             connector_setup_secret=os.getenv("CONNECTOR_SETUP_SECRET") or None,
+            apns_key_path=os.getenv("APNS_KEY_PATH") or None,
+            apns_key_contents=os.getenv("APNS_KEY_CONTENTS") or None,
+            apns_key_id=os.getenv("APNS_KEY_ID") or None,
+            apns_team_id=os.getenv("APNS_TEAM_ID") or None,
+            apns_bundle_id=os.getenv("APNS_BUNDLE_ID", "io.hermesmobile.HermesMobile"),
+            apns_environment=os.getenv("APNS_ENVIRONMENT", "development"),
+            app_presence_stale_seconds=int(os.getenv("APP_PRESENCE_STALE_SECONDS", "120")),
         )
