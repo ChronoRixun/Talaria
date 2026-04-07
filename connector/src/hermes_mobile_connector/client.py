@@ -747,6 +747,8 @@ class HermesMobileConnector:
                 result = self._rpc_talk_session_end(params)
             elif method in {"talk.delegate", "talk.hermes_delegate"}:
                 result = await self._rpc_talk_delegate(params)
+            elif method == "commands.catalog":
+                result = self._rpc_commands_catalog()
             else:
                 raise RuntimeError(f"Unsupported RPC method: {method}")
             return {
@@ -821,6 +823,62 @@ class HermesMobileConnector:
             "voice": config.voice or DEFAULT_REALTIME_VOICE,
             "voiceContextUpdatedAt": snapshot.updated_at,
         }
+
+    def _rpc_commands_catalog(self) -> dict:
+        """Return the full slash command catalog: built-in gateway commands + installed skills.
+
+        The iOS app uses this to populate its slash command menu dynamically,
+        matching the same surface available on Discord, Telegram, and the TUI.
+        """
+        commands: list[dict] = []
+        skills: list[dict] = []
+
+        try:
+            import sys
+            hermes_home = self.executor.settings.hermes_home or Path.home() / ".hermes"
+            agent_dir = Path(hermes_home) / "hermes-agent"
+            if str(agent_dir) not in sys.path:
+                sys.path.insert(0, str(agent_dir))
+
+            from hermes_cli.commands import COMMAND_REGISTRY, _is_gateway_available, _resolve_config_gates
+
+            overrides = _resolve_config_gates()
+            for cmd in COMMAND_REGISTRY:
+                if _is_gateway_available(cmd, overrides):
+                    commands.append({
+                        "name": cmd.name,
+                        "description": cmd.description,
+                        "category": cmd.category,
+                        "args": cmd.args_hint or None,
+                        "aliases": list(cmd.aliases) if cmd.aliases else [],
+                        "gatewayOnly": cmd.gateway_only,
+                    })
+
+            # Installed skills
+            skills_dir = Path(hermes_home) / "skills"
+            if skills_dir.is_dir():
+                for skill_dir in sorted(skills_dir.iterdir()):
+                    skill_file = skill_dir / "SKILL.md"
+                    if skill_file.is_file():
+                        # Read first line for description
+                        desc = ""
+                        try:
+                            with open(skill_file, "r") as f:
+                                for line in f:
+                                    line = line.strip()
+                                    if line and not line.startswith("#") and not line.startswith("---"):
+                                        desc = line[:80]
+                                        break
+                        except Exception:
+                            pass
+                        skills.append({
+                            "name": skill_dir.name,
+                            "description": desc or f"Invoke the {skill_dir.name} skill",
+                        })
+        except Exception as e:
+            logger.warning("Failed to build command catalog: %s", e)
+
+        return {"commands": commands, "skills": skills}
 
     def _rpc_talk_session_end(self, params: dict) -> dict:
         voice_session_id = str(params.get("voiceSessionId") or "").strip()

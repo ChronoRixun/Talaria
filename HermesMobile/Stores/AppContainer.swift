@@ -261,6 +261,7 @@ final class AppContainer {
         await hostStore.refresh()
         await chatStore.loadConversationIfNeeded()
         await inboxStore.loadInbox()
+        await refreshCommandCatalog()
         await registerStoredPushTokenIfNeeded()
         sensorUploadService?.start()
         await sensorUploadService?.handleAppDidBecomeActive()
@@ -377,6 +378,66 @@ final class AppContainer {
             return
         }
         await registerPushTokenIfNeeded(storedToken)
+    }
+
+    /// Fetches the dynamic slash command catalog from the connected Hermes host.
+    /// Merges built-in gateway commands + installed skills into the chat store.
+    func refreshCommandCatalog() async {
+        guard let token = await sessionStore.currentAccessToken(),
+              let client = apiClient else { return }
+
+        struct CatalogResponse: Decodable {
+            let data: CatalogData?
+            struct CatalogData: Decodable {
+                let commands: [RemoteCommand]?
+                let skills: [RemoteSkill]?
+            }
+            struct RemoteCommand: Decodable {
+                let name: String
+                let description: String
+                let category: String?
+                let args: String?
+            }
+            struct RemoteSkill: Decodable {
+                let name: String
+                let description: String
+            }
+        }
+
+        do {
+            let response: CatalogResponse = try await client.get(
+                path: "commands",
+                accessToken: token
+            )
+
+            var catalog = SlashCommand.localCommands
+            let localNames = Set(catalog.map(\.name))
+
+            // Add remote built-in commands (skip any that overlap with local)
+            if let remoteCommands = response.data?.commands {
+                for cmd in remoteCommands where !localNames.contains(cmd.name) {
+                    catalog.append(.fromRemote(
+                        name: cmd.name,
+                        description: cmd.description,
+                        category: cmd.category ?? "Agent",
+                        args: cmd.args
+                    ))
+                }
+            }
+
+            // Add skill commands
+            if let skills = response.data?.skills {
+                let existingNames = Set(catalog.map(\.name))
+                for skill in skills where !existingNames.contains(skill.name) {
+                    catalog.append(.fromSkill(name: skill.name, description: skill.description))
+                }
+            }
+
+            chatStore.commandCatalog = catalog
+        } catch {
+            // Fallback to built-in list — catalog is a nice-to-have
+            chatStore.commandCatalog = SlashCommand.allBuiltIn
+        }
     }
 
     /// Snapshots current app state into the App Group shared container

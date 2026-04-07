@@ -829,6 +829,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         host = current_hermes_host_for_user(db, user_id=auth.user.id)
         return success({"host": serialize_hermes_host(db, host=host, settings=request_settings)})
 
+    @app.get("/v1/commands")
+    async def command_catalog(
+        auth: AuthContext = Depends(get_auth_context),
+    ) -> dict:
+        """Return the full slash command catalog from the connected Hermes host.
+
+        Includes built-in gateway commands and installed skill commands.
+        The iOS app uses this to populate its slash command autocomplete menu.
+        """
+        try:
+            result = await send_connector_rpc(
+                auth.user.id,
+                method="commands.catalog",
+                timeout_seconds=10.0,
+            )
+            return success(result)
+        except HTTPException:
+            # Host offline — return empty catalog, iOS falls back to built-in list
+            return success({"commands": [], "skills": []})
+
     @app.post("/v1/hosts/current/revoke")
     def revoke_current_host(
         auth: AuthContext = Depends(get_auth_context),

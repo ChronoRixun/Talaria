@@ -12,6 +12,7 @@ struct ChatInputBar: View {
     let onSlashCommand: (SlashCommand, String?) -> Void
 
     @Environment(TalkStore.self) private var talkStore
+    @Environment(ChatStore.self) private var chatStore
     @Environment(TabRouter.self) private var router
 
     @State private var speechService = LiveSpeechService()
@@ -35,11 +36,12 @@ struct ChatInputBar: View {
         return (cmd, arg)
     }
 
+    /// Uses the dynamic catalog from ChatStore (fetched from the Hermes host).
+    /// Falls back to the built-in list if the catalog hasn't loaded yet.
     private var filteredCommands: [SlashCommand] {
         let query = parsedSlashInput.command
-        let all = SlashCommand.allBuiltIn
+        let all = chatStore.commandCatalog
         if query.isEmpty { return all }
-        // If the query exactly matches a command that accepts args, show only that command
         if let exact = all.first(where: { $0.name == query }), exact.acceptsArgument {
             return [exact]
         }

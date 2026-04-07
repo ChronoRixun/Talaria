@@ -14,6 +14,11 @@ final class ChatStore {
 
     var isStreaming: Bool { streamingMessageID != nil }
 
+    /// Dynamic slash command catalog fetched from the connected Hermes host.
+    /// Includes built-in gateway commands + installed skill commands.
+    /// Falls back to `SlashCommand.allBuiltIn` when unavailable.
+    private(set) var commandCatalog: [SlashCommand] = SlashCommand.allBuiltIn
+
     private let hermesClient: any HermesClientProtocol
     private let chatLiveActivity = LiveActivityService()
     let persistence: any AppPersistenceStoreProtocol
