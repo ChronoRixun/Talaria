@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import Speech
 
 @MainActor
 @Observable
@@ -48,6 +49,8 @@ final class PermissionsStore {
             _ = await mediaService.requestPhotosAuthorization()
         case .motion:
             _ = await motionService?.requestAuthorization()
+        case .speechRecognition:
+            await requestSpeechAuthorization()
         }
 
         capabilities = currentCapabilities()
@@ -96,6 +99,7 @@ final class PermissionsStore {
             DeviceCapability(permissionType: .camera, status: mediaService.cameraAuthorizationStatus),
             DeviceCapability(permissionType: .photos, status: mediaService.photosAuthorizationStatus),
             DeviceCapability(permissionType: .motion, status: motionService?.authorizationStatus ?? .unsupported),
+            DeviceCapability(permissionType: .speechRecognition, status: speechRecognitionStatus()),
         ]
     }
 
@@ -114,6 +118,27 @@ final class PermissionsStore {
         guard AVAudioApplication.shared.recordPermission == .undetermined else { return }
         await withCheckedContinuation { continuation in
             AVAudioApplication.requestRecordPermission { _ in
+                continuation.resume()
+            }
+        }
+    }
+
+    // MARK: - Speech Recognition
+
+    private func speechRecognitionStatus() -> PermissionStatus {
+        switch SFSpeechRecognizer.authorizationStatus() {
+        case .authorized: .authorized
+        case .denied: .denied
+        case .restricted: .restricted
+        case .notDetermined: .notDetermined
+        @unknown default: .notDetermined
+        }
+    }
+
+    private func requestSpeechAuthorization() async {
+        guard SFSpeechRecognizer.authorizationStatus() == .notDetermined else { return }
+        await withCheckedContinuation { continuation in
+            SFSpeechRecognizer.requestAuthorization { _ in
                 continuation.resume()
             }
         }

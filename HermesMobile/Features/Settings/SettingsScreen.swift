@@ -353,9 +353,11 @@ struct SettingsScreen: View {
                     switch permissionsStore.locationAuthorizationLevel {
                     case .denied, .restricted:
                         permissionsStore.openLocationSystemSettings()
-                    case .always:
-                        break
-                    case .notDetermined, .whenInUse:
+                    case .always, .whenInUse:
+                        // Both levels support CLBackgroundActivitySession.
+                        // While In Use shows blue indicator; Always does not.
+                        await permissionsStore.requestBackgroundLocationAccess()
+                    case .notDetermined:
                         await permissionsStore.requestBackgroundLocationAccess()
                     }
                 }
@@ -375,9 +377,11 @@ struct SettingsScreen: View {
         if settingsStore.settings.locationSyncPreference == .backgroundAllowed {
             switch permissionsStore.locationAuthorizationLevel {
             case .always:
-                return "Hermes can keep receiving location updates when the app is backgrounded."
-            case .whenInUse, .notDetermined:
-                return "Enabling this will prompt iOS to upgrade location access so Hermes can keep syncing while the app is in the background."
+                return "Hermes receives location updates in the background without the blue indicator."
+            case .whenInUse:
+                return "Hermes receives background location updates. A blue indicator appears at the top of the screen when active."
+            case .notDetermined:
+                return "Enabling this will request location access so Hermes can sync while backgrounded."
             case .denied, .restricted:
                 return "Location is blocked at the system level. Open Settings to allow Hermes to request background updates."
             }

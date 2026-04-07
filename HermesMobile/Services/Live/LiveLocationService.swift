@@ -49,13 +49,19 @@ final class LiveLocationService: NSObject, LocationServiceProtocol, CLLocationMa
     func requestBackgroundAuthorization() async -> PermissionStatus {
         syncPreference = .backgroundAllowed
 
-        if authorizationLevel == .always {
+        // If already authorized at any level, just reconfigure monitoring
+        // to enable the background activity session.
+        if authorizationLevel == .always || authorizationLevel == .whenInUse {
             configureMonitoringSessions()
             return authorizationStatus
         }
 
+        // Not yet authorized — request When In Use first. Per iOS 26 guidance,
+        // CLBackgroundActivitySession works with When In Use authorization
+        // (shows blue indicator bar). Always authorization can be requested
+        // later as a separate upgrade if the user wants to hide the bar.
         let status = await awaitAuthorizationChange { [self] in
-            self.serviceSession = CLServiceSession(authorization: .always)
+            self.serviceSession = CLServiceSession(authorization: .whenInUse)
         }
         configureMonitoringSessions()
         return status
@@ -158,12 +164,17 @@ final class LiveLocationService: NSObject, LocationServiceProtocol, CLLocationMa
                 serviceSession = CLServiceSession(authorization: .whenInUse)
             }
         case .backgroundAllowed:
+            // iOS 26: CLBackgroundActivitySession works with both While In Use
+            // and Always authorization. With While In Use, the blue location
+            // indicator bar is shown. With Always, no indicator is needed.
             if authorizationLevel == .always {
                 serviceSession = CLServiceSession(authorization: .always)
                 backgroundSession = CLBackgroundActivitySession()
                 startLiveUpdatesIfNeeded()
             } else if authorizationLevel == .whenInUse {
                 serviceSession = CLServiceSession(authorization: .whenInUse)
+                backgroundSession = CLBackgroundActivitySession()
+                startLiveUpdatesIfNeeded()
             }
         }
     }

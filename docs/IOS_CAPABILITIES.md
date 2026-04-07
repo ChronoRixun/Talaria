@@ -87,9 +87,11 @@ A living document tracking every iOS capability integrated into Hermes iOS — w
 
 ---
 
-## 3. Background Location (Always)
+## 3. Background Location
 
-**What it does:** Continues receiving location updates when the app is in the background or suspended, enabling continuous spatial awareness.
+**What it does:** Continues receiving location updates when the app is in the background, enabling continuous spatial awareness. Supports both While In Use (with blue indicator bar) and Always authorization.
+
+**iOS 26 approach:** `CLBackgroundActivitySession` works with While In Use authorization — no need to require Always. The blue status bar keeps users informed. Always authorization hides the bar for a cleaner experience. Users choose their preference via the settings toggle.
 
 ### Current Status
 
@@ -97,17 +99,18 @@ A living document tracking every iOS capability integrated into Hermes iOS — w
 |-----------|-------|--------|
 | `NSLocationAlwaysAndWhenInUseUsageDescription` | Configured | In project.yml |
 | `UIBackgroundModes: location` | Configured | In project.yml |
-| `CLBackgroundActivitySession` | Built | Already in `LiveLocationService.swift` |
-| `requestBackgroundAuthorization()` | Built | Two-stage flow (When In Use → Always) |
-| `CLBackgroundActivitySession` | Built | Created when `syncPreference == .backgroundAllowed && auth == .always` |
-| Permissions UI | Wired | Settings exposes background sync toggle and can request upgraded access |
-| Default sync preference | Foreground-only | `LocationSyncPreference` defaults to foreground; background requires explicit opt-in |
+| `CLBackgroundActivitySession` | Wired | Created for both While In Use and Always when background sync enabled |
+| `CLServiceSession` | Wired | `.whenInUse` or `.always` depending on authorization level |
+| `CLLocationUpdate.liveUpdates()` | Wired | Async stream for continuous updates in foreground and background |
+| Permissions UI | Wired | Settings toggle with contextual description per auth level |
+| Default sync preference | Foreground-only | Background requires explicit opt-in via Settings → Location toggle |
 
 ### Next Steps
-- [x] Add settings UI toggle for "Background Location" that calls `updateLocationSyncPreference(.backgroundAllowed)` and `requestBackgroundLocationAccess()`
-- [ ] Test background location on physical device (verify blue indicator bar)
+- [x] Add settings UI toggle for "Background Location"
+- [x] Support CLBackgroundActivitySession with While In Use (blue indicator) per iOS 26 guidance
+- [ ] Test background location on physical device (verify blue indicator bar with While In Use)
 - [ ] Verify location uploads continue when app is backgrounded
-- [ ] Consider iOS 26's `CLBackgroundActivitySession` guidance for While In Use apps
+- [ ] Test Always authorization upgrade flow (blue bar disappears)
 
 ### Use Case Ideas
 - **Automatic context**: Hermes always knows where you are — "Am I near a grocery store?" works even after the app was backgrounded hours ago
@@ -190,15 +193,17 @@ A living document tracking every iOS capability integrated into Hermes iOS — w
 | `NSSpeechRecognitionUsageDescription` | Configured | In project.yml |
 | `LiveSpeechService.swift` | Built | SFSpeechRecognizer wrapper with on-device recognition support |
 | On-device recognition | Built | Uses `supportsOnDeviceRecognition` when available |
-| Permission request | Built | `SFSpeechRecognizer.requestAuthorization()` in service |
-| Chat composer mic button | Wired | Dictation button in ChatInputBar with live transcript |
+| Permission request | Wired | `SFSpeechRecognizer.requestAuthorization()` in service + PermissionsStore |
+| Chat composer mic button | Wired | Dictation button in ChatInputBar with live transcript + auto-stop commit |
 | Audio session | Built | Configured with `.allowBluetoothHFP` (non-deprecated) |
+| `PermissionType.speechRecognition` | Wired | In enum with icon, color, label; shown in capabilities list |
 
 ### Next Steps
 - [x] Create `LiveSpeechService.swift` wrapping `SFSpeechRecognizer`
 - [x] Implement on-device real-time transcription from audio buffer
 - [x] Add mic button to chat input bar for dictation
-- [ ] Add `.speechRecognition` to `PermissionType` enum
+- [x] Add `.speechRecognition` to `PermissionType` enum
+- [x] Fix transcript loss on auto-stop (onAutoStop callback)
 - [ ] Integrate as fallback when OpenAI Realtime is unavailable
 - [ ] Consider using for local "wake word" detection without a full Realtime session
 
