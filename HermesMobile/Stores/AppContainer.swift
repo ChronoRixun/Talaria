@@ -240,6 +240,9 @@ final class AppContainer {
         container.talkStore.onSessionStateChanged = { [weak container] in
             container?.updateWidgetData()
         }
+        container.hostStore.onHostChanged = { [weak container] in
+            container?.updateWidgetData()
+        }
 
         return container
     }

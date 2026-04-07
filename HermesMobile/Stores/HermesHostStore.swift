@@ -8,6 +8,7 @@ final class HermesHostStore {
     var isLoading = false
     var isWorking = false
     var lastErrorMessage: String?
+    var onHostChanged: (@MainActor () -> Void)?
 
     private let hostService: any HermesHostServiceProtocol
     private let accessTokenProvider: @MainActor () async -> String?
@@ -33,6 +34,7 @@ final class HermesHostStore {
         do {
             currentHost = try await hostService.fetchCurrentHost(accessToken: await accessTokenProvider())
             lastErrorMessage = nil
+            onHostChanged?()
         } catch {
             lastErrorMessage = error.localizedDescription
         }
@@ -48,6 +50,7 @@ final class HermesHostStore {
             activeEnrollmentCode = try await hostService.createEnrollmentCode(accessToken: await accessTokenProvider())
             currentHost = try await hostService.fetchCurrentHost(accessToken: await accessTokenProvider())
             lastErrorMessage = nil
+            onHostChanged?()
         } catch {
             lastErrorMessage = error.localizedDescription
         }
@@ -64,6 +67,7 @@ final class HermesHostStore {
             currentHost = nil
             activeEnrollmentCode = nil
             lastErrorMessage = nil
+            onHostChanged?()
         } catch {
             lastErrorMessage = error.localizedDescription
         }
@@ -75,5 +79,6 @@ final class HermesHostStore {
         isLoading = false
         isWorking = false
         lastErrorMessage = nil
+        onHostChanged?()
     }
 }
