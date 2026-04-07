@@ -147,9 +147,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     database = Database(settings.database_url)
 
+    from .apns import create_apns_client_from_env
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         database.create_all()
+
+        # Initialize APNs client (optional — None if not configured)
+        app.state.apns_client = create_apns_client_from_env()
 
         async def _cleanup_stale_job_queues():
             """Periodically remove event queues for completed/failed jobs."""
@@ -173,6 +178,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         cleanup_task = asyncio.create_task(_cleanup_stale_job_queues())
         yield
         cleanup_task.cancel()
+        if app.state.apns_client:
+            await app.state.apns_client.close()
 
     app = FastAPI(title=settings.service_name, version=settings.version, lifespan=lifespan)
     app.state.settings = settings
@@ -1207,6 +1214,92 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "updatedAt": registration.updated_at,
             }
         )
+
+    @app.post("/v1/push/send")
+    async def send_push(
+        request: Request,
+        payload: dict = Body(...),
+        db: Session = Depends(get_db),
+        _internal: None = Depends(require_internal_key),
+    ) -> dict:
+        """Send a push notification to all active devices for a user.
+
+        Called by the connector (via internal API key) when the agent has
+        a proactive message or wants to wake the iOS app.
+
+        Body:
+            user_id: str — target user ID
+            type: "silent" | "alert" (default: silent)
+            title: str (for alert type)
+            body: str (for alert type)
+        """
+        apns_client = request.app.state.apns_client
+        if apns_client is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="APNs not configured. Set APNS_KEY_PATH, APNS_KEY_ID, APNS_TEAM_ID.",
+            )
+
+        user_id = payload.get("user_id")
+        if not user_id:
+            raise HTTPException(status_code=400, detail="user_id is required")
+
+        push_type = payload.get("type", "silent")
+
+        # Find all active push registrations for this user's devices
+        registrations = db.scalars(
+            select(PushRegistration)
+            .join(PushRegistration.__table__.c.device_id == PushRegistration.__table__.c.device_id)
+            .where(PushRegistration.is_active == True)
+        ).all()
+
+        # Simpler query: get all devices for user, then their push registrations
+        from .models import Device
+        device_ids = [
+            d.id for d in db.scalars(
+                select(Device).where(Device.user_id == user_id)
+            ).all()
+        ]
+
+        registrations = db.scalars(
+            select(PushRegistration).where(
+                PushRegistration.device_id.in_(device_ids),
+                PushRegistration.is_active == True,
+            )
+        ).all()
+
+        if not registrations:
+            return success({"sent": 0, "reason": "no active push registrations"})
+
+        sent = 0
+        for reg in registrations:
+            if push_type == "alert":
+                title = payload.get("title", "Hermes")
+                body = payload.get("body", "New message from Hermes")
+                ok = await apns_client.send_alert_push(
+                    reg.apns_token, title=title, body=body
+                )
+            else:
+                ok = await apns_client.send_silent_push(reg.apns_token)
+
+            if ok:
+                sent += 1
+            elif not ok:
+                # Mark invalid tokens as inactive (410 Gone)
+                reg.is_active = False
+                db.commit()
+
+        record_audit(
+            db,
+            actor_type="internal",
+            actor_id="relay",
+            action="push.send",
+            entity_type="user",
+            entity_id=user_id,
+        )
+        db.commit()
+
+        return success({"sent": sent, "total": len(registrations)})
 
     @app.get("/v1/conversations/current")
     def current_conversation(auth: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict:

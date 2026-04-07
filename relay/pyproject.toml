@@ -9,7 +9,8 @@ description = "FastAPI relay for Hermes Mobile."
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115.0,<1.0.0",
-  "httpx>=0.28.0,<1.0.0",
+  "httpx[http2]>=0.28.0,<1.0.0",
+  "PyJWT[crypto]>=2.9.0,<3.0.0",
   "mcp>=1.0.0,<2.0.0",
   "psycopg[binary]>=3.2.0,<4.0.0",
   "python-dotenv>=1.0.0,<2.0.0",

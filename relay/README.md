@@ -89,6 +89,7 @@ See [docs/fly-io.md](docs/fly-io.md).
 - `GET /v1/inbox`
 - `POST /v1/inbox/{id}/action`
 - `POST /v1/push/register`
+- `POST /v1/push/send` *(internal)* — send silent/alert push to user's devices
 - `POST /internal/inbox/create`
 - `GET /internal/inbox/{id}/actions`
 

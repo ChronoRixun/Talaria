@@ -105,7 +105,13 @@ Push notifications allow the relay to wake the app in the background for proacti
    ```
 5. The iOS app automatically registers its device token with the relay on launch — no app-side configuration needed.
 
-**Note:** The relay's APNs sending implementation is not yet built. The token registration pipeline is complete (iOS → relay stores token). Server-side push delivery is a future task.
+**The relay's APNs pipeline is fully wired:**
+- iOS registers its device token on launch via `POST /v1/push/register`
+- The relay stores tokens in `push_registrations` table
+- `POST /v1/push/send` (internal API key required) sends silent or alert pushes to all active devices for a user
+- Invalid tokens (APNs 410 Gone) are automatically marked inactive
+
+The relay uses `PyJWT[crypto]` for ES256 JWT signing and `httpx[http2]` for HTTP/2 APNs transport.
 
 ### Without APNs
 
