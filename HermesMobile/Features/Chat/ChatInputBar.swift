@@ -16,6 +16,7 @@ struct ChatInputBar: View {
     @Environment(TabRouter.self) private var router
 
     @State private var speechService = LiveSpeechService()
+    @State private var dictationBaseText = ""
 
     private var canSend: Bool {
         let hasText = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -88,18 +89,17 @@ struct ChatInputBar: View {
                 // Text input area
                 TextField(
                     speechService.isListening ? "Listening..." : "Reply to Hermes",
-                    text: speechService.isListening ? .constant(speechService.transcript) : $text,
+                    text: $text,
                     axis: .vertical
                 )
                     .font(Design.Typography.body)
                     .foregroundStyle(Design.Colors.foreground)
                     .lineLimit(1...5)
                     .focused(isFocused)
-                    .disabled(speechService.isListening)
                     .submitLabel(.send)
                     .onSubmit {
                         if canSend {
-                            onSend()
+                            handlePrimaryAction()
                         }
                     }
                     .padding(.horizontal, Design.Spacing.md)
@@ -126,7 +126,7 @@ struct ChatInputBar: View {
                         Button {
                             toggleDictation()
                         } label: {
-                            Image(systemName: speechService.isListening ? "mic.fill" : "mic")
+                            Image(systemName: speechService.isListening ? "stop.fill" : "mic")
                                 .font(.system(size: Design.Size.iconMedium, weight: .medium))
                                 .foregroundStyle(speechService.isListening ? .red : Design.Colors.secondaryForeground)
                                 .frame(width: 36, height: 36)
@@ -137,7 +137,7 @@ struct ChatInputBar: View {
                     }
 
                     // Talk mode button (right side, before send)
-                    if !isStreaming && !canSend {
+                    if !isStreaming && !speechService.isListening && !canSend {
                         Button {
                             router.isVoiceOverlayPresented = true
                         } label: {
@@ -167,12 +167,12 @@ struct ChatInputBar: View {
         .animation(Design.Motion.quickResponse, value: isStreaming)
         .animation(Design.Motion.quickResponse, value: canSend)
         .onAppear {
+            speechService.onTranscriptChange = { partialTranscript in
+                text = mergedDictationText(partialTranscript)
+            }
             speechService.onAutoStop = { finalTranscript in
-                if text.isEmpty {
-                    text = finalTranscript
-                } else {
-                    text += " " + finalTranscript
-                }
+                text = mergedDictationText(finalTranscript)
+                dictationBaseText = ""
             }
         }
     }
@@ -258,7 +258,7 @@ struct ChatInputBar: View {
             }
             .accessibilityLabel("Stop generating")
         } else if canSend {
-            Button(action: onSend) {
+            Button(action: handlePrimaryAction) {
                 Image(systemName: "arrow.up")
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(Design.Colors.background)
@@ -276,14 +276,8 @@ struct ChatInputBar: View {
     private func toggleDictation() {
         if speechService.isListening {
             speechService.stopListening()
-            // Append final transcript to the text field
-            if !speechService.transcript.isEmpty {
-                if text.isEmpty {
-                    text = speechService.transcript
-                } else {
-                    text += " " + speechService.transcript
-                }
-            }
+            text = mergedDictationText(speechService.transcript)
+            dictationBaseText = ""
         } else {
             Task {
                 // Request permission if needed
@@ -294,11 +288,31 @@ struct ChatInputBar: View {
                 guard speechService.authorizationStatus == .authorized else { return }
 
                 do {
+                    dictationBaseText = text.trimmingCharacters(in: .whitespacesAndNewlines)
                     try await speechService.startListening()
                 } catch {
                     // Speech recognition unavailable — silently ignore
+                    dictationBaseText = ""
                 }
             }
         }
+    }
+
+    private func handlePrimaryAction() {
+        if speechService.isListening {
+            speechService.stopListening()
+            text = mergedDictationText(speechService.transcript)
+            dictationBaseText = ""
+        }
+        onSend()
+    }
+
+    private func mergedDictationText(_ transcript: String) -> String {
+        let trimmedTranscript = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        let base = dictationBaseText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if base.isEmpty { return trimmedTranscript }
+        if trimmedTranscript.isEmpty { return base }
+        return "\(base) \(trimmedTranscript)"
     }
 }

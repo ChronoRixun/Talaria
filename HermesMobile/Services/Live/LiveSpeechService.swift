@@ -14,6 +14,8 @@ final class LiveSpeechService {
     /// Called when the recognizer auto-stops (final result or error).
     /// The caller should commit the transcript to its text field.
     var onAutoStop: ((_ finalTranscript: String) -> Void)?
+    /// Called whenever a partial or final transcript update arrives.
+    var onTranscriptChange: ((_ transcript: String) -> Void)?
 
     private let speechRecognizer = SFSpeechRecognizer(locale: Locale.current)
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
@@ -75,6 +77,7 @@ final class LiveSpeechService {
                 guard let self else { return }
                 if let result {
                     self.transcript = result.bestTranscription.formattedString
+                    self.onTranscriptChange?(self.transcript)
                 }
                 if error != nil || (result?.isFinal == true) {
                     let finalTranscript = self.transcript
