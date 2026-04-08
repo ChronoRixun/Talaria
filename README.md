@@ -37,16 +37,22 @@ The connector continuously receives sensor data from your iPhone and stores it l
 **What your agent can do with it:**
 
 ```
-You:    "Where am I right now?"
-Hermes: You're at 1 Infinite Loop, Cupertino, CA. (via get_user_location)
+You:    "Find me a good dinner spot tonight"
+Hermes: Looks like you've been around the West Village today. Carbone, Via
+        Carota, and L'Artusi are all nearby and well-reviewed. Carbone usually
+        needs a reservation — want me to look into availability?
 
-You:    "How did I sleep this week?"
-Hermes: Here's your sleep data for the last 7 days... (via get_health_metric)
+You:    "Am I on track for my fitness goals this week?"
+Hermes: You've hit 42,000 steps so far this week (avg 8,400/day), burned
+        2,100 active calories, and averaged 7.1 hours of sleep. Your
+        resting heart rate has been steady at 62 bpm. You're ahead on
+        steps but slightly behind on sleep — you lost about an hour
+        last night compared to your weekly average.
 
 You:    "Build me a personal health dashboard"
-Hermes: I'll query your sensor database and create an HTML dashboard with
-        your steps, sleep trends, and heart rate over the past 30 days.
-        (via query_sensor_data → custom SQL against your local SQLite)
+Hermes: I'll query your sensor database and create an interactive dashboard
+        with your steps, sleep trends, heart rate, and location history
+        over the past 30 days. Give me a minute.
 ```
 
 The data never leaves your machine. The sensor SQLite database lives at `~/.hermes-mobile/sensors.db` and is queryable through the `hermes_mobile` MCP server with 8 tools:
