@@ -38,7 +38,7 @@ The connector continuously receives sensor data from your iPhone and stores it l
 
 ```
 You:    "Where am I right now?"
-Hermes: You're at 301 Old Mill Village Dr, Apex, NC. (via get_user_location)
+Hermes: You're at 1 Infinite Loop, Cupertino, CA. (via get_user_location)
 
 You:    "How did I sleep this week?"
 Hermes: Here's your sleep data for the last 7 days... (via get_health_metric)
