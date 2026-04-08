@@ -12,4 +12,6 @@ final class MockHealthService: HealthServiceProtocol {
         backgroundDeliveryEnabled = true
         return .authorized
     }
+
+    func refreshAuthorizationStatus() async {}
 }

@@ -54,6 +54,10 @@ final class AppContainer {
         sharedDefaultContainer
     }
 
+    var shouldShowLaunchSplash: Bool {
+        sessionStore.isBootstrapping || (pairingStore.isPaired && !isInitialized)
+    }
+
     static func makeDefault(
         defaults: UserDefaults? = nil,
         processEnvironment: [String: String] = ProcessInfo.processInfo.environment

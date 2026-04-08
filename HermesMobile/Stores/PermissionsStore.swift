@@ -30,6 +30,8 @@ final class PermissionsStore {
 
     func reloadCapabilities() async {
         locationService.refreshAuthorizationState()
+        await healthService.refreshAuthorizationStatus()
+        await notificationService.refreshAuthorizationStatus()
         capabilities = currentCapabilities()
     }
 

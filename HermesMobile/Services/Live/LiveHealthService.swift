@@ -81,6 +81,25 @@ final class LiveHealthService: HealthServiceProtocol {
         return authorizationStatus
     }
 
+    func refreshAuthorizationStatus() async {
+        guard let store else {
+            authorizationStatus = .unsupported
+            return
+        }
+
+        let statuses = metricDescriptors.values.map { descriptor in
+            store.authorizationStatus(for: descriptor.sampleType)
+        }
+
+        if statuses.contains(.sharingAuthorized) {
+            authorizationStatus = .authorized
+        } else if statuses.contains(.sharingDenied) {
+            authorizationStatus = .denied
+        } else {
+            authorizationStatus = .notDetermined
+        }
+    }
+
     func startMonitoring() {
         guard let store, observerQueries.isEmpty else { return }
 

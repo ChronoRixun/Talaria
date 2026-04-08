@@ -13,6 +13,8 @@ final class MockNotificationService: NotificationServiceProtocol {
         return .authorized
     }
 
+    func refreshAuthorizationStatus() async {}
+
     func updatePushToken(_ token: String?) async {
         currentPushToken = token
     }
