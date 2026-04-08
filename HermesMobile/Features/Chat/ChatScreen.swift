@@ -105,11 +105,11 @@ struct ChatScreen: View {
 
     @State private var showContextPopover = false
 
-    /// Context usage as 0.0–1.0. Nil if no usage data yet.
-    private var contextProgress: Double? {
+    /// Context usage as 0.0–1.0. Shows 0 when no usage data yet.
+    private var contextProgress: Double {
         guard let usage = chatStore.lastTokenUsage,
               let maxCtx = chatStore.contextWindow, maxCtx > 0
-        else { return nil }
+        else { return 0 }
         return min(Double(usage.totalTokens) / Double(maxCtx), 1.0)
     }
 
@@ -117,9 +117,7 @@ struct ChatScreen: View {
 
     private var modelStatusChip: some View {
         Button {
-            if contextProgress != nil {
-                showContextPopover.toggle()
-            }
+            showContextPopover.toggle()
         } label: {
             HStack(spacing: 6) {
                 Circle()
@@ -133,9 +131,7 @@ struct ChatScreen: View {
                         .lineLimit(1)
                 }
 
-                if let progress = contextProgress {
-                    contextRing(progress: progress)
-                }
+                contextRing(progress: contextProgress)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
