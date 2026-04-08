@@ -4,6 +4,9 @@ import Speech
 
 /// On-device speech-to-text using Apple's Speech framework.
 /// Used for dictation in the chat composer — not for voice mode (which uses OpenAI Realtime).
+///
+/// Audio engine operations run on a dedicated background queue to avoid blocking
+/// the main thread. Only `@Observable` state updates happen on `@MainActor`.
 @MainActor
 @Observable
 final class LiveSpeechService {
@@ -11,16 +14,17 @@ final class LiveSpeechService {
     private(set) var transcript = ""
     private(set) var authorizationStatus: SFSpeechRecognizerAuthorizationStatus = .notDetermined
 
-    /// Called when the recognizer auto-stops (final result or error).
-    /// The caller should commit the transcript to its text field.
     var onAutoStop: ((_ finalTranscript: String) -> Void)?
-    /// Called whenever a partial or final transcript update arrives.
     var onTranscriptChange: ((_ transcript: String) -> Void)?
 
-    private let speechRecognizer = SFSpeechRecognizer(locale: Locale.current)
+    /// Dedicated queue for all AVAudioEngine operations.
+    /// Core Audio hardware calls block — they must never run on the main thread.
+    private nonisolated let audioQueue = DispatchQueue(label: "hermes.speech.audio", qos: .userInitiated)
+
+    private nonisolated let speechRecognizer = SFSpeechRecognizer(locale: Locale.current)
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
-    private let audioEngine = AVAudioEngine()
+    private nonisolated let audioEngine = AVAudioEngine()
     private var activeSessionID = UUID()
 
     var supportsOnDevice: Bool {
@@ -49,23 +53,13 @@ final class LiveSpeechService {
             guard await AVAudioApplication.requestRecordPermission() else {
                 throw SpeechError.microphoneDenied
             }
-        } else if microphoneStatus == .denied {
-            throw SpeechError.microphoneDenied
         } else if microphoneStatus != .granted {
             throw SpeechError.microphoneDenied
         }
 
-        // Cancel any previous task
         recognitionTask?.cancel()
         recognitionTask = nil
         activeSessionID = UUID()
-
-        // Use Apple's live-audio speech-recognition audio-session guidance.
-        // Dictation is record-only; using `.measurement` is less likely to
-        // fight the app's WebRTC playback/record paths than `.playAndRecord`.
-        let audioSession = AVAudioSession.sharedInstance()
-        try audioSession.setCategory(.record, mode: .measurement, options: [.duckOthers])
-        try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
 
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
@@ -73,82 +67,89 @@ final class LiveSpeechService {
             request.requiresOnDeviceRecognition = true
         }
 
-        let inputNode = audioEngine.inputNode
-        let recordingFormat = inputNode.outputFormat(forBus: 0)
-        inputNode.removeTap(onBus: 0)
         transcript = ""
         let sessionID = activeSessionID
+        let engine = audioEngine
 
-        do {
-            inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { buffer, _ in
-                request.append(buffer)
-            }
+        // All audio hardware work happens off the main thread.
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            audioQueue.async {
+                do {
+                    let audioSession = AVAudioSession.sharedInstance()
+                    try audioSession.setCategory(.record, mode: .measurement, options: [.duckOthers])
+                    try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
 
-            audioEngine.prepare()
-            try audioEngine.start()
-
-            recognitionRequest = request
-            isListening = true
-
-            recognitionTask = speechRecognizer.recognitionTask(with: request) { [weak self] result, error in
-                let latestTranscript = result?.bestTranscription.formattedString
-                let isFinal = result?.isFinal == true
-                let shouldFinish = error != nil || isFinal
-
-                if shouldFinish {
+                    let inputNode = engine.inputNode
+                    let recordingFormat = inputNode.outputFormat(forBus: 0)
                     inputNode.removeTap(onBus: 0)
-                    self?.audioEngine.stop()
+                    inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { buffer, _ in
+                        request.append(buffer)
+                    }
+
+                    engine.prepare()
+                    try engine.start()
+                    continuation.resume()
+                } catch {
+                    try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+
+        recognitionRequest = request
+        isListening = true
+
+        recognitionTask = speechRecognizer.recognitionTask(with: request) { [weak self] result, error in
+            let latestTranscript = result?.bestTranscription.formattedString
+            let isFinal = result?.isFinal == true
+            let shouldFinish = error != nil || isFinal
+
+            if shouldFinish {
+                // Stop audio hardware on the audio queue, not the callback thread
+                let engine = self?.audioEngine
+                DispatchQueue(label: "hermes.speech.cleanup", qos: .userInitiated).async {
+                    engine?.inputNode.removeTap(onBus: 0)
+                    engine?.stop()
                     request.endAudio()
                     try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
                 }
+            }
 
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    guard self.activeSessionID == sessionID else { return }
+            Task { @MainActor [weak self] in
+                guard let self, self.activeSessionID == sessionID else { return }
 
-                    if let latestTranscript {
-                        self.transcript = latestTranscript
-                        self.onTranscriptChange?(self.transcript)
-                    }
+                if let latestTranscript {
+                    self.transcript = latestTranscript
+                    self.onTranscriptChange?(self.transcript)
+                }
 
-                    if shouldFinish {
-                        let finalTranscript = self.transcript
-                        self.recognitionRequest = nil
-                        self.recognitionTask = nil
-                        self.isListening = false
-                        // Notify the caller so it can commit the transcript
-                        if !finalTranscript.isEmpty {
-                            self.onAutoStop?(finalTranscript)
-                        }
+                if shouldFinish {
+                    let finalTranscript = self.transcript
+                    self.recognitionRequest = nil
+                    self.recognitionTask = nil
+                    self.isListening = false
+                    if !finalTranscript.isEmpty {
+                        self.onAutoStop?(finalTranscript)
                     }
                 }
             }
-        } catch {
-            inputNode.removeTap(onBus: 0)
-            audioEngine.stop()
-            request.endAudio()
-            recognitionRequest = nil
-            recognitionTask?.cancel()
-            recognitionTask = nil
-            isListening = false
-            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-            throw error
         }
     }
 
     func stopListening() {
         guard isListening else { return }
         activeSessionID = UUID()
-
-        audioEngine.stop()
-        audioEngine.inputNode.removeTap(onBus: 0)
-        recognitionRequest?.endAudio()
-        recognitionRequest = nil
         isListening = false
+        recognitionRequest = nil
         recognitionTask = nil
 
-        // Deactivate the audio session so it doesn't conflict with WebRTC
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        // Stop audio hardware off the main thread
+        let engine = audioEngine
+        audioQueue.async {
+            engine.stop()
+            engine.inputNode.removeTap(onBus: 0)
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        }
     }
 
     enum SpeechError: LocalizedError {

@@ -87,16 +87,23 @@ final class LiveHealthService: HealthServiceProtocol {
             return
         }
 
-        let statuses = metricDescriptors.values.map { descriptor in
-            store.authorizationStatus(for: descriptor.sampleType)
-        }
-
-        if statuses.contains(.sharingAuthorized) {
-            authorizationStatus = .authorized
-        } else if statuses.contains(.sharingDenied) {
-            authorizationStatus = .denied
+        // Apple's privacy model: authorizationStatus(for:) only works for
+        // write (share) access. For read access, the system always returns
+        // .notDetermined to prevent apps from learning what the user denied.
+        // The correct check: attempt a sample query and see if data comes back.
+        // If requestAuthorization was previously called, we trust that result.
+        // See: https://developer.apple.com/documentation/healthkit/hkhealthstore/authorizationstatus(for:)
+        let requestStatus = store.authorizationStatus(for: HKQuantityType(.stepCount))
+        if requestStatus == .sharingDenied {
+            // User explicitly denied write access — implies they saw the prompt
+            // but we only care about read. Check if we got data previously.
+            authorizationStatus = authorizationStatus == .authorized ? .authorized : .notDetermined
         } else {
-            authorizationStatus = .notDetermined
+            // If we previously got authorized via requestAuthorization, keep it.
+            // Otherwise stay at current state — we can't distinguish denied from not-asked for read.
+            if authorizationStatus != .authorized {
+                authorizationStatus = .notDetermined
+            }
         }
     }
 
