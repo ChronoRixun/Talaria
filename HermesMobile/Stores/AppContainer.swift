@@ -341,8 +341,12 @@ final class AppContainer {
         else { return }
 
         // Respect the user's in-app notifications toggle.
-        // If disabled, skip registration so the relay won't send pushes.
+        // If disabled, deactivate any existing registration on the relay
+        // so the user actually stops receiving pushes.
         guard settingsStore.settings.notificationsEnabled else {
+            if notificationService.isPushTokenRegistered {
+                await deactivatePushRegistration()
+            }
             await notificationService.markPushTokenRegistered(false)
             sessionStore.state.pushTokenRegistered = false
             return
@@ -409,6 +413,21 @@ final class AppContainer {
             await notificationService.markPushTokenRegistered(false)
             sessionStore.state.pushTokenRegistered = false
         }
+    }
+
+    /// Tells the relay to deactivate push registrations for this device.
+    private func deactivatePushRegistration() async {
+        guard let apiClient,
+              let accessToken = await sessionStore.currentAccessToken() else { return }
+
+        struct DeactivateResponse: Decodable {
+            let deactivated: Bool?
+        }
+
+        _ = try? await apiClient.post(
+            path: "push/deactivate",
+            accessToken: accessToken
+        ) as DeactivateResponse
     }
 
     private func registerStoredPushTokenIfNeeded() async {

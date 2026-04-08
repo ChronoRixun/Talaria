@@ -1284,6 +1284,37 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             }
         )
 
+    @app.post("/v1/push/deactivate")
+    def deactivate_push(
+        auth: AuthContext = Depends(get_auth_context),
+        db: Session = Depends(get_db),
+    ) -> dict:
+        """Deactivate push registrations for this device.
+
+        Called when the user disables notifications in-app. Marks all
+        active push registrations for the device as inactive so the
+        relay stops sending pushes.
+        """
+        registration = db.scalar(
+            select(PushRegistration).where(
+                PushRegistration.device_id == auth.device.id,
+                PushRegistration.is_active == True,
+            )
+        )
+        if registration is not None:
+            registration.is_active = False
+            record_audit(
+                db,
+                actor_type="app",
+                actor_id=auth.device.id,
+                action="push.deactivate",
+                entity_type="push_registration",
+                entity_id=registration.id,
+            )
+            db.commit()
+
+        return success({"deactivated": True})
+
     @app.post("/v1/device/app-state")
     def device_app_state(
         payload: DeviceAppStateRequest,
