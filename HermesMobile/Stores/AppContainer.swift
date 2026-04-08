@@ -277,6 +277,7 @@ final class AppContainer {
         await registerStoredPushTokenIfNeeded()
         sensorUploadService?.start()
         await sensorUploadService?.handleAppDidBecomeActive()
+        reconcileLiveActivities()
         updateWidgetData()
         isInitialized = true
     }
@@ -293,6 +294,7 @@ final class AppContainer {
         await sensorUploadService?.handleAppDidBecomeActive()
         talkStore.handleAppDidBecomeActive()
         await talkStore.refreshReadiness()
+        reconcileLiveActivities()
         await reportAppStateIfNeeded("foreground")
         updateWidgetData()
     }
@@ -308,6 +310,7 @@ final class AppContainer {
         await sensorUploadService?.handleAppDidBecomeActive()
         talkStore.handleAppDidBecomeActive()
         await talkStore.refreshReadiness()
+        reconcileLiveActivities()
         updateWidgetData()
     }
 
@@ -319,6 +322,7 @@ final class AppContainer {
         await sensorUploadService?.handleSystemLaunch()
         await registerStoredPushTokenIfNeeded()
         await talkStore.refreshReadiness()
+        reconcileLiveActivities()
         await reportAppStateIfNeeded("foreground")
     }
 
@@ -605,6 +609,14 @@ final class AppContainer {
         hostStore.reset()
         lastKnownHostOnline = false
         lastCommandCatalogRefreshAt = nil
+        LiveActivityService.endAllActivities()
         SharedWidgetDataStore.write(.empty)
+    }
+
+    private func reconcileLiveActivities() {
+        if talkStore.isSessionActive || chatStore.isStreaming {
+            return
+        }
+        LiveActivityService.endAllActivities()
     }
 }

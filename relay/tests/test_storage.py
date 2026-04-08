@@ -1,15 +1,23 @@
 from __future__ import annotations
 
+from datetime import timedelta
+
 from sqlalchemy import select
 
 from app.config import Settings
 from app.database import Database
-from app.models import AuditLog, AuthSession, InboxItem, PushRegistration, User
+from app.models import AuditLog, AuthSession, InboxItem, PushRegistration, User, VoiceTurn, utcnow
 from app.services import (
+    append_message,
+    create_voice_session,
     create_inbox_item,
     ensure_default_user,
+    get_or_create_current_conversation,
+    inject_voice_transcript,
     list_inbox_items,
+    list_conversation_messages,
     record_audit,
+    record_voice_turn,
     refresh_auth_session,
     rotate_auth_session,
     upsert_device,
@@ -108,3 +116,53 @@ def test_push_registration_and_inbox_state_transition(tmp_path):
         assert db.scalar(select(InboxItem).where(InboxItem.id == item.id)).status == "pending"
         assert len(list_inbox_items(db, user_id=user.id)) == 1
         assert db.scalar(select(User).where(User.id == user.id)) is not None
+
+
+def test_inject_voice_transcript_appends_after_existing_chat_messages(tmp_path):
+    settings, database = make_database(tmp_path)
+
+    with database.session() as db:
+        user = ensure_default_user(db, settings)
+        conversation = get_or_create_current_conversation(db, user_id=user.id)
+
+        append_message(
+            db,
+            conversation=conversation,
+            user_id=user.id,
+            role="user",
+            text="Existing chat message",
+            delivery_status="delivered",
+        )
+
+        host = type("Host", (), {"id": "host-123"})()
+        voice_session, _ = create_voice_session(db, user_id=user.id, host_id=host.id)
+        old_turn_time = utcnow() - timedelta(minutes=5)
+
+        first_turn = record_voice_turn(
+            db,
+            voice_session_id=voice_session.id,
+            role="user",
+            source="tool",
+            text="Voice user turn",
+        )
+        second_turn = record_voice_turn(
+            db,
+            voice_session_id=voice_session.id,
+            role="assistant",
+            source="tool",
+            text="Voice assistant turn",
+        )
+
+        first_turn.created_at = old_turn_time
+        second_turn.created_at = old_turn_time + timedelta(seconds=1)
+        db.commit()
+
+        inject_voice_transcript(db, voice_session_id=voice_session.id, user_id=user.id)
+        messages = list_conversation_messages(db, conversation_id=conversation.id)
+
+        assert [message.text for message in messages] == [
+            "Existing chat message",
+            "Voice user turn",
+            "Voice assistant turn",
+            "[Voice session ended]",
+        ]

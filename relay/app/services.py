@@ -697,7 +697,13 @@ def inject_voice_transcript(
 
     conversation = get_or_create_current_conversation(db, user_id=user_id)
 
-    for turn in turns:
+    existing_messages = list_conversation_messages(db, conversation_id=conversation.id)
+    last_message_at = existing_messages[-1].created_at if existing_messages else None
+    base_created_at = utcnow()
+    if last_message_at is not None:
+        base_created_at = max(normalize_datetime(last_message_at), base_created_at)
+
+    for index, turn in enumerate(turns):
         role = "voice_user" if turn.role == "user" else "voice_hermes"
         append_message(
             db,
@@ -707,7 +713,7 @@ def inject_voice_transcript(
             text=turn.text,
             source="voice_transcript",
             delivery_status="delivered",
-            created_at_override=turn.created_at,
+            created_at_override=base_created_at + timedelta(milliseconds=index),
         )
 
     # System banner
@@ -719,6 +725,7 @@ def inject_voice_transcript(
         text="[Voice session ended]",
         source="voice_transcript",
         delivery_status="delivered",
+        created_at_override=base_created_at + timedelta(milliseconds=len(turns)),
     )
 
     return conversation

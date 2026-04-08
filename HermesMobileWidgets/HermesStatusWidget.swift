@@ -46,9 +46,7 @@ private struct HermesStatusView: View {
     private var systemSmallView: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Image(systemName: "brain.head.profile")
-                    .font(.title3)
-                    .foregroundStyle(.yellow)
+                HermesBrandIcon(size: 22)
                 Text("Hermes")
                     .font(.headline)
                     .foregroundStyle(.primary)
@@ -90,9 +88,13 @@ private struct HermesStatusView: View {
 
     private var circularView: some View {
         VStack(spacing: 2) {
-            Image(systemName: entry.data.voiceSessionActive ? "waveform" : "brain.head.profile")
-                .font(.title3)
-                .widgetAccentable()
+            if entry.data.voiceSessionActive {
+                Image(systemName: "waveform")
+                    .font(.title3)
+                    .widgetAccentable()
+            } else {
+                HermesBrandIcon(size: 18)
+            }
             Circle()
                 .fill(entry.data.hostOnline ? .green : .gray)
                 .frame(width: 5, height: 5)
@@ -105,9 +107,7 @@ private struct HermesStatusView: View {
     private var rectangularView: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 4) {
-                Image(systemName: "brain.head.profile")
-                    .font(.caption)
-                    .widgetAccentable()
+                HermesBrandIcon(size: 14)
                 Text("Hermes")
                     .font(.headline)
                 Spacer()

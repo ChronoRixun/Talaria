@@ -26,8 +26,7 @@ private struct HermesHealthView: View {
     var body: some View {
         VStack(spacing: 8) {
             HStack {
-                Image(systemName: "brain.head.profile")
-                    .foregroundStyle(.yellow)
+                HermesBrandIcon(size: 16)
                 Text("Hermes Health")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)

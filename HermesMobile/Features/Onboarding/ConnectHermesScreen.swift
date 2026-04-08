@@ -80,7 +80,7 @@ struct ConnectHermesScreen: View {
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
 
-            Text("Hermes Mobile")
+            Text("Hermes iOS")
                 .font(Design.Typography.heroTitle)
                 .foregroundStyle(Design.Colors.foreground)
 

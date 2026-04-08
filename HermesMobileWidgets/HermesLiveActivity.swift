@@ -1,6 +1,64 @@
 import ActivityKit
 import SwiftUI
+import UIKit
 import WidgetKit
+
+struct HermesBrandIcon: View {
+    let size: CGFloat
+    var fallbackSymbol: String = "brain.head.profile"
+    var fallbackTint: Color = .yellow
+    var backgroundTint: Color? = nil
+    var cornerRadius: CGFloat? = nil
+
+    var body: some View {
+        if let uiImage = Self.loadImage() {
+            Image(uiImage: uiImage)
+                .resizable()
+                .renderingMode(.original)
+                .aspectRatio(contentMode: .fit)
+                .frame(width: size, height: size)
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius ?? size * 0.22))
+                .ifLet(backgroundTint) { view, tint in
+                    view.background(tint, in: RoundedRectangle(cornerRadius: cornerRadius ?? size * 0.22))
+                }
+        } else {
+            Image(systemName: fallbackSymbol)
+                .font(.system(size: size * 0.7, weight: .medium))
+                .foregroundStyle(fallbackTint)
+                .frame(width: size, height: size)
+                .ifLet(backgroundTint) { view, tint in
+                    view.background(tint, in: Circle())
+                }
+        }
+    }
+
+    private static func loadImage() -> UIImage? {
+        if let image = UIImage(named: "AppIcon60x60", in: Bundle.main, compatibleWith: nil) {
+            return image
+        }
+
+        let containerAppURL = Bundle.main.bundleURL
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        if let appBundle = Bundle(url: containerAppURL),
+           let image = UIImage(named: "AppIcon60x60", in: appBundle, compatibleWith: nil) {
+            return image
+        }
+
+        return nil
+    }
+}
+
+extension View {
+    @ViewBuilder
+    func ifLet<T, Content: View>(_ value: T?, transform: (Self, T) -> Content) -> some View {
+        if let value {
+            transform(self, value)
+        } else {
+            self
+        }
+    }
+}
 
 struct HermesLiveActivity: Widget {
     var body: some WidgetConfiguration {
@@ -11,9 +69,7 @@ struct HermesLiveActivity: Widget {
             DynamicIsland {
                 // Expanded view (long press on Dynamic Island)
                 DynamicIslandExpandedRegion(.leading) {
-                    Image(systemName: "brain.head.profile")
-                        .font(.title2)
-                        .foregroundStyle(.yellow)
+                    HermesBrandIcon(size: 28)
                 }
                 DynamicIslandExpandedRegion(.center) {
                     VStack(alignment: .leading, spacing: 2) {
@@ -34,9 +90,7 @@ struct HermesLiveActivity: Widget {
                 }
             } compactLeading: {
                 // Compact left side of Dynamic Island
-                Image(systemName: "brain.head.profile")
-                    .font(.caption)
-                    .foregroundStyle(.yellow)
+                HermesBrandIcon(size: 14)
             } compactTrailing: {
                 // Compact right side
                 Text(context.state.status.prefix(12))
@@ -44,8 +98,7 @@ struct HermesLiveActivity: Widget {
                     .foregroundStyle(.white.opacity(0.8))
             } minimal: {
                 // Minimal (when multiple Live Activities compete)
-                Image(systemName: "brain.head.profile")
-                    .foregroundStyle(.yellow)
+                HermesBrandIcon(size: 16)
             }
         }
         .supplementalActivityFamilies([.small])
@@ -54,12 +107,11 @@ struct HermesLiveActivity: Widget {
     @ViewBuilder
     private func lockScreenView(context: ActivityViewContext<HermesActivityAttributes>) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: "brain.head.profile")
-                .font(.title2)
-                .foregroundStyle(.yellow)
-                .frame(width: 44, height: 44)
-                .background(Color.yellow.opacity(0.15))
-                .clipShape(Circle())
+            HermesBrandIcon(
+                size: 44,
+                backgroundTint: Color.yellow.opacity(0.15),
+                cornerRadius: 12
+            )
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(context.attributes.agentName)
