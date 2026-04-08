@@ -884,12 +884,53 @@ class HermesMobileConnector:
         personalities = self._load_custom_personalities(hermes_home)
         quick_commands = self._load_quick_commands(hermes_home)
 
+        # Read active model/provider from config
+        model_info = self._read_active_model(hermes_home)
+
         return {
             "commands": commands,
             "skills": skills,
             "personalities": personalities,
             "quickCommands": quick_commands,
+            "activeModel": model_info,
         }
+
+    @staticmethod
+    def _read_active_model(hermes_home: Path) -> dict | None:
+        """Read the active model name and provider from ~/.hermes/config.yaml."""
+        config_path = hermes_home / "config.yaml"
+        if not config_path.is_file():
+            return None
+        try:
+            import yaml
+        except ImportError:
+            # Fall back to basic parsing if PyYAML isn't available
+            try:
+                text = config_path.read_text(encoding="utf-8")
+                model_name = None
+                provider = None
+                for line in text.splitlines():
+                    stripped = line.strip()
+                    if stripped.startswith("default:") and model_name is None:
+                        model_name = stripped.split(":", 1)[1].strip()
+                    if stripped.startswith("provider:") and provider is None:
+                        provider = stripped.split(":", 1)[1].strip()
+                if model_name:
+                    return {"name": model_name, "provider": provider}
+            except Exception:
+                pass
+            return None
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                config = yaml.safe_load(f)
+            model_section = config.get("model", {})
+            model_name = model_section.get("default")
+            provider = model_section.get("provider")
+            if model_name:
+                return {"name": model_name, "provider": provider}
+        except Exception:
+            pass
+        return None
 
     def _resolve_hermes_home(self) -> Path:
         try:

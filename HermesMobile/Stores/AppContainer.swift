@@ -454,6 +454,7 @@ final class AppContainer {
             let skills: [RemoteSkill]?
             let personalities: [RemotePersonality]?
             let quickCommands: [RemoteQuickCommand]?
+            let activeModel: ActiveModel?
 
             struct RemoteCommand: Decodable {
                 let name: String
@@ -472,6 +473,10 @@ final class AppContainer {
             struct RemoteQuickCommand: Decodable {
                 let name: String
                 let description: String
+            }
+            struct ActiveModel: Decodable {
+                let name: String
+                let provider: String?
             }
         }
 
@@ -537,7 +542,7 @@ final class AppContainer {
             if remoteCommands.isEmpty && skills.isEmpty && personalities.isEmpty && quickCommands.isEmpty {
                 chatStore.resetCommandCatalog()
             } else {
-                chatStore.replaceCommandCatalog(catalog)
+                chatStore.replaceCommandCatalog(catalog, activeModel: response.activeModel?.name)
                 lastCommandCatalogRefreshAt = .now
             }
         } catch {

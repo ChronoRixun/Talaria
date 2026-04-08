@@ -93,11 +93,50 @@ struct ChatScreen: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            modelStatusChip
+        }
         ToolbarItem(placement: .topBarTrailing) {
             GlassCircleButton(icon: "gearshape.fill") {
                 router.presentSheet(.settings)
             }
         }
+    }
+
+    private var modelStatusChip: some View {
+        HStack(spacing: Design.Spacing.xxs) {
+            Circle()
+                .fill(hostStore.isHostOnline ? .green : .gray)
+                .frame(width: 6, height: 6)
+
+            if let model = chatStore.activeModelName {
+                Text(model)
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .foregroundStyle(Design.Colors.foreground)
+            }
+
+            if let usage = chatStore.lastTokenUsage {
+                Text("·")
+                    .font(.caption2)
+                    .foregroundStyle(Design.Colors.secondaryForeground)
+                Text(formatTokenCount(usage.totalTokens))
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(Design.Colors.secondaryForeground)
+            }
+        }
+        .padding(.horizontal, Design.Spacing.xs)
+        .padding(.vertical, Design.Spacing.xxs)
+        .background(.ultraThinMaterial)
+        .clipShape(Capsule())
+    }
+
+    private func formatTokenCount(_ count: Int) -> String {
+        if count >= 1_000_000 {
+            return String(format: "%.1fM", Double(count) / 1_000_000)
+        } else if count >= 1_000 {
+            return String(format: "%.1fK", Double(count) / 1_000)
+        }
+        return "\(count)"
     }
 
     // MARK: - Message List

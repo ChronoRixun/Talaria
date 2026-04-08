@@ -19,6 +19,9 @@ final class ChatStore {
     /// and hidden quick-command metadata for manual slash dispatch.
     private(set) var commandCatalog: [SlashCommand] = SlashCommand.allBuiltIn
 
+    /// Active model name from the Hermes agent config (e.g., "gpt-5.4-mini").
+    private(set) var activeModelName: String?
+
     private let hermesClient: any HermesClientProtocol
     private let chatLiveActivity = LiveActivityService()
     let persistence: any AppPersistenceStoreProtocol
@@ -332,12 +335,14 @@ final class ChatStore {
         }
     }
 
-    func replaceCommandCatalog(_ catalog: [SlashCommand]) {
+    func replaceCommandCatalog(_ catalog: [SlashCommand], activeModel: String? = nil) {
         commandCatalog = catalog.isEmpty ? SlashCommand.allBuiltIn : catalog
+        if let activeModel { activeModelName = activeModel }
     }
 
     func resetCommandCatalog() {
         commandCatalog = SlashCommand.allBuiltIn
+        activeModelName = nil
     }
 
     func reset() {
