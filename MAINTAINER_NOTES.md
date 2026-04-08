@@ -1,4 +1,4 @@
-# Hermes iOS — Internal Build Snapshot
+# Hermes iOS — Maintainer Notes
 
 This file is for maintainers who want a short internal snapshot of the current implementation. It is **not** the recommended onboarding guide for public users.
 

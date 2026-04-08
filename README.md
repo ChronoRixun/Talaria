@@ -66,7 +66,6 @@ export HERMES_COMMAND=/absolute/path/to/hermes
 export HERMES_MOBILE_RELAY_URL=https://your-relay.example.com/v1
 
 hermes-mobile setup
-hermes-mobile pair-phone
 ```
 
 The setup wizard can:
@@ -79,15 +78,50 @@ The setup wizard can:
 
 See [connector/README.md](connector/README.md) for the full flow.
 
-### 3. Build and pair the iPhone app
+### 3. Build and open the iPhone app
 
 1. Open the project in Xcode.
 2. Set your signing team and local bundle/App Group overrides if needed.
 3. Launch the app on your phone or simulator.
 4. Enter the same relay URL used by the connector.
-5. Scan the QR code or enter the manual code from `hermes-mobile pair-phone`.
 
 <insert image> Connect Hermes screen with a custom relay URL entered and the phone pairing code ready to scan.
+
+### 4. Pair the phone
+
+On the connector host:
+
+```bash
+hermes-mobile pair-phone
+```
+
+Then scan the QR code or enter the manual code in the iPhone app.
+
+### 5. Recommended: install the Hermes iOS skill in Hermes
+
+The connector exposes the `hermes_mobile` MCP tools, but the bundled `hermes-ios` skill teaches Hermes when and how to use them well for location, health, activity, and sensor-aware responses.
+
+From the repo root:
+
+```bash
+mkdir -p ~/.hermes/skills
+cp -R skills/hermes-ios ~/.hermes/skills/
+```
+
+If you are updating an older local copy of the skill, replace it explicitly:
+
+```bash
+rm -rf ~/.hermes/skills/hermes-ios
+cp -R skills/hermes-ios ~/.hermes/skills/
+```
+
+Then reload Hermes:
+
+```text
+/reload-mcp
+```
+
+Or start a fresh Hermes chat/session if you prefer.
 
 ## Optional features
 
@@ -106,13 +140,14 @@ See [connector/README.md](connector/README.md) for the full flow.
 - [relay/docs/local-dev.md](relay/docs/local-dev.md): local development and same-network testing notes
 - [connector/SENSOR_SCHEMA.md](connector/SENSOR_SCHEMA.md): connector SQLite schema and MCP query surface
 - [docs/IOS_CAPABILITIES.md](docs/IOS_CAPABILITIES.md): technical iOS capability ledger for maintainers
-- [currentlybuilt.md](currentlybuilt.md): internal implementation snapshot, not onboarding
+- [MAINTAINER_NOTES.md](MAINTAINER_NOTES.md): maintainer-facing implementation snapshot, not onboarding
 
 ## Screenshots to add
 
 - `<insert image> Hermes iOS chat screen with inline returned image, tool activity, and model chip.`
 - `<insert image> Connector setup wizard showing the Fly / existing relay / local network options.`
 - `<insert image> Connector pair-phone output with QR code and manual pairing code.`
+- `<insert image> Hermes skill install step or `/reload-mcp` confirmation in a Hermes chat session.`
 
 ## Project status
 
