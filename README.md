@@ -25,6 +25,48 @@ Hermes iOS is a self-hosted-first iPhone companion for a user-owned Hermes runti
 - Home Screen widgets, Live Activities, and host/model/context status in the chat UI
 - Self-hosted relay + connector pairing flow with background service support
 
+## Sensor Pipeline & MCP Tools
+
+The connector continuously receives sensor data from your iPhone and stores it locally in SQLite on your Hermes machine. Hermes accesses this data through MCP tools — meaning your agent can answer questions about you, build on top of your personal data, and use it as context in any conversation.
+
+**What flows from your phone:**
+- Real-time GPS location with reverse-geocoded addresses
+- 11 HealthKit metrics (steps, heart rate, sleep, calories, blood oxygen, and more)
+- CoreMotion activity detection (walking, running, driving, cycling, stationary)
+
+**What your agent can do with it:**
+
+```
+You:    "Where am I right now?"
+Hermes: You're at 301 Old Mill Village Dr, Apex, NC. (via get_user_location)
+
+You:    "How did I sleep this week?"
+Hermes: Here's your sleep data for the last 7 days... (via get_health_metric)
+
+You:    "Build me a personal health dashboard"
+Hermes: I'll query your sensor database and create an HTML dashboard with
+        your steps, sleep trends, and heart rate over the past 30 days.
+        (via query_sensor_data → custom SQL against your local SQLite)
+```
+
+The data never leaves your machine. The sensor SQLite database lives at `~/.hermes-mobile/sensors.db` and is queryable through the `hermes_mobile` MCP server with 8 tools:
+
+| Tool | What it does |
+|------|-------------|
+| `get_user_location` | Current location with address |
+| `get_location_history` | Where you've been (time-series) |
+| `get_health_summary` | All latest health metrics at once |
+| `get_health_metric` | Time-series for one metric |
+| `get_health_metrics_list` | Available metrics + latest values |
+| `get_user_activity` | Current physical activity |
+| `get_sensor_schema` | Database table definitions |
+| `query_sensor_data` | Custom read-only SQL queries |
+
+The `query_sensor_data` tool is particularly powerful — your agent can write arbitrary SELECT queries against your health and location data to find correlations, build charts, generate reports, or power any project that benefits from personal sensor data.
+
+> [!TIP]
+> Install the bundled `hermes-ios` skill (see step 5 below) to teach Hermes when and how to use these tools effectively.
+
 ## Architecture
 
 ```mermaid
