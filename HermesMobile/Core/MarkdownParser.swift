@@ -38,23 +38,49 @@ private func isImageURL(_ urlString: String) -> Bool {
     return false
 }
 
-/// Extracts markdown images from a prose line, returning the remaining text
-/// and any image segments found.
-private func extractImages(from text: String) -> (cleanedText: String, images: [(url: URL, alt: String)]) {
-    var images: [(url: URL, alt: String)] = []
-    var cleaned = text
+/// Splits prose text into interleaved prose and image segments, preserving order.
+/// Input:  "before ![alt](url) after"
+/// Output: [.prose("before"), .image(url, "alt"), .prose("after")]
+private func splitProseAndImages(_ text: String) -> [MarkdownSegment] {
+    let matches = text.matches(of: markdownImagePattern)
+    guard !matches.isEmpty else {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? [] : [.prose(text: trimmed)]
+    }
 
-    for match in text.matches(of: markdownImagePattern).reversed() {
+    var segments: [MarkdownSegment] = []
+    var lastEnd = text.startIndex
+
+    for match in matches {
         let alt = String(match.1)
         let urlString = String(match.2)
 
-        guard isImageURL(urlString), let url = URL(string: urlString) else { continue }
+        // Emit prose before this image
+        let before = String(text[lastEnd..<match.range.lowerBound])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !before.isEmpty {
+            segments.append(.prose(text: before))
+        }
 
-        images.insert((url: url, alt: alt), at: 0)
-        cleaned.replaceSubrange(match.range, with: "")
+        // Emit image if it's a recognized image URL
+        if isImageURL(urlString), let url = URL(string: urlString) {
+            segments.append(.image(url: url, altText: alt))
+        } else {
+            // Not a recognized image — keep the markdown as prose
+            let raw = String(text[match.range])
+            segments.append(.prose(text: raw))
+        }
+
+        lastEnd = match.range.upperBound
     }
 
-    return (cleaned, images)
+    // Emit prose after the last image
+    let after = String(text[lastEnd...]).trimmingCharacters(in: .whitespacesAndNewlines)
+    if !after.isEmpty {
+        segments.append(.prose(text: after))
+    }
+
+    return segments
 }
 
 /// Parses markdown content into alternating prose, fenced code block, and image segments.
@@ -81,17 +107,7 @@ func parseMarkdownSegments(_ content: String, isStreaming: Bool = false) -> [Mar
         guard !currentProse.isEmpty else { return }
         let text = currentProse.joined(separator: "\n")
         currentProse = []
-
-        // Extract images from the prose block
-        let (cleaned, images) = extractImages(from: text)
-
-        let trimmedCleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmedCleaned.isEmpty {
-            segments.append(.prose(text: trimmedCleaned))
-        }
-        for img in images {
-            segments.append(.image(url: img.url, altText: img.alt))
-        }
+        segments.append(contentsOf: splitProseAndImages(text))
     }
 
     for line in lines {

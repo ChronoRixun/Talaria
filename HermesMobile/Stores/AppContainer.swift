@@ -344,9 +344,9 @@ final class AppContainer {
         // If disabled, deactivate any existing registration on the relay
         // so the user actually stops receiving pushes.
         guard settingsStore.settings.notificationsEnabled else {
-            if notificationService.isPushTokenRegistered {
-                await deactivatePushRegistration()
-            }
+            // Always attempt deactivation — the relay may have an active
+            // registration from a previous session even if the local flag is false.
+            await deactivatePushRegistration()
             await notificationService.markPushTokenRegistered(false)
             sessionStore.state.pushTokenRegistered = false
             return

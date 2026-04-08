@@ -124,7 +124,7 @@ struct ChatScreen: View {
                     .fill(hostStore.isHostOnline ? .green : .gray)
                     .frame(width: 6, height: 6)
 
-                if let model = hostStore.currentHost?.hermesModel ?? chatStore.activeModelName {
+                if let model = chatStore.activeModelName ?? hostStore.currentHost?.hermesModel {
                     Text(model)
                         .font(.system(size: 12, weight: .medium, design: .monospaced))
                         .foregroundStyle(Design.Colors.foreground)
@@ -161,7 +161,7 @@ struct ChatScreen: View {
 
     private var contextPopoverContent: some View {
         VStack(spacing: Design.Spacing.sm) {
-            if let model = hostStore.currentHost?.hermesModel ?? chatStore.activeModelName {
+            if let model = chatStore.activeModelName ?? hostStore.currentHost?.hermesModel {
                 Text(model)
                     .font(.system(.subheadline, design: .monospaced, weight: .semibold))
                     .foregroundStyle(Design.Colors.foreground)
