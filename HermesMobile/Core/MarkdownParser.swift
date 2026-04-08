@@ -16,13 +16,14 @@ enum MarkdownSegment: Identifiable {
 }
 
 // Regex for markdown images: ![alt text](url)
-private let markdownImagePattern = /!\[([^\]]*)\]\(([^)]+)\)/
+// nonisolated(unsafe) satisfies Swift 6.2 strict concurrency for global Regex.
+nonisolated(unsafe) private let markdownImagePattern = /!\[([^\]]*)\]\(([^)]+)\)/
 
 /// Image file extensions the parser recognizes.
 private let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "gif", "webp", "svg"]
 
 /// Known image hosting domains (always treated as images regardless of extension).
-private let imageHostPatterns = ["fal.media", "fal-cdn", "replicate.delivery", "oaidalleapiprodscus"]
+private let imageHostPatterns: [String] = ["fal.media", "fal-cdn", "replicate.delivery", "oaidalleapiprodscus"]
 
 /// Returns true if the URL looks like an image.
 private func isImageURL(_ urlString: String) -> Bool {
