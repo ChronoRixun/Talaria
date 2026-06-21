@@ -508,13 +508,20 @@ final class ChatStore {
             }
         }
 
-        // Preserve local-only streaming placeholders while the server is still
-        // catching up, so polling doesn't make the active reply disappear.
+        // Preserve any local message the relay hasn't echoed back yet — not just
+        // streaming placeholders, but also just-sent user messages still in flight.
+        // The relay assigns its own message IDs, so a local message is "confirmed"
+        // only if the refreshed conversation contains it by id OR by clientMessageID.
+        // Anything unconfirmed must survive the merge, otherwise a sent message
+        // vanishes the instant the first poll/refresh returns without it.
         let refreshedIDs = Set(refreshedConversation.messages.map(\.id))
-        let localStreamingPlaceholders = localConversation.messages.filter {
-            $0.isStreaming && !refreshedIDs.contains($0.id)
+        let refreshedClientIDs = Set(refreshedConversation.messages.compactMap(\.clientMessageID))
+        let unconfirmedLocals = localConversation.messages.filter { local in
+            if refreshedIDs.contains(local.id) { return false }
+            if let clientID = local.clientMessageID, refreshedClientIDs.contains(clientID) { return false }
+            return true
         }
-        refreshedConversation.messages.append(contentsOf: localStreamingPlaceholders)
+        refreshedConversation.messages.append(contentsOf: unconfirmedLocals)
 
         return refreshedConversation
     }
