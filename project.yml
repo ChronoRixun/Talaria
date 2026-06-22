@@ -144,7 +144,13 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: org.aethyrion.talaria.tests
-        TEST_TARGET_NAME: Talaria
+        # The app's PRODUCT_NAME is "Talaria for Hermes Desktop", so its bundle
+        # is "Talaria for Hermes Desktop.app" — not "Talaria.app". TEST_TARGET_NAME
+        # would derive TEST_HOST from the *target* name and look for Talaria.app,
+        # which doesn't exist ("Could not find test host"). Point TEST_HOST /
+        # BUNDLE_LOADER at the real product instead.
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Talaria for Hermes Desktop.app/Talaria for Hermes Desktop"
+        BUNDLE_LOADER: "$(TEST_HOST)"
         GENERATE_INFOPLIST_FILE: true
 
   TalariaUITests:
