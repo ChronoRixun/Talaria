@@ -97,21 +97,14 @@ jobs:
       - name: Unit tests (TalariaTests)
         run: |
           set -o pipefail
-          # Resolve an available iPhone simulator (prefer a Pro Max), so the
-          # destination doesn't break when the runner ships a different lineup.
-          UDID="$(xcrun simctl list devices available --json \
-            | jq -r '[.devices[][] | select(.name | test("iPhone"))]
-                      | (map(select(.name | test("Pro Max"))) + .)
-                      | .[0].udid // empty')"
-          echo "Selected simulator UDID: ${UDID:-<none>}"
-          if [ -z "$UDID" ]; then
-            echo "::error::No available iPhone simulator on this runner"
-            exit 1
-          fi
+          # Let xcodebuild resolve the simulator by name. iPhone 17 Pro Max is
+          # the project's target device and is present on the runner; resolving a
+          # UDID ourselves via `simctl` can pick a device xcodebuild treats as
+          # ineligible. Change the device name here if a runner image drops it.
           xcodebuild test \
             -project "$PROJECT" -scheme "$SCHEME" \
             -configuration Debug \
-            -destination "id=$UDID" \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max,OS=latest' \
             -only-testing:TalariaTests \
             CODE_SIGNING_ALLOWED=NO \
             | xcbeautify --renderer github-actions
