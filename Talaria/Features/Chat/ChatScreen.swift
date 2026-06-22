@@ -24,7 +24,35 @@ struct ChatScreen: View {
 
     private let thinkingIndicatorID = UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
 
+    // `body` is split across several `some View` properties so each is a small,
+    // independent expression. Applied as one chain, the ~15 modifiers overrun the
+    // Swift type-checker's budget ("unable to type-check this expression in
+    // reasonable time"), more readily on slower machines (e.g. CI). The split is
+    // behavior-preserving: the grouped modifiers are order-independent.
     var body: some View {
+        observingContent
+            .confirmationDialog(
+                "Clear Conversation",
+                isPresented: $showClearConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Clear", role: .destructive) {
+                    Task { await performClear() }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This will archive the current conversation and start a new session. This cannot be undone.")
+            }
+            .sheet(isPresented: $showAttachmentPicker) {
+                AttachmentPickerSheet { result in
+                    handleAttachmentResult(result)
+                }
+                .presentationDetents([.height(220)])
+                .presentationDragIndicator(.hidden)
+            }
+    }
+
+    private var mainStack: some View {
         ZStack {
             HUDScreenBackground(gridIntensity: 0.4)
                 .ignoresSafeArea()
@@ -51,65 +79,58 @@ struct ChatScreen: View {
                 )
             }
         }
-        .overlay {
-            SessionsDrawer(
-                isPresented: $sessionsOpen,
-                model: sessionsModel,
-                hostName: (hostStore.currentHost?.resolvedDisplayName ?? "HERMES HOST"),
-                hostDetail: sessionsHostDetail,
-                hostOnline: isChatHostOnline
-            )
-        }
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar { toolbarContent }
-        .toolbarBackground(.hidden, for: .navigationBar)
-        .onAppear { configureChatSeams() }
-        .onChange(of: sessionsOpen) { _, isOpen in
-            if isOpen { Task { await refreshSessions() } }
-        }
-        .onChange(of: displayedModelName) { _, newValue in
-            modelModel.activeModelNameOverride = newValue
-        }
-        .task { await startChatSession() }
-        .task { await monitorConnectionStatus() }
-        .onDisappear {
-            chatStore.setPollingEnabled(false)
-        }
-        .onChange(of: chatStore.conversation?.messages.count ?? 0) {
-            guard chatStore.streamingMessageID == nil else { return }
-            scrollToBottom()
-        }
-        .onChange(of: chatStore.pendingMessageSentAt) {
-            guard chatStore.streamingMessageID == nil else { return }
-            scrollToBottom()
-        }
-        .onChange(of: chatStore.streamingMessageID) { old, new in
-            if let new, old == nil {
-                scrollToResponseTop(new)
+    }
+
+    private var sessionsOverlay: some View {
+        SessionsDrawer(
+            isPresented: $sessionsOpen,
+            model: sessionsModel,
+            hostName: (hostStore.currentHost?.resolvedDisplayName ?? "HERMES HOST"),
+            hostDetail: sessionsHostDetail,
+            hostOnline: isChatHostOnline
+        )
+    }
+
+    private var framedContent: some View {
+        mainStack
+            .overlay { sessionsOverlay }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { toolbarContent }
+            .toolbarBackground(.hidden, for: .navigationBar)
+    }
+
+    private var lifecycleContent: some View {
+        framedContent
+            .onAppear { configureChatSeams() }
+            .task { await startChatSession() }
+            .task { await monitorConnectionStatus() }
+            .onDisappear { chatStore.setPollingEnabled(false) }
+    }
+
+    private var observingContent: some View {
+        lifecycleContent
+            .onChange(of: sessionsOpen) { _, isOpen in
+                if isOpen { Task { await refreshSessions() } }
             }
-            if old != nil && new == nil && settingsStore.settings.hapticFeedbackEnabled {
-                HapticEngine.responseReceived()
+            .onChange(of: displayedModelName) { _, newValue in
+                modelModel.activeModelNameOverride = newValue
             }
-        }
-        .confirmationDialog(
-            "Clear Conversation",
-            isPresented: $showClearConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Clear", role: .destructive) {
-                Task { await performClear() }
+            .onChange(of: chatStore.conversation?.messages.count ?? 0) {
+                guard chatStore.streamingMessageID == nil else { return }
+                scrollToBottom()
             }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This will archive the current conversation and start a new session. This cannot be undone.")
-        }
-        .sheet(isPresented: $showAttachmentPicker) {
-            AttachmentPickerSheet { result in
-                handleAttachmentResult(result)
+            .onChange(of: chatStore.pendingMessageSentAt) {
+                guard chatStore.streamingMessageID == nil else { return }
+                scrollToBottom()
             }
-            .presentationDetents([.height(220)])
-            .presentationDragIndicator(.hidden)
-        }
+            .onChange(of: chatStore.streamingMessageID) { old, new in
+                if let new, old == nil {
+                    scrollToResponseTop(new)
+                }
+                if old != nil && new == nil && settingsStore.settings.hapticFeedbackEnabled {
+                    HapticEngine.responseReceived()
+                }
+            }
     }
 
     // MARK: - Shell wiring (presentation seams)
