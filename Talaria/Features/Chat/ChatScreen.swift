@@ -64,6 +64,9 @@ struct ChatScreen: View {
         .toolbar { toolbarContent }
         .toolbarBackground(.hidden, for: .navigationBar)
         .onAppear { configureChatSeams() }
+        .onChange(of: sessionsOpen) { _, isOpen in
+            if isOpen { Task { await refreshSessions() } }
+        }
         .onChange(of: displayedModelName) { _, newValue in
             modelModel.activeModelNameOverride = newValue
         }
@@ -121,18 +124,22 @@ struct ChatScreen: View {
 
     // MARK: - Shell wiring (presentation seams)
 
-    /// Connects the Sessions drawer / Model selector shells to existing flows.
-    /// Model selector is wired to the Hermes Sessions API; the Sessions drawer
-    /// list/selection is still pending (see its `// TODO: wire …` markers).
+    /// Connects the Sessions drawer / Model selector shells to the Hermes
+    /// Sessions API (model list + switch, session list + open).
     private func configureChatSeams() {
         modelModel.activeModelNameOverride = displayedModelName
         sessionsModel.onNewChat = { showClearConfirmation = true }
         sessionsModel.onOpenHostSettings = { router.presentSheet(.settings) }
-        // TODO: wire to Sessions API — switch the active conversation here.
-        sessionsModel.onSelectSession = { _ in }
+        // Sessions drawer → Hermes Sessions API. Tapping a session loads its
+        // full history and continues that thread.
+        sessionsModel.onSelectSession = { summary in
+            Task { await chatStore.openSession(summary.id) }
+        }
 
         // Model selector → Hermes Sessions API. A selection applies on the NEXT
         // session, so the picker also offers a "Start New Session" action.
+        // FUTURE: offer the native /api/model/options + /api/model/set endpoints
+        // as a Settings toggle (immediate switch) vs. today's /model-command path.
         modelModel.onSelectModel = { option in
             Task { await chatStore.selectModel(option.id) }
         }
@@ -147,7 +154,55 @@ struct ChatScreen: View {
                 modelModel.selectedModelID = active
             }
         }
+        Task { await refreshSessions() }
     }
+
+    /// Fetches the host's sessions and maps them into the drawer's view models.
+    private func refreshSessions() async {
+        let infos = await chatStore.loadSessions()
+        sessionsModel.sessions = infos.map(Self.sessionSummary(from:))
+    }
+
+    private static func sessionSummary(from info: HermesSessionInfo) -> SessionsDrawerModel.SessionSummary {
+        let title = (info.title?.isEmpty == false)
+            ? info.title!
+            : ((info.preview?.isEmpty == false) ? info.preview! : "Untitled session")
+        let subtitle = (info.preview?.isEmpty == false)
+            ? info.preview!
+            : "\(info.messageCount) message\(info.messageCount == 1 ? "" : "s")"
+        let (group, timeLabel) = sessionGroupAndLabel(for: info.lastActive)
+        return .init(
+            id: info.id,
+            title: title,
+            subtitle: subtitle,
+            timeLabel: timeLabel,
+            group: group,
+            isActive: info.isActive,
+            isPinned: false,
+            badge: info.source == "cron" ? "AUTO" : nil
+        )
+    }
+
+    private static func sessionGroupAndLabel(for date: Date?) -> (SessionsDrawerModel.Group, String) {
+        guard let date else { return (.earlier, "—") }
+        let cal = Calendar.current
+        if cal.isDateInToday(date) { return (.today, sessionTimeFormatter.string(from: date)) }
+        if cal.isDateInYesterday(date) { return (.yesterday, sessionTimeFormatter.string(from: date)) }
+        if let days = cal.dateComponents([.day], from: date, to: .now).day, days < 7 {
+            return (.earlier, sessionWeekdayFormatter.string(from: date))
+        }
+        return (.earlier, sessionDateFormatter.string(from: date))
+    }
+
+    private static let sessionTimeFormatter: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "HH:mm"; return f
+    }()
+    private static let sessionWeekdayFormatter: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "EEE"; return f
+    }()
+    private static let sessionDateFormatter: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "M/d"; return f
+    }()
 
     private var sessionsHostDetail: String {
         switch hostStore.connectionState {

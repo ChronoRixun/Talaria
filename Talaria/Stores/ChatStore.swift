@@ -382,6 +382,33 @@ final class ChatStore {
         }
     }
 
+    // MARK: - Sessions
+
+    /// Recent sessions from the host. Returns [] when unreachable.
+    func loadSessions() async -> [HermesSessionInfo] {
+        (try? await hermesClient.listSessions()) ?? []
+    }
+
+    /// Opens an existing session: loads its history and continues that thread.
+    func openSession(_ id: String) async {
+        streamingTask?.cancel()
+        streamingTask = nil
+        streamingMessageID = nil
+        chatLiveActivity.endActivity()
+        pollingTask?.cancel()
+        pollingTask = nil
+        do {
+            let convo = try await hermesClient.openSession(id)
+            conversation = convo
+            lastTokenUsage = convo.latestUsage
+            pendingMessageSentAt = nil
+            persistence.saveConversationCache(convo)
+            onConversationChanged?()
+        } catch {
+            // Keep the current conversation if the open fails.
+        }
+    }
+
     func replaceCommandCatalog(_ catalog: [SlashCommand], activeModel: String? = nil, contextWindow: Int? = nil) {
         commandCatalog = catalog.isEmpty ? SlashCommand.allBuiltIn : catalog
         if let activeModel { activeModelName = activeModel }

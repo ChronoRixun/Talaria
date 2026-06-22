@@ -255,6 +255,57 @@ final class SessionsHermesClient: HermesClientProtocol {
         )
     }
 
+    // MARK: - Sessions list / open
+
+    func listSessions() async throws -> [HermesSessionInfo] {
+        let response: SessionsListResponse = try await getJSON(
+            path: "\(Self.sessionsPath)?limit=50&order=recent&min_messages=1"
+        )
+        return response.sessions.map { row in
+            HermesSessionInfo(
+                id: row.id,
+                title: row.title,
+                preview: row.preview,
+                model: row.model,
+                source: row.source,
+                messageCount: row.messageCount ?? 0,
+                lastActive: row.lastActive.map { Date(timeIntervalSince1970: $0) },
+                isActive: row.isActive ?? false
+            )
+        }
+    }
+
+    /// Adopts `id` as the active session and returns its full history. New
+    /// messages then continue that thread (see ensureSession()).
+    func openSession(_ id: String) async throws -> Conversation {
+        let response: SessionMessagesResponse = try await getJSON(
+            path: "\(Self.sessionsPath)/\(id)/messages"
+        )
+        apiSessionId = response.sessionId ?? id
+        let messages = response.messages.compactMap(Self.mapStoredMessage)
+        let convo = Conversation(
+            title: "Hermes",
+            messages: messages,
+            lastActivity: messages.last?.timestamp ?? .now
+        )
+        currentConversation = convo
+        connectionStatus = .connected
+        return convo
+    }
+
+    nonisolated private static func mapStoredMessage(_ m: SessionMessagesResponse.StoredMessage) -> Message? {
+        let sender: MessageSender
+        switch (m.role ?? "").lowercased() {
+        case "user": sender = .user
+        case "assistant": sender = .hermes
+        default: return nil   // skip system / tool / other roles
+        }
+        let text = (m.content ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return nil }
+        let ts = m.timestamp.map { Date(timeIntervalSince1970: $0) } ?? .now
+        return Message(sender: sender, content: text, timestamp: ts, status: .delivered)
+    }
+
     private func ensureSession() async throws -> String {
         if let apiSessionId { return apiSessionId }
         let response: CreateSessionResponse = try await postJSON(
@@ -366,6 +417,63 @@ final class SessionsHermesClient: HermesClientProtocol {
         let data: [ModelInfo]?
         struct ModelInfo: Decodable {
             let id: String?
+        }
+    }
+
+    private struct SessionsListResponse: Decodable {
+        let sessions: [Row]
+        struct Row: Decodable {
+            let id: String
+            let title: String?
+            let preview: String?
+            let model: String?
+            let source: String?
+            let messageCount: Int?
+            let lastActive: Double?
+            let isActive: Bool?
+            enum CodingKeys: String, CodingKey {
+                case id, title, preview, model, source
+                case messageCount = "message_count"
+                case lastActive = "last_active"
+                case isActive = "is_active"
+            }
+        }
+    }
+
+    private struct SessionMessagesResponse: Decodable {
+        let sessionId: String?
+        let messages: [StoredMessage]
+        enum CodingKeys: String, CodingKey {
+            case sessionId = "session_id"
+            case messages
+        }
+        struct StoredMessage: Decodable {
+            let role: String?
+            let content: String?
+            let timestamp: Double?
+            enum CodingKeys: String, CodingKey {
+                case role, content, timestamp
+                case createdAt = "created_at"
+            }
+            init(from decoder: Decoder) throws {
+                let c = try decoder.container(keyedBy: CodingKeys.self)
+                role = try c.decodeIfPresent(String.self, forKey: .role)
+                let ts = try? c.decodeIfPresent(Double.self, forKey: .timestamp)
+                let created = try? c.decodeIfPresent(Double.self, forKey: .createdAt)
+                timestamp = (ts ?? nil) ?? (created ?? nil)
+                // content may be a plain string or an array of {type, text} parts.
+                if let s = try? c.decode(String.self, forKey: .content) {
+                    content = s
+                } else if let parts = try? c.decode([ContentPart].self, forKey: .content) {
+                    content = parts.compactMap(\.text).joined(separator: "\n")
+                } else {
+                    content = nil
+                }
+            }
+            struct ContentPart: Decodable {
+                let type: String?
+                let text: String?
+            }
         }
     }
 

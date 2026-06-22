@@ -71,4 +71,12 @@ final class ResilientHermesClient: HermesClientProtocol {
     func switchModel(_ identifier: String) async throws {
         try await primary.switchModel(identifier)
     }
+
+    func listSessions() async throws -> [HermesSessionInfo] {
+        try await primary.listSessions()
+    }
+
+    func openSession(_ id: String) async throws -> Conversation {
+        try await primary.openSession(id)
+    }
 }
