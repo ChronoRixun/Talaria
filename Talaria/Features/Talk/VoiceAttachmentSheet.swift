@@ -34,7 +34,7 @@ struct VoiceAttachmentSheet: View {
                             onCameraRequested()
                             dismiss()
                         } label: {
-                            attachmentRow("Live Camera", systemImage: "video.fill")
+                            AttachmentRow(title: "Live Camera", systemImage: "video.fill")
                         }
                         .buttonStyle(.plain)
                     }
@@ -45,7 +45,7 @@ struct VoiceAttachmentSheet: View {
                         matching: .images,
                         photoLibrary: .shared()
                     ) {
-                        attachmentRow("Photo Library", systemImage: "photo.on.rectangle")
+                        AttachmentRow(title: "Photo Library", systemImage: "photo.on.rectangle")
                     }
                 }
                 .padding(.horizontal, Design.Spacing.lg)
@@ -67,7 +67,11 @@ struct VoiceAttachmentSheet: View {
     }
 
     /// HUD attachment row: cyan glyph + label on a panelled chip.
-    private func attachmentRow(_ title: String, systemImage: String) -> some View {
+    private struct AttachmentRow: View {
+        let title: String
+        let systemImage: String
+
+        var body: some View {
         HStack(spacing: Design.Spacing.sm) {
             Image(systemName: systemImage)
                 .font(.system(size: Design.Size.iconSmall, weight: .medium))
@@ -86,6 +90,7 @@ struct VoiceAttachmentSheet: View {
         .padding(.horizontal, Design.Spacing.md)
         .padding(.vertical, Design.Spacing.sm)
         .hudPanel(cornerRadius: Design.CornerRadius.md)
+        }
     }
 
     /// Downscale to 512px longest side and compress for WebRTC data channel.
