@@ -76,7 +76,16 @@ def _set_default(provider, model, confirm_expensive):
                     "confirm_message": getattr(w, "message", str(w)),
                     "provider": provider, "model": model}
     with _profile_scope(None):
-        return _apply_model_assignment_sync("main", provider, model, "", "", "")
+        result = _apply_model_assignment_sync("main", provider, model, "", "", "")
+    # The persistent default just changed in config.yaml. Invalidate the cached
+    # GET payload so the NEXT /models (even refresh=0) rebuilds and reflects the new
+    # current. The rebuild is cheap when refresh=0 — it re-reads config for the
+    # model/provider pointer but reuses each provider's on-disk model-list cache, so
+    # clients don't need the slow refresh=1 just to see their own set-default land.
+    with _lock:
+        _cache["payload"] = None
+        _cache["compiled_at"] = 0.0
+    return result
 
 class H(BaseHTTPRequestHandler):
     server_version = "TalariaModelsShim/1.0"
