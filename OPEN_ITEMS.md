@@ -233,3 +233,64 @@ pipeline's internal state at a glance:
 - Last location update timestamp + last health snapshot timestamp
 
 This lets Owen (and eventually Shelley) see the pipeline state without Console.app.
+
+
+---
+
+## 16. 🐛 HealthKit authorization never requested on Talaria install
+
+**Status:** Confirmed blocker — all health sensor data is blocked.
+
+The app's `healthService.authorizationStatus` is `notDetermined`. HealthKit callbacks fire
+(distance_walking, respiratory_rate, resting_heart_rate, etc.) but `collectSnapshot()`
+returns nil every time because the app has never called `HKHealthStore.requestAuthorization()`.
+
+Granting permissions in iOS Settings is NOT sufficient — HealthKit requires an explicit
+in-app `requestAuthorization()` call before queries return data. The permissions flow in
+`PermissionsStore.reloadCapabilities()` or the onboarding/pairing sequence needs to trigger
+this.
+
+**Console evidence (console2.txt):**
+```
+start() — monitoring started. Health auth=notDetermined, loc auth=authorizedWhenInUse
+💓 health update for: distance_walking
+captureHealth: collectSnapshot returned nil (auth=notDetermined)
+💓 health update for: respiratory_rate
+captureHealth: collectSnapshot returned nil (auth=notDetermined)
+```
+
+**Fix:** Add `HKHealthStore.requestAuthorization(toShare:read:)` to the app lifecycle —
+either in `PermissionsStore`, on first launch, or when the user enables health sync in
+Settings. Must be called at least once per install.
+
+---
+
+## 17. 🐛 Relay sensor delivery returns `retry` — connector handoff failing
+
+**Status:** Confirmed blocker — location uploads reach the relay but never deliver.
+
+The phone successfully uploads sensor data to the relay on `:8000`, but the relay responds
+with `deliveryState=retry` instead of `delivered`. This means the relay accepted the upload
+but the connector has not confirmed delivery to Hermes.
+
+**Console evidence (console2.txt):**
+```
+drain: starting. Outbox: loc=true, health=49
+executeUpload device/sensor/location: deliveryState=retry wasDelivered=false
+drain: location upload ❌ failed
+drain: finished. Outbox remaining: loc=true, health=49
+```
+
+**Architecture reminder:**
+```
+Phone → relay (:8000, OJAMD) → connector → Hermes CLI session on OJAMD
+```
+
+The connector appears connected to the relay, but delivery isn't completing. Possible causes:
+- Connector's Hermes session is dead or the `hermes_mobile` MCP tools are not registered
+- Connector received the payload but failed to forward (check connector logs)
+- Relay-to-connector protocol mismatch or timeout
+
+**Next step:** Ask Hermes on OJAMD to check relay + connector logs for sensor delivery
+errors and verify the `hermes_mobile` MCP tools are registered and the connector session
+is alive.

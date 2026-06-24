@@ -177,7 +177,7 @@ final class SensorUploadService {
         healthService.onHealthUpdate = { [weak self] changedIdentifiers in
             guard let self else { return }
             Task { @MainActor in
-                sensorLog.notice("💓 health update for: \(changedIdentifiers.joined(separator: ", "))")
+                sensorLog.notice("💓 health update for: \(changedIdentifiers.joined(separator: ", "), privacy: .public)")
                 await self.captureHealthSnapshot(changedIdentifiers: changedIdentifiers)
             }
         }
@@ -297,7 +297,7 @@ final class SensorUploadService {
         while isActive && isPairedProvider() {
             if let pendingLocation = outboxState.pendingLocation {
                 let delivered = await uploadLocation(pendingLocation)
-                sensorLog.notice("drain: location upload \(delivered ? "✅ delivered" : "❌ failed")")
+                sensorLog.notice("drain: location upload \(delivered ? "delivered" : "FAILED", privacy: .public)")
                 guard delivered else { break }
                 outboxState.pendingLocation = nil
                 persistOutboxState()
@@ -306,7 +306,7 @@ final class SensorUploadService {
 
             if !outboxState.pendingHealthSamples.isEmpty {
                 let delivered = await uploadHealth(outboxState.pendingHealthSamples)
-                sensorLog.notice("drain: health upload (\(self.outboxState.pendingHealthSamples.count) samples) \(delivered ? "✅ delivered" : "❌ failed")")
+                sensorLog.notice("drain: health upload (\(self.outboxState.pendingHealthSamples.count) samples) \(delivered ? "delivered" : "FAILED", privacy: .public)")
                 guard delivered else { break }
                 outboxState.pendingHealthSamples.removeAll()
                 persistOutboxState()
@@ -416,7 +416,7 @@ final class SensorUploadService {
             body: body,
             accessToken: accessToken
         )
-        sensorLog.notice("executeUpload \(path): deliveryState=\(result.deliveryState) wasDelivered=\(result.wasDelivered)")
+        sensorLog.notice("executeUpload \(path, privacy: .public): deliveryState=\(result.deliveryState, privacy: .public) wasDelivered=\(result.wasDelivered, privacy: .public)")
         return result.wasDelivered
     }
 }
