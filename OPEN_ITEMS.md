@@ -94,3 +94,19 @@ the Keychain (`talaria.modelsShimToken`) only. No token in git.
 
 On-device + HealthKit work is gated on a TestFlight build. Ties to item 1 (base URL) and
 the `tailscale serve` HTTPS work. Add Shelley as the second tester when ready.
+
+---
+
+## 9. 📝 Model-selection waiting / transition animation (needs Claude Design)
+
+When a model is tapped, the dual-write runs: shim `POST /models/default` **and** the
+gateway `/model` pin (the latter creates a session + sends a command turn and can be
+slow). Today the only feedback is the per-row spinner + disabled rows. We want a proper
+**animation / waiting screen** for the duration of the switch so the selection feels
+deliberate and the wait is covered.
+
+**Action:** task **Claude Design** to create the animation / transition screen, then wire
+it to `ModelsSettingsModel.applyingModelID` (already drives the in-flight state). Should
+cover the whole apply() window and dismiss on success / surface the error or confirm
+dialog. Ties to the existing optimistic-checkmark behavior.
+
