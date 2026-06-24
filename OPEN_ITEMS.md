@@ -132,3 +132,85 @@ the custom HUD back buttons' `dismiss()` vs an explicit path pop). Owen to pinpo
 screens on-device.
 
 
+
+
+---
+
+## 12. 🐛 Sensor data stale / not collecting on-device
+
+First on-device run shows sensor data via the MCP bridge (Location, HealthKit, Activity)
+but everything is **stale since June 16**. The relay path (iPhone → Hermes) works — the
+MCP calls return cached data — but the phone's local SQLite hasn't had fresh samples
+written. This is a fresh install on whoGoesThere.
+
+Likely causes (investigate in order):
+1. **Permissions not granted.** The Permissions screen (Settings → Permissions) has
+   Location, Health, Notifications, Microphone — all showed "NOT SET" / "ENABLE" in the
+   simulator. On the physical device, did all four get enabled? HealthKit in particular
+   requires explicit per-type authorization.
+2. **Background collection not running.** The `SensorUploadService` may need an active
+   session or a relay enrollment to start its background timer. Check whether the service
+   is instantiated (it's optional in AppContainer) and whether it starts collecting on
+   permission grant.
+3. **Relay enrollment.** The model mentioned "OJAMD connector being unenrolled/paused."
+   If sensor upload requires an active relay enrollment, re-enroll.
+
+The data coming back (steps 4937, walking 3198m, location at Saucier) is real but week-old.
+Fresh collection needs to flow before sensors are useful.
+
+---
+
+## 13. 🐛 Model identification is unreliable — app displays config, not reality
+
+On-device conversation reveals model identity is wrong at multiple levels:
+
+1. **Top chip** says "CLAUDE OPUS…" — hardcoded placeholder (→ Open Item #10).
+2. **The app displayed "kimi"** as the active model/provider (from the shim config), but
+   the model that **actually responded is MiniMax-M3** (which is vocal about its own
+   identity). This is not a cosmetic issue — the routing itself sent the request to a
+   different model than what the config/shim reports. Either Hermes is aliasing
+   `kimi-k2.7-code` to MiniMax under the hood, or the config pointer has drifted from
+   what's actually being served.
+3. **The Hermes system header** reported `kimi-k2.6` (stale session pin from an earlier
+   test) while the persistent default is `kimi-k2.7-code`.
+
+**Root problem:** Talaria currently echoes whatever the shim config says (provider slug +
+model id) without verifying what actually answered. Hermes supports dozens of providers
+and models — anthropic, deepseek, kimi, minimax, openai, nous, etc. The app must work
+with **all of them**, not assume the config is correct.
+
+**What needs to happen:**
+- **Talaria (app):** the model display should reflect what's actually being served, not
+  just parrot the shim's config slug. Options: (a) parse the gateway's response headers
+  for the real model id / provider, (b) ask the model to self-identify on session start,
+  (c) add a lightweight `/status` or `/whoami` endpoint to the gateway that returns the
+  actual routed model after resolution.
+- **Hermes (upstream):** investigate why `kimi-k2.7-code` via `kimi-coding` resolved to
+  MiniMax-M3. Is this a provider alias, a fallback chain, or a config bug? The shim and
+  gateway need to agree on what's actually being served.
+- **General:** model identification must be provider-agnostic. Don't tie display logic to
+  any single provider's naming convention.
+
+---
+
+## 14. 📝 Shim token onboarding — needs a frictionless flow
+
+Currently the shim bearer token lives in `~/.hermes/talaria_shim_token` on the mini and
+must be manually copied to the phone (Universal Clipboard / AirDrop / paste). This is a
+dev-only workflow — real users (even Owen) shouldn't have to SSH into a server and cat a
+file.
+
+Possible approaches (pick one or combine):
+- **QR code on the shim.** Add a `/pair` or `/qr` endpoint to the shim that renders a
+  QR code containing the token (or a short-lived pairing URL). The app scans it once.
+  Protected by requiring local-network access or a one-time PIN.
+- **Derive from the existing Hermes API key.** If the shim could accept the same API key
+  the app already stores for the Sessions API, no second token is needed. Would require
+  the shim to validate against the same key store.
+- **Pairing handshake.** During the existing relay pairing flow (the 8-digit code), have
+  the shim token piggyback on the pairing response so it's automatically stored.
+- **mDNS/Bonjour discovery + auto-pair.** The shim advertises on the local network; the
+  app discovers it and exchanges tokens automatically (like AirPlay).
+
+The goal: zero manual token entry for the end user. The shim URL can default to
+auto-discovery or the tailnet IP; the token should be exchanged, not typed.
