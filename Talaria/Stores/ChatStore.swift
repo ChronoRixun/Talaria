@@ -424,6 +424,7 @@ final class ChatStore {
 
     /// Opens an existing session: loads its history and continues that thread.
     func openSession(_ id: String) async {
+        chatLog.notice("openSession: opening '\(id, privacy: .public)'")
         streamingTask?.cancel()
         streamingTask = nil
         streamingMessageID = nil
@@ -437,8 +438,9 @@ final class ChatStore {
             pendingMessageSentAt = nil
             persistence.saveConversationCache(convo)
             onConversationChanged?()
+            chatLog.notice("openSession: loaded \(convo.messages.count, privacy: .public) messages for '\(id, privacy: .public)'")
         } catch {
-            // Keep the current conversation if the open fails.
+            chatLog.error("openSession: FAILED for '\(id, privacy: .public)' — \(error.localizedDescription, privacy: .public)")
         }
     }
 

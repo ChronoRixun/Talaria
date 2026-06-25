@@ -425,6 +425,9 @@ but the Hermes Sessions API returns `"data"`. One-word DTO mismatch. The `try?` 
 - Updated stale TODO comment
 
 **Verified on-device:** `listSessions: decoded 50 rows`, `loadSessions: got 50 sessions`.
+Session tap → open also fixed: `SessionMessagesResponse` had the same `"messages"` vs
+`"data"` key mismatch. Both DTOs now use `data` to match the Hermes API contract.
+Tapping a session loads its full conversation history.
 
 ---
 

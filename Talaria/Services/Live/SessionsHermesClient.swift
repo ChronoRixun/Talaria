@@ -301,11 +301,21 @@ final class SessionsHermesClient: HermesClientProtocol {
     /// Adopts `id` as the active session and returns its full history. New
     /// messages then continue that thread (see ensureSession()).
     func openSession(_ id: String) async throws -> Conversation {
-        let response: SessionMessagesResponse = try await getJSON(
-            path: "\(Self.sessionsPath)/\(id)/messages"
-        )
+        let path = "\(Self.sessionsPath)/\(id)/messages"
+        let request = try makeRequest(path: path, method: "GET", body: nil, accept: "application/json")
+        let (data, httpResponse) = try await session.data(for: request)
+        try ensureSuccess(response: httpResponse, data: data)
+        let response: SessionMessagesResponse
+        do {
+            response = try decoder.decode(SessionMessagesResponse.self, from: data)
+        } catch {
+            let snippet = String(data: data.prefix(500), encoding: .utf8) ?? "(binary)"
+            Self.logger.error("openSession: decode FAILED for '\(id, privacy: .public)' — \(error.localizedDescription, privacy: .public). Raw: \(snippet, privacy: .public)")
+            throw error
+        }
+        Self.logger.notice("openSession: decoded \(response.data.count, privacy: .public) messages for '\(id, privacy: .public)'")
         apiSessionId = response.sessionId ?? id
-        let messages = response.messages.compactMap(Self.mapStoredMessage)
+        let messages = response.data.compactMap(Self.mapStoredMessage)
         let convo = Conversation(
             title: "Hermes",
             messages: messages,
@@ -476,10 +486,10 @@ final class SessionsHermesClient: HermesClientProtocol {
 
     private struct SessionMessagesResponse: Decodable {
         let sessionId: String?
-        let messages: [StoredMessage]
+        let data: [StoredMessage]
         enum CodingKeys: String, CodingKey {
             case sessionId = "session_id"
-            case messages
+            case data
         }
         struct StoredMessage: Decodable {
             let role: String?
