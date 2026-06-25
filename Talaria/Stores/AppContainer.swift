@@ -376,6 +376,11 @@ final class AppContainer {
         await hostStore.refresh()
         lastKnownHostOnline = hostStore.isHostOnline
         await refreshCommandCatalog(force: true)
+        // Seed the model chip from the shim if the catalog didn't provide one
+        // (e.g. relay offline). This path runs even when initialize() aborts.
+        if chatStore.activeModelName == nil {
+            await seedActiveModelFromShim()
+        }
         await registerStoredPushTokenIfNeeded()
         await sensorUploadService?.handleAppDidBecomeActive()
         talkStore.handleAppDidBecomeActive()

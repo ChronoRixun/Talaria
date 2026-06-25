@@ -173,8 +173,13 @@ provide one. Falls back to "HERMES" instead of the old hardcoded "CLAUDE OPUS 4.
 placeholder. Updated in sync with `/model` switches via `chatStore.activeModelName`.
 
 **Fixed 2026-06-25:** `AppContainer.initialize()` → `seedActiveModelFromShim()` as
-fallback after `refreshCommandCatalog`. `ModelSelectorModel.activeDisplayName` fallback
-changed from stub list to "HERMES".
+fallback after `refreshCommandCatalog`. Also added to `handleAppDidBecomeActive()` as
+a secondary path (runs even when `initialize()` aborts due to relay guard).
+`ModelSelectorModel.activeDisplayName` fallback changed from stub list to "HERMES".
+
+**Verified on-device 2026-06-25:** chip shows "kimi-k2.6" (correct active selection).
+Command catalog provides the model name when relay is reachable; shim seed serves as
+fallback when relay is down.
 
 ---
 
@@ -333,6 +338,12 @@ on every launch with zero nagging. After re-asserting, it does an immediate
 outbox, but **#17** (relay `deliveryState=retry`) still blocks delivery to Hermes — both
 fixes are needed for end-to-end sensor data.
 
+**Verified on-device 2026-06-25:** `start() — health auth re-asserted: authorized` ✅.
+Health observer callbacks fire for 11 types (active_calories, blood_oxygen, body_mass,
+heart_rate, distance_walking, respiratory_rate, sleep_duration, resting_heart_rate,
+workout_minutes, stand_hours, steps). Fresh samples captured: `captureHealth: got 2
+samples — distance_walking, steps`.
+
 ---
 
 ## 17. 🐛 Relay sensor delivery returns `retry` — connector handoff failing
@@ -364,6 +375,23 @@ The connector appears connected to the relay, but delivery isn't completing. Pos
 **Next step:** Ask Hermes on OJAMD to check relay + connector logs for sensor delivery
 errors and verify the `hermes_mobile` MCP tools are registered and the connector session
 is alive.
+
+**Update (2026-06-25):** Root cause of `deliveryState=retry` identified — **iCloud Private
+Relay** was intercepting HTTP requests to Tailscale IPs and proxying them through
+`mask.icloud.com`, which has no route to the tailnet. Manifested as 502 responses from the
+proxy for `:8000` and 30-second timeouts for `:8765` (shim).
+
+After disabling Private Relay on the phone:
+- **Location delivery now works:** `deliveryState=delivered wasDelivered=true` ✅
+- **Health uploads still fail with 422** — relay rejects the payload. This is a
+  payload format / schema issue, not a connectivity problem. The relay accepts location
+  but not health — likely a content-type or body-structure mismatch in the health upload
+  endpoint.
+
+**Known networking requirement:** iCloud Private Relay must be disabled (or Tailscale IPs
+excluded) for any Tailscale-routed HTTP services. This affects the relay (`:8000`), the
+shim (`:8765`), and potentially the gateway (`:8642`). Should be documented in onboarding
+and checked in the diagnostics panel (#15).
 
 
 ---
@@ -414,6 +442,9 @@ Removed:
   `ModelOption` struct
 
 Net -102 lines across 5 files.
+
+**Verified on-device 2026-06-25:** chip tap opens the Models picker directly. No
+dropdown, no popover, no "Start New Session" — straight to the shim-backed list.
 
 ---
 
