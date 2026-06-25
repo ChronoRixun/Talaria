@@ -147,27 +147,12 @@ struct ChatScreen: View {
             Task { await chatStore.openSession(summary.id) }
         }
 
-        // Model selector → Hermes Sessions API. A selection is dispatched as a
-        // `/model` switch that pins the CURRENT session (effective on the next
-        // message); NEW sessions revert to the persistent default (set via
-        // Settings → Models / the models shim). The picker also offers a
-        // "Start New Session" action as a convenience.
-        // FUTURE: offer the native /api/model/options + /api/model/set endpoints
-        // as a Settings toggle (immediate switch) vs. today's /model-command path.
-        modelModel.onSelectModel = { option in
-            Task { await chatStore.selectModel(option.id) }
+        // Model chip → Settings → Models (the shim-backed real picker).
+        // No local dropdown — the chip is a shortcut to the full picker.
+        modelModel.onChipTap = { [router] in
+            router.presentSheet(.settingsModels)
         }
-        modelModel.onStartNewSession = { showClearConfirmation = true }
-        Task {
-            let ids = await chatStore.availableModels()
-            guard !ids.isEmpty else { return }
-            modelModel.availableModels = ids.map {
-                ModelSelectorModel.ModelOption(id: $0, displayName: $0, detail: nil)
-            }
-            if let active = chatStore.activeModelName, ids.contains(active) {
-                modelModel.selectedModelID = active
-            }
-        }
+
         Task { await refreshSessions() }
     }
 

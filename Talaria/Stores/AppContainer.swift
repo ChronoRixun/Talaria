@@ -346,6 +346,12 @@ final class AppContainer {
         await chatStore.loadConversationIfNeeded()
         await inboxStore.loadInbox()
         await refreshCommandCatalog(force: true)
+        // Seed the model chip label from the shim if the command catalog didn't
+        // provide an active model name (e.g. relay offline). Best-effort: if the
+        // shim is unreachable or the token isn't set, the chip shows "HERMES".
+        if chatStore.activeModelName == nil {
+            await seedActiveModelFromShim()
+        }
         await registerStoredPushTokenIfNeeded()
         containerLog.notice("initialize: starting sensor service + handleAppDidBecomeActive")
         sensorUploadService?.start()
@@ -652,6 +658,25 @@ final class AppContainer {
         } catch {
             // Fallback to built-in list — catalog is a nice-to-have
             chatStore.resetCommandCatalog()
+        }
+    }
+
+    /// Best-effort seed for the model chip label. Uses the shim's cached model
+    /// list (no refresh — fast) and extracts the `model` field (the persistent
+    /// default id). Only called when the command catalog didn't supply one.
+    private func seedActiveModelFromShim() async {
+        do {
+            let options = try await modelsShimClient.fetchModels(refresh: false)
+            if let currentModel = options.model, !currentModel.isEmpty {
+                chatStore.replaceCommandCatalog(
+                    chatStore.commandCatalog,
+                    activeModel: currentModel
+                )
+                containerLog.notice("seedActiveModelFromShim: seeded '\(currentModel, privacy: .public)'")
+            }
+        } catch {
+            // Shim unreachable / not configured — chip will show fallback ("HERMES")
+            containerLog.notice("seedActiveModelFromShim: shim unavailable — \(error.localizedDescription, privacy: .public)")
         }
     }
 

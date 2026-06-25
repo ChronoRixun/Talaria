@@ -165,17 +165,16 @@ dialog. Ties to the existing optimistic-checkmark behavior.
 
 ---
 
-## 10. 🐛 Top-center model chip shows a placeholder, not the active model
+## 10. ✅ Top-center model chip — shows real model, seeded from shim
 
-The ChatScreen top-center `ModelSelector` chip displays the hardcoded placeholder
-("CLAUDE OPUS 4.6") instead of the actually-selected/active model. It should reflect the
-real active model — seed it on launch from the gateway's active model / the shim's current
-`model` (e.g. `kimi-k2.7-code`) and keep it in sync after a pick. Today `activeModelName`
-is nil until a `/model` switch is detected over chat, so a fresh launch shows the
-placeholder and the chip's `availableModels` is still the opus/sonnet/haiku stub.
+The ChatScreen top-center `ModelSelector` chip now shows the real active model name,
+seeded on launch from the models shim (cached, fast) when the command catalog doesn't
+provide one. Falls back to "HERMES" instead of the old hardcoded "CLAUDE OPUS 4.6"
+placeholder. Updated in sync with `/model` switches via `chatStore.activeModelName`.
 
-**Confirmed in the wild (2026-06-25):** on-device the chip read "CLAUDE OPUS…" while the session
-was actually answering as **Kimi K2.6** — exactly this gap. Fix tracked in #20.
+**Fixed 2026-06-25:** `AppContainer.initialize()` → `seedActiveModelFromShim()` as
+fallback after `refreshCommandCatalog`. `ModelSelectorModel.activeDisplayName` fallback
+changed from stub list to "HERMES".
 
 ---
 
@@ -246,6 +245,12 @@ with **all of them**, not assume the config is correct.
   gateway need to agree on what's actually being served.
 - **General:** model identification must be provider-agnostic. Don't tie display logic to
   any single provider's naming convention.
+
+**Progress (2026-06-25):** Sub-issue #1 (hardcoded placeholder) resolved — chip now
+shows the shim's `model` field or "HERMES" fallback (→ #10). Sub-issues #2 and #3
+(Hermes aliasing kimi→MiniMax, stale session pin) are **upstream Hermes issues**, not
+app-side. The app now faithfully displays whatever the shim reports; if the shim
+reports the wrong model, that's a Hermes config/routing problem.
 
 ---
 
@@ -391,19 +396,24 @@ on-device 2026-06-24.
 
 ---
 
-## 20. 🔧 Top-center model chip — route tap to the real picker; drop the stub dropdown + "Start New Session"
+## 20. ✅ Top-center model chip — routes to real picker; stub dropdown + "Start New Session" removed
 
-Separate from the placeholder-text bug (→ Open Item #10). **Decision (Owen, 2026-06-24):
-option (b)** — the top-center `ModelSelector` chip stays tappable, but the tap is a
-**shortcut that opens the live Settings → MODELS picker** (the shim-backed list) instead of
-the current stub opus/sonnet/haiku dropdown.
+**Decision (Owen, 2026-06-24): option (b)** — implemented 2026-06-25.
 
-- Remove the stub `availableModels` dropdown entirely.
-- **Remove the "Start New Session" action** from the chip / `ModelSelector` — new-session
-  lives in the left session drawer, so it shouldn't be duplicated here.
-- Chip still needs to show the real active model (→ #10).
+The top-center `ModelSelector` chip now routes taps to the real **Settings → MODELS picker**
+(shim-backed, `ModelsSettingsScreen`) via a new `SheetDestination.settingsModels` that
+presents the picker directly in a NavigationStack (no detour through Settings root).
 
-Reported on-device 2026-06-24.
+Removed:
+- The stub `availableModels` dropdown (opus/sonnet/haiku hardcoded list)
+- The `onStartNewSession` / "Start New Session" action (session management belongs in the
+  left drawer)
+- The popover picker UI entirely
+- The chevron.down icon on the chip
+- `ModelSelectorModel.selectedModelID`, `.onSelectModel`, `.onStartNewSession`, `.select()`,
+  `ModelOption` struct
+
+Net -102 lines across 5 files.
 
 ---
 
