@@ -500,3 +500,56 @@ Notifications, deregistering from the relay. Some permissions (Camera, Photos) c
 toggled in iOS Settings — for those, surface a "Manage in Settings" deep-link.
 
 Logged 2026-06-25.
+
+---
+
+## 24. 🐛 OJAMD server-side work — health 422, relay bind, shim persistence
+
+Consolidated tracker for server-side fixes on OJAMD (Windows desktop, Tailscale
+`100.110.102.59`). None of these are app code — they require work on the OJAMD host.
+
+### 24a. Health upload rejected with 422
+
+The relay on `:8000` accepts location uploads (`deliveryState=delivered`) but rejects
+health payloads with **HTTP 422**. This is a payload format / schema issue — the relay
+parses the body and doesn't like what the health upload sends. Console evidence:
+
+```
+upload device/sensor/health: error — Relay request failed with status 422.
+drain: health upload (1607 samples) FAILED
+```
+
+**Investigate:** check OJAMD relay logs for the 422 response body / validation error.
+Compare the health upload body structure against what the relay endpoint expects.
+Location works, so the auth + routing is fine — it's specifically the health payload.
+
+### 24b. Relay bind to `0.0.0.0`
+
+The relay on `:8000` has the same localhost-bind issue the gateway had before it was
+fixed. Needs `0.0.0.0` treatment + Windows Firewall rule so the phone can reach it
+over Tailscale without the iCloud Private Relay workaround. (Currently works because
+Private Relay is off, but shouldn't depend on that.)
+
+### 24c. Shim Task Scheduler persistence
+
+The models shim (`tools/models-shim/shim.py`) runs in a CMD window on OJAMD. It needs
+a Task Scheduler entry so it survives reboot/logoff — currently depends on Owen leaving
+the CMD window open.
+
+### 24d. Windows Firewall rule for port 8765
+
+The shim listens on `:8765`. Needs an inbound firewall rule on OJAMD for Tailscale
+access. Currently works when Private Relay is off, but should be explicitly allowed.
+
+### 24e. iCloud Private Relay networking requirement
+
+**Discovery (2026-06-25):** iCloud Private Relay intercepts HTTP to Tailscale IPs via
+`mask.icloud.com`, which has no tailnet route. This caused 502s for the relay and
+30-second timeouts for the shim. Disabling Private Relay on the phone fixes everything.
+
+This needs to be:
+- Documented in onboarding / setup instructions
+- Checked in the diagnostics panel (#15)
+- Potentially mitigated by using HTTPS via `tailscale serve` (which may bypass the proxy)
+
+Logged 2026-06-25.
