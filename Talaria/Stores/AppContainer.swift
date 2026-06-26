@@ -1,4 +1,7 @@
 import Foundation
+import os
+
+private let containerLog = Logger(subsystem: "org.aethyrion.talaria", category: "AppContainer")
 
 @MainActor
 @Observable
@@ -173,23 +176,28 @@ final class AppContainer {
             allowsFallback: { allowMockFallbacks && (activePairingStore?.isPaired != true || usesMockPairingService) }
         )
 
-        // Talaria models-shim client (mini tailnet). Token comes from the Keychain
-        // box (hydrated below); in DEBUG only, a `TALARIA_SHIM_TOKEN` launch-env var
-        // is used as a fallback so the picker can be driven in the simulator without
-        // pasting (idb has no keyboard injection). The token never ships in git.
+        // Talaria models-shim client (OJAMD tailnet). Auth priority:
+        //  1. Dedicated shim token from Keychain (legacy / explicit override)
+        //  2. DEBUG launch-env TALARIA_SHIM_TOKEN (simulator convenience)
+        //  3. Hermes API server key (same key used for chat — zero-config)
+        // Option 3 means the user never has to manually copy a second token;
+        // the shim accepts both its own token AND the API server key (#14).
         let shimTokenBox = MutableShimTokenBox()
         let modelsShimClient = ModelsShimClient(
             baseURLProvider: {
                 let raw = settingsStore.settings.modelsShimBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
                 return raw.isEmpty ? nil : raw
             },
-            tokenProvider: {
+            tokenProvider: { [hermesAPIKeyBox] in
                 if !shimTokenBox.value.isEmpty { return shimTokenBox.value }
                 #if DEBUG
                 if let envToken = processEnvironment["TALARIA_SHIM_TOKEN"], !envToken.isEmpty {
                     return envToken
                 }
                 #endif
+                // Fall back to the Hermes API key — the shim accepts it as an
+                // alternate bearer token (see tools/models-shim/shim.py).
+                if !hermesAPIKeyBox.value.isEmpty { return hermesAPIKeyBox.value }
                 return nil
             }
         )
@@ -318,22 +326,45 @@ final class AppContainer {
     }
 
     func initialize() async {
-        guard pairingStore.isPaired else { return }
-        guard !isInitialized else { return }
+        guard pairingStore.isPaired else {
+            containerLog.warning("initialize: ABORT — not paired")
+            return
+        }
+        guard !isInitialized else {
+            containerLog.notice("initialize: SKIP — already initialized")
+            return
+        }
         guard await sessionStore.currentAccessToken() != nil else {
+            containerLog.warning("initialize: ABORT — no access token, clearing pairing")
             await pairingStore.clearLocalPairing()
             return
         }
 
         await permissionsStore.reloadCapabilities()
         await sessionStore.bootstrap()
-        guard sessionStore.state.connectionStatus == .connected else { return }
+        if sessionStore.state.connectionStatus != .connected {
+            // Relay bootstrap failed (e.g. the relay restarted and invalidated this
+            // device's tokens → 401 on register/session/refresh). Do NOT strand the
+            // launch splash: the direct chat path (:8642, API-key auth) is independent
+            // of the relay session, so we continue into the app in a degraded state and
+            // let the user reach Settings to re-pair / retry rather than being hard
+            // locked at launch. Relay-backed features (sensor upload, inbox, push) stay
+            // degraded until a valid session is restored; re-pairing re-runs initialize().
+            containerLog.warning("initialize: relay bootstrap not connected (is \(String(describing: self.sessionStore.state.connectionStatus), privacy: .public)) — entering degraded mode; direct chat still available")
+        }
         await hostStore.refresh()
         lastKnownHostOnline = hostStore.isHostOnline
         await chatStore.loadConversationIfNeeded()
         await inboxStore.loadInbox()
         await refreshCommandCatalog(force: true)
+        // Seed the model chip label from the shim if the command catalog didn't
+        // provide an active model name (e.g. relay offline). Best-effort: if the
+        // shim is unreachable or the token isn't set, the chip shows "HERMES".
+        if chatStore.activeModelName == nil {
+            await seedActiveModelFromShim()
+        }
         await registerStoredPushTokenIfNeeded()
+        containerLog.notice("initialize: starting sensor service + handleAppDidBecomeActive")
         sensorUploadService?.start()
         await sensorUploadService?.handleAppDidBecomeActive()
         reconcileLiveActivities()
@@ -342,13 +373,25 @@ final class AppContainer {
     }
 
     func handleAppDidBecomeActive() async {
-        guard pairingStore.isPaired else { return }
-        guard await sessionStore.currentAccessToken() != nil else { return }
+        guard pairingStore.isPaired else {
+            containerLog.warning("handleAppDidBecomeActive: BLOCKED — not paired")
+            return
+        }
+        guard await sessionStore.currentAccessToken() != nil else {
+            containerLog.warning("handleAppDidBecomeActive: BLOCKED — no access token")
+            return
+        }
+        containerLog.notice("handleAppDidBecomeActive: paired + token OK, proceeding")
 
         await permissionsStore.reloadCapabilities()
         await hostStore.refresh()
         lastKnownHostOnline = hostStore.isHostOnline
         await refreshCommandCatalog(force: true)
+        // Seed the model chip from the shim if the catalog didn't provide one
+        // (e.g. relay offline). This path runs even when initialize() aborts.
+        if chatStore.activeModelName == nil {
+            await seedActiveModelFromShim()
+        }
         await registerStoredPushTokenIfNeeded()
         await sensorUploadService?.handleAppDidBecomeActive()
         talkStore.handleAppDidBecomeActive()
@@ -359,8 +402,15 @@ final class AppContainer {
     }
 
     func handleRemoteNotificationWake() async {
-        guard pairingStore.isPaired else { return }
-        guard await sessionStore.currentAccessToken() != nil else { return }
+        containerLog.notice("handleRemoteNotificationWake: entered")
+        guard pairingStore.isPaired else {
+            containerLog.warning("handleRemoteNotificationWake: BLOCKED — not paired")
+            return
+        }
+        guard await sessionStore.currentAccessToken() != nil else {
+            containerLog.warning("handleRemoteNotificationWake: BLOCKED — no access token")
+            return
+        }
 
         await permissionsStore.reloadCapabilities()
         await hostStore.refresh()
@@ -374,8 +424,16 @@ final class AppContainer {
     }
 
     func handleSystemLaunch() async {
-        guard pairingStore.isPaired else { return }
-        guard await sessionStore.currentAccessToken() != nil else { return }
+        containerLog.notice("handleSystemLaunch: entered")
+        guard pairingStore.isPaired else {
+            containerLog.warning("handleSystemLaunch: BLOCKED — not paired")
+            return
+        }
+        guard await sessionStore.currentAccessToken() != nil else {
+            containerLog.warning("handleSystemLaunch: BLOCKED — no access token")
+            return
+        }
+        containerLog.notice("handleSystemLaunch: guards passed, starting sensor service")
 
         sensorUploadService?.start()
         await sensorUploadService?.handleSystemLaunch()
@@ -616,6 +674,25 @@ final class AppContainer {
         } catch {
             // Fallback to built-in list — catalog is a nice-to-have
             chatStore.resetCommandCatalog()
+        }
+    }
+
+    /// Best-effort seed for the model chip label. Uses the shim's cached model
+    /// list (no refresh — fast) and extracts the `model` field (the persistent
+    /// default id). Only called when the command catalog didn't supply one.
+    private func seedActiveModelFromShim() async {
+        do {
+            let options = try await modelsShimClient.fetchModels(refresh: false)
+            if let currentModel = options.model, !currentModel.isEmpty {
+                chatStore.replaceCommandCatalog(
+                    chatStore.commandCatalog,
+                    activeModel: currentModel
+                )
+                containerLog.notice("seedActiveModelFromShim: seeded '\(currentModel, privacy: .public)'")
+            }
+        } catch {
+            // Shim unreachable / not configured — chip will show fallback ("HERMES")
+            containerLog.notice("seedActiveModelFromShim: shim unavailable — \(error.localizedDescription, privacy: .public)")
         }
     }
 

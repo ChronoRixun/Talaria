@@ -12,12 +12,14 @@ enum Route: Hashable {
 
 enum SheetDestination: Identifiable {
     case settings
+    case settingsModels
     case attachments
     case newChat
 
     var id: String {
         switch self {
         case .settings: "settings"
+        case .settingsModels: "settingsModels"
         case .attachments: "attachments"
         case .newChat: "newChat"
         }

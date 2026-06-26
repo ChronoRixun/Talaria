@@ -15,6 +15,16 @@ struct SettingsScreen: View {
     @State private var hermesAPIKeySaving = false
     @State private var hermesAPIKeyJustSaved = false
 
+    /// Combined host connection state. Prefers the direct Sessions API probe
+    /// (`chatStore.directConnectionStatus`) over the relay-based `hostStore`
+    /// so Settings shows "ONLINE" when chat works even if the relay is down.
+    private var effectiveConnectionState: HermesHostConnectionState {
+        if container.chatStore.directConnectionStatus == .connected {
+            return .online
+        }
+        return hostStore.connectionState
+    }
+
     var body: some View {
         ZStack {
             HUDScreenBackground(gridIntensity: 0.35)
@@ -25,6 +35,11 @@ struct SettingsScreen: View {
                     systemHeader
                     hostLinkPanel
                     connectionSection
+                    tempUplinkLink
+                    tempSessionsLink
+                    tempDiagnosticsLink
+                    tempAppearanceLink
+                    tempSystemLink
                     hermesAPISection
                     modelsSection
                     relaySection
@@ -94,7 +109,7 @@ struct SettingsScreen: View {
             StatusPip(
                 color: hostLinkStatusColor,
                 diameter: 9,
-                blinks: hostStore.connectionState == .unreachable
+                blinks: effectiveConnectionState == .unreachable
             )
         }
         .padding(Design.Spacing.md)
@@ -108,7 +123,7 @@ struct SettingsScreen: View {
     }
 
     private var hostLinkStatusColor: Color {
-        switch hostStore.connectionState {
+        switch effectiveConnectionState {
         case .online: Design.Brand.accent
         case .offline, .unreachable: Design.Brand.forge
         case .notConnected: Design.Colors.mutedForeground
@@ -116,7 +131,7 @@ struct SettingsScreen: View {
     }
 
     private var hostLinkStatusLine: String {
-        switch hostStore.connectionState {
+        switch effectiveConnectionState {
         case .online: "LINKED · \(sessionStore.state.connectionStatus.displayLabel.uppercased())"
         case .offline: "OFFLINE · STANDBY"
         case .unreachable: "UNREACHABLE · CHECK UPLINK"
@@ -304,6 +319,136 @@ struct SettingsScreen: View {
         }
     }
 
+    // MARK: - TEMP (T3) — reach the new UPLINK screen for device testing.
+    // Remove once SettingsScreen becomes the SYSTEM index linking to all sub-screens.
+
+    private var tempUplinkLink: some View {
+        SettingsSectionView(title: "Uplink (T3 preview)") {
+            NavigationLink {
+                UplinkSettingsScreen()
+            } label: {
+                HStack(spacing: Design.Spacing.sm) {
+                    Image(systemName: "dot.radiowaves.left.and.right")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Design.Brand.accent)
+                    Text("Open UPLINK")
+                        .font(Design.Typography.body(15, weight: .medium))
+                        .foregroundStyle(Design.Colors.foreground)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Design.Colors.mutedForeground)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    // MARK: - TEMP (T3) — reach the new SESSIONS screen for device testing.
+    // Remove once SettingsScreen becomes the SYSTEM index linking to all sub-screens.
+
+    private var tempSessionsLink: some View {
+        SettingsSectionView(title: "Sessions (T3 preview)") {
+            NavigationLink {
+                SessionsSettingsScreen()
+            } label: {
+                HStack(spacing: Design.Spacing.sm) {
+                    Image(systemName: "clock.arrow.circlepath")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Design.Brand.accent)
+                    Text("Open SESSIONS")
+                        .font(Design.Typography.body(15, weight: .medium))
+                        .foregroundStyle(Design.Colors.foreground)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Design.Colors.mutedForeground)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    // MARK: - TEMP (T3) — reach the new DIAGNOSTICS screen for device testing.
+    // Remove once SettingsScreen becomes the SYSTEM index linking to all sub-screens.
+
+    private var tempDiagnosticsLink: some View {
+        SettingsSectionView(title: "Diagnostics (T3 preview)") {
+            NavigationLink {
+                DiagnosticsSettingsScreen()
+            } label: {
+                HStack(spacing: Design.Spacing.sm) {
+                    Image(systemName: "waveform.path.ecg")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Design.Brand.accent)
+                    Text("Open DIAGNOSTICS")
+                        .font(Design.Typography.body(15, weight: .medium))
+                        .foregroundStyle(Design.Colors.foreground)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Design.Colors.mutedForeground)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    // MARK: - TEMP (T3) — reach the new APPEARANCE screen for device testing.
+    // Remove once SettingsScreen becomes the SYSTEM index linking to all sub-screens.
+
+    private var tempAppearanceLink: some View {
+        SettingsSectionView(title: "Appearance (T3 preview)") {
+            NavigationLink {
+                AppearanceSettingsScreen()
+            } label: {
+                HStack(spacing: Design.Spacing.sm) {
+                    Image(systemName: "paintpalette")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Design.Brand.accent)
+                    Text("Open APPEARANCE")
+                        .font(Design.Typography.body(15, weight: .medium))
+                        .foregroundStyle(Design.Colors.foreground)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Design.Colors.mutedForeground)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    // MARK: - TEMP (T3) — reach the new SYSTEM index for device testing.
+    // Remove once this index replaces SettingsScreen as the Settings root.
+
+    private var tempSystemLink: some View {
+        SettingsSectionView(title: "System Index (T3 preview)") {
+            NavigationLink {
+                SystemSettingsScreen()
+            } label: {
+                HStack(spacing: Design.Spacing.sm) {
+                    Image(systemName: "square.grid.2x2")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Design.Brand.accent)
+                    Text("Open SYSTEM INDEX")
+                        .font(Design.Typography.body(15, weight: .medium))
+                        .foregroundStyle(Design.Colors.foreground)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Design.Colors.mutedForeground)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
     // MARK: - Environment
 
     private var relaySection: some View {
@@ -373,7 +518,7 @@ struct SettingsScreen: View {
     }
 
     private var hostStatusRowIcon: String {
-        switch hostStore.connectionState {
+        switch effectiveConnectionState {
         case .online:
             return "desktopcomputer"
         case .offline:
@@ -386,7 +531,7 @@ struct SettingsScreen: View {
     }
 
     private var hostStatusRowColor: Color {
-        switch hostStore.connectionState {
+        switch effectiveConnectionState {
         case .online:
             return .green
         case .offline, .unreachable:
@@ -397,7 +542,7 @@ struct SettingsScreen: View {
     }
 
     private var hostStatusRowValue: String {
-        switch hostStore.connectionState {
+        switch effectiveConnectionState {
         case .online, .offline:
             return hostStore.currentHost?.resolvedDisplayName ?? "Hermes Host"
         case .unreachable:

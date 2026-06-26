@@ -53,6 +53,12 @@ struct MainTabView: View {
             }
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
+        case .settingsModels:
+            NavigationStack {
+                ModelsSettingsScreen()
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
         case .attachments:
             EmptyView()
         case .newChat:

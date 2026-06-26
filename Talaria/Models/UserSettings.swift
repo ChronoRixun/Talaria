@@ -224,12 +224,49 @@ enum LocationSyncPreference: String, Codable, Hashable, Sendable {
     }
 }
 
+enum AppearanceAccent: String, Codable, CaseIterable, Hashable, Sendable {
+    case cyan
+    case amber
+    case violet
+
+    var displayLabel: String {
+        switch self {
+        case .cyan: "Cyan · Arc"
+        case .amber: "Amber · Forge"
+        case .violet: "Violet · Flux"
+        }
+    }
+}
+
+enum GridDensity: String, Codable, CaseIterable, Hashable, Sendable {
+    case off
+    case faint
+    case bold
+
+    var displayLabel: String {
+        switch self {
+        case .off: "Off"
+        case .faint: "Faint"
+        case .bold: "Bold"
+        }
+    }
+
+    /// HUD grid-line opacity (0…1) for HUDScreenBackground.
+    var gridIntensity: Double {
+        switch self {
+        case .off: 0.0
+        case .faint: 0.35
+        case .bold: 0.8
+        }
+    }
+}
+
 struct UserSettings: Codable, Hashable, Sendable {
     static let defaultHermesAPIBaseURL = "http://ojamd:8642"
-    /// Default Talaria models-shim endpoint — the mini's tailnet IP. The shim
-    /// exposes the Hermes model list + persistent set-default without the
-    /// privileged dashboard plane. See tools/models-shim/.
-    static let defaultModelsShimBaseURL = "http://100.79.222.100:8765"
+    /// Default Talaria models-shim endpoint — OJAMD, the production Hermes host (same
+    /// box as the chat gateway above). The shim exposes the Hermes model list +
+    /// persistent set-default without the privileged dashboard plane. See tools/models-shim/.
+    static let defaultModelsShimBaseURL = "http://ojamd:8765"
 
     var userName: String
     var avatarInitials: String
@@ -241,6 +278,10 @@ struct UserSettings: Codable, Hashable, Sendable {
     var locationSyncPreference: LocationSyncPreference
     var hermesAPIBaseURL: String
     var modelsShimBaseURL: String
+    var appearanceAccent: AppearanceAccent
+    var hudGlowIntensity: Double
+    var gridDensity: GridDensity
+    var reduceMotion: Bool
 
     init(
         userName: String = "User",
@@ -252,7 +293,11 @@ struct UserSettings: Codable, Hashable, Sendable {
         autoConnectOnLaunch: Bool = true,
         locationSyncPreference: LocationSyncPreference = .foregroundOnly,
         hermesAPIBaseURL: String = UserSettings.defaultHermesAPIBaseURL,
-        modelsShimBaseURL: String = UserSettings.defaultModelsShimBaseURL
+        modelsShimBaseURL: String = UserSettings.defaultModelsShimBaseURL,
+        appearanceAccent: AppearanceAccent = .cyan,
+        hudGlowIntensity: Double = 1.0,
+        gridDensity: GridDensity = .faint,
+        reduceMotion: Bool = false
     ) {
         self.userName = userName
         self.avatarInitials = avatarInitials
@@ -264,6 +309,10 @@ struct UserSettings: Codable, Hashable, Sendable {
         self.locationSyncPreference = locationSyncPreference
         self.hermesAPIBaseURL = hermesAPIBaseURL
         self.modelsShimBaseURL = modelsShimBaseURL
+        self.appearanceAccent = appearanceAccent
+        self.hudGlowIntensity = hudGlowIntensity
+        self.gridDensity = gridDensity
+        self.reduceMotion = reduceMotion
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -277,6 +326,10 @@ struct UserSettings: Codable, Hashable, Sendable {
         case locationSyncPreference
         case hermesAPIBaseURL
         case modelsShimBaseURL
+        case appearanceAccent
+        case hudGlowIntensity
+        case gridDensity
+        case reduceMotion
     }
 
     init(from decoder: Decoder) throws {
@@ -292,6 +345,10 @@ struct UserSettings: Codable, Hashable, Sendable {
         locationSyncPreference = try container.decodeIfPresent(LocationSyncPreference.self, forKey: .locationSyncPreference) ?? .foregroundOnly
         hermesAPIBaseURL = try container.decodeIfPresent(String.self, forKey: .hermesAPIBaseURL) ?? UserSettings.defaultHermesAPIBaseURL
         modelsShimBaseURL = try container.decodeIfPresent(String.self, forKey: .modelsShimBaseURL) ?? UserSettings.defaultModelsShimBaseURL
+        appearanceAccent = try container.decodeIfPresent(AppearanceAccent.self, forKey: .appearanceAccent) ?? .cyan
+        hudGlowIntensity = try container.decodeIfPresent(Double.self, forKey: .hudGlowIntensity) ?? 1.0
+        gridDensity = try container.decodeIfPresent(GridDensity.self, forKey: .gridDensity) ?? .faint
+        reduceMotion = try container.decodeIfPresent(Bool.self, forKey: .reduceMotion) ?? false
     }
 
     func encode(to encoder: Encoder) throws {
@@ -306,6 +363,10 @@ struct UserSettings: Codable, Hashable, Sendable {
         try container.encode(locationSyncPreference, forKey: .locationSyncPreference)
         try container.encode(hermesAPIBaseURL, forKey: .hermesAPIBaseURL)
         try container.encode(modelsShimBaseURL, forKey: .modelsShimBaseURL)
+        try container.encode(appearanceAccent, forKey: .appearanceAccent)
+        try container.encode(hudGlowIntensity, forKey: .hudGlowIntensity)
+        try container.encode(gridDensity, forKey: .gridDensity)
+        try container.encode(reduceMotion, forKey: .reduceMotion)
     }
 
     func applyingEnvironmentPolicy(

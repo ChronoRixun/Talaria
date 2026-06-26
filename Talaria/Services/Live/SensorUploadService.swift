@@ -1,6 +1,9 @@
 import CoreLocation
 import Foundation
 @preconcurrency import MapKit
+import os
+
+private let sensorLog = Logger(subsystem: "org.aethyrion.talaria", category: "SensorUpload")
 
 struct SensorOutboxState: Codable, Hashable, Sendable {
     struct PendingLocation: Codable, Hashable, Sendable {
@@ -153,13 +156,18 @@ final class SensorUploadService {
     }
 
     func start() {
-        guard !isActive else { return }
+        guard !isActive else {
+            sensorLog.notice("start() skipped — already active")
+            return
+        }
         isActive = true
         outboxState = persistence.loadSensorOutboxState()
+        sensorLog.notice("start() — activating sensor pipeline. Outbox: loc=\(self.outboxState.pendingLocation != nil), health=\(self.outboxState.pendingHealthSamples.count)")
 
         locationService.onLocationUpdate = { [weak self] update in
             guard let self else { return }
             Task { @MainActor in
+                sensorLog.notice("📍 location update: (\(update.latitude), \(update.longitude)) accuracy=\(update.accuracy)")
                 self.outboxState.enqueue(location: update)
                 self.persistOutboxState()
                 await self.drainOutboxIfPossible()
@@ -169,6 +177,7 @@ final class SensorUploadService {
         healthService.onHealthUpdate = { [weak self] changedIdentifiers in
             guard let self else { return }
             Task { @MainActor in
+                sensorLog.notice("💓 health update for: \(changedIdentifiers.joined(separator: ", "), privacy: .public)")
                 await self.captureHealthSnapshot(changedIdentifiers: changedIdentifiers)
             }
         }
@@ -176,6 +185,7 @@ final class SensorUploadService {
         motionService?.onActivityUpdate = { [weak self] activityCode in
             guard let self else { return }
             Task { @MainActor in
+                sensorLog.notice("🏃 activity update: code=\(activityCode.rawValue)")
                 let now = Date()
                 let sample = HealthSnapshot.Sample(
                     metric: "user_activity",
@@ -191,8 +201,26 @@ final class SensorUploadService {
         }
 
         locationService.startMonitoring()
-        healthService.startMonitoring()
         motionService?.startMonitoring()
+
+        // Health authorization is in-memory only: LiveHealthService resets it to
+        // .notDetermined on every launch, and Apple's read-privacy model means it
+        // cannot be recovered via authorizationStatus(for:) (read status stays hidden).
+        // collectSnapshot() hard-gates on .authorized, so without re-asserting here,
+        // every snapshot returns nil after a relaunch even when the user already
+        // granted access. Re-request on each start() to restore .authorized AND
+        // re-enable background delivery. For read-only types iOS shows the system
+        // sheet at most once per install, so repeat calls after the first decision
+        // are silent — no nagging, even on denial.
+        Task { [weak self] in
+            guard let self else { return }
+            let status = await self.healthService.requestAuthorization()
+            self.healthService.startMonitoring()
+            sensorLog.notice("start() — health auth re-asserted: \(String(describing: status), privacy: .public)")
+            await self.captureHealthSnapshot(forceFullRefresh: true)
+        }
+
+        sensorLog.notice("start() — monitoring started (loc/motion; health pending re-auth). loc auth=\(String(describing: self.locationService.authorizationStatus), privacy: .public)")
     }
 
     func stop() {
@@ -212,7 +240,11 @@ final class SensorUploadService {
     }
 
     func handleAppDidBecomeActive() async {
-        guard isActive else { return }
+        guard isActive else {
+            sensorLog.warning("handleAppDidBecomeActive: service not active — skipping")
+            return
+        }
+        sensorLog.notice("handleAppDidBecomeActive: requesting location + full health refresh")
 
         locationService.requestSingleLocation()
         await captureHealthSnapshot(forceFullRefresh: true)
@@ -220,7 +252,11 @@ final class SensorUploadService {
     }
 
     func handleSystemLaunch() async {
-        guard isActive else { return }
+        guard isActive else {
+            sensorLog.warning("handleSystemLaunch: service not active — skipping")
+            return
+        }
+        sensorLog.notice("handleSystemLaunch: capturing health + draining outbox")
 
         await captureHealthSnapshot()
         await drainOutboxIfPossible()
@@ -236,9 +272,14 @@ final class SensorUploadService {
                 changedIdentifiers: changedIdentifiers
             )
         else {
+            sensorLog.notice("captureHealth: collectSnapshot returned nil (auth=\(String(describing: self.healthService.authorizationStatus), privacy: .public))")
             return
         }
-        guard !snapshot.samples.isEmpty else { return }
+        guard !snapshot.samples.isEmpty else {
+            sensorLog.notice("captureHealth: snapshot empty (no changed metrics)")
+            return
+        }
+        sensorLog.notice("captureHealth: got \(snapshot.samples.count) samples — \(snapshot.samples.map(\.metric).joined(separator: ", "))")
         outboxState.enqueue(healthSamples: snapshot.samples)
         SharedWidgetDataStore.updateHealthMetrics(from: snapshot.samples)
         persistOutboxState()
@@ -246,14 +287,26 @@ final class SensorUploadService {
     }
 
     private func drainOutboxIfPossible() async {
-        guard !isDraining else { return }
-        guard isActive else { return }
-        guard isPairedProvider() else { return }
+        guard !isDraining else {
+            sensorLog.debug("drain: skipped — already draining")
+            return
+        }
+        guard isActive else {
+            sensorLog.warning("drain: BLOCKED — service not active (start() never called or stop()'d)")
+            return
+        }
+        guard isPairedProvider() else {
+            sensorLog.warning("drain: BLOCKED — isPairedProvider() returned false")
+            return
+        }
 
         guard let accessToken = await accessTokenProvider(), !accessToken.isEmpty else {
+            sensorLog.warning("drain: BLOCKED — accessTokenProvider() returned nil/empty")
             return
         }
         _ = accessToken
+
+        sensorLog.notice("drain: starting. Outbox: loc=\(self.outboxState.pendingLocation != nil), health=\(self.outboxState.pendingHealthSamples.count)")
 
         isDraining = true
         defer { isDraining = false }
@@ -261,6 +314,7 @@ final class SensorUploadService {
         while isActive && isPairedProvider() {
             if let pendingLocation = outboxState.pendingLocation {
                 let delivered = await uploadLocation(pendingLocation)
+                sensorLog.notice("drain: location upload \(delivered ? "delivered" : "FAILED", privacy: .public)")
                 guard delivered else { break }
                 outboxState.pendingLocation = nil
                 persistOutboxState()
@@ -269,6 +323,7 @@ final class SensorUploadService {
 
             if !outboxState.pendingHealthSamples.isEmpty {
                 let delivered = await uploadHealth(outboxState.pendingHealthSamples)
+                sensorLog.notice("drain: health upload (\(self.outboxState.pendingHealthSamples.count) samples) \(delivered ? "delivered" : "FAILED", privacy: .public)")
                 guard delivered else { break }
                 outboxState.pendingHealthSamples.removeAll()
                 persistOutboxState()
@@ -277,6 +332,7 @@ final class SensorUploadService {
 
             break
         }
+        sensorLog.notice("drain: finished. Outbox remaining: loc=\(self.outboxState.pendingLocation != nil), health=\(self.outboxState.pendingHealthSamples.count)")
     }
 
     private func persistOutboxState() {
@@ -355,17 +411,21 @@ final class SensorUploadService {
         do {
             return try await executeUpload(path: path, body: body, accessToken: await accessTokenProvider())
         } catch RelayAPIClient.ClientError.unauthorized {
+            sensorLog.warning("upload \(path): 401 unauthorized, attempting token refresh…")
             guard let refreshedToken = await accessTokenRefresher(), !refreshedToken.isEmpty else {
+                sensorLog.error("upload \(path): token refresh failed/empty")
                 return false
             }
             return (try? await executeUpload(path: path, body: body, accessToken: refreshedToken)) ?? false
         } catch {
+            sensorLog.error("upload \(path): error — \(error.localizedDescription)")
             return false
         }
     }
 
     private func executeUpload<Body: Encodable>(path: String, body: Body, accessToken: String?) async throws -> Bool {
         guard let accessToken, !accessToken.isEmpty else {
+            sensorLog.warning("executeUpload \(path): no access token")
             return false
         }
         let result: DeliveryResult = try await apiClient.post(
@@ -373,6 +433,7 @@ final class SensorUploadService {
             body: body,
             accessToken: accessToken
         )
+        sensorLog.notice("executeUpload \(path, privacy: .public): deliveryState=\(result.deliveryState, privacy: .public) wasDelivered=\(result.wasDelivered, privacy: .public)")
         return result.wasDelivered
     }
 }
