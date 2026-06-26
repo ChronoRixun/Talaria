@@ -342,9 +342,15 @@ final class AppContainer {
 
         await permissionsStore.reloadCapabilities()
         await sessionStore.bootstrap()
-        guard sessionStore.state.connectionStatus == .connected else {
-            containerLog.warning("initialize: ABORT — connectionStatus != .connected (is \(String(describing: self.sessionStore.state.connectionStatus), privacy: .public))")
-            return
+        if sessionStore.state.connectionStatus != .connected {
+            // Relay bootstrap failed (e.g. the relay restarted and invalidated this
+            // device's tokens → 401 on register/session/refresh). Do NOT strand the
+            // launch splash: the direct chat path (:8642, API-key auth) is independent
+            // of the relay session, so we continue into the app in a degraded state and
+            // let the user reach Settings to re-pair / retry rather than being hard
+            // locked at launch. Relay-backed features (sensor upload, inbox, push) stay
+            // degraded until a valid session is restored; re-pairing re-runs initialize().
+            containerLog.warning("initialize: relay bootstrap not connected (is \(String(describing: self.sessionStore.state.connectionStatus), privacy: .public)) — entering degraded mode; direct chat still available")
         }
         await hostStore.refresh()
         lastKnownHostOnline = hostStore.isHostOnline
