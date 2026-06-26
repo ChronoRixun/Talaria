@@ -227,27 +227,29 @@ experiment — not an app or routing bug.
 
 ---
 
-## 14. 📝 Shim token onboarding — needs a frictionless flow
+## 14. ✅ Shim token onboarding — unified key, zero manual entry
 
-Currently the shim bearer token lives in `~/.hermes/talaria_shim_token` on the mini and
-must be manually copied to the phone (Universal Clipboard / AirDrop / paste). This is a
-dev-only workflow — real users (even Owen) shouldn't have to SSH into a server and cat a
-file.
+**Approach chosen:** unified API key. The shim now accepts the same Hermes API server
+key the app already stores for chat — no second token needed.
 
-Possible approaches (pick one or combine):
-- **QR code on the shim.** Add a `/pair` or `/qr` endpoint to the shim that renders a
-  QR code containing the token (or a short-lived pairing URL). The app scans it once.
-  Protected by requiring local-network access or a one-time PIN.
-- **Derive from the existing Hermes API key.** If the shim could accept the same API key
-  the app already stores for the Sessions API, no second token is needed. Would require
-  the shim to validate against the same key store.
-- **Pairing handshake.** During the existing relay pairing flow (the 8-digit code), have
-  the shim token piggyback on the pairing response so it's automatically stored.
-- **mDNS/Bonjour discovery + auto-pair.** The shim advertises on the local network; the
-  app discovers it and exchanges tokens automatically (like AirPlay).
+**Shim side (`tools/models-shim/shim.py`):**
+- `_load_api_server_key()` reads the Hermes API server key from `API_SERVER_KEY` env
+  var or `~/.hermes/config.yaml → api_server.key`
+- `_authed()` accepts BOTH the dedicated shim token (legacy) AND the API server key
+- Backward compatible — existing shim tokens still work
 
-The goal: zero manual token entry for the end user. The shim URL can default to
-auto-discovery or the tailnet IP; the token should be exchanged, not typed.
+**App side (`AppContainer.swift`):**
+- `ModelsShimClient.tokenProvider` now has a 3-tier fallback:
+  1. Dedicated shim token from Keychain (legacy/override)
+  2. `TALARIA_SHIM_TOKEN` launch-env (DEBUG simulator)
+  3. Hermes API server key (same key used for chat — zero-config)
+- New users only need to enter ONE key (the Hermes API key) and models switching
+  works immediately — no manual token copy from the server
+
+**Deploy note:** Owen needs to redeploy `shim.py` on OJAMD for the server side to
+take effect. The app-side fallback is already active.
+
+Fixed 2026-06-25.
 
 
 ---

@@ -176,23 +176,28 @@ final class AppContainer {
             allowsFallback: { allowMockFallbacks && (activePairingStore?.isPaired != true || usesMockPairingService) }
         )
 
-        // Talaria models-shim client (OJAMD tailnet). Token comes from the Keychain
-        // box (hydrated below); in DEBUG only, a `TALARIA_SHIM_TOKEN` launch-env var
-        // is used as a fallback so the picker can be driven in the simulator without
-        // pasting (idb has no keyboard injection). The token never ships in git.
+        // Talaria models-shim client (OJAMD tailnet). Auth priority:
+        //  1. Dedicated shim token from Keychain (legacy / explicit override)
+        //  2. DEBUG launch-env TALARIA_SHIM_TOKEN (simulator convenience)
+        //  3. Hermes API server key (same key used for chat — zero-config)
+        // Option 3 means the user never has to manually copy a second token;
+        // the shim accepts both its own token AND the API server key (#14).
         let shimTokenBox = MutableShimTokenBox()
         let modelsShimClient = ModelsShimClient(
             baseURLProvider: {
                 let raw = settingsStore.settings.modelsShimBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
                 return raw.isEmpty ? nil : raw
             },
-            tokenProvider: {
+            tokenProvider: { [hermesAPIKeyBox] in
                 if !shimTokenBox.value.isEmpty { return shimTokenBox.value }
                 #if DEBUG
                 if let envToken = processEnvironment["TALARIA_SHIM_TOKEN"], !envToken.isEmpty {
                     return envToken
                 }
                 #endif
+                // Fall back to the Hermes API key — the shim accepts it as an
+                // alternate bearer token (see tools/models-shim/shim.py).
+                if !hermesAPIKeyBox.value.isEmpty { return hermesAPIKeyBox.value }
                 return nil
             }
         )

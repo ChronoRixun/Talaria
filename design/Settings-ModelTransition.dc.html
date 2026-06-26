@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+:root{--accent:#54e6f0;--accent-bright:#cdf8fb;--accent-deep:#14636e;--glow:1;--grid-op:1}
+body{margin:0;background:#080b0f;font-family:'Space Grotesk',sans-serif}
+@keyframes tal-spin{to{transform:rotate(360deg)}}
+@keyframes tal-spinfast{to{transform:rotate(360deg)}}
+@keyframes tal-breathe{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.08);opacity:.85}}
+@keyframes tal-blink{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes tal-scan{0%{transform:translateY(-70px)}100%{transform:translateY(320px)}}
+@keyframes tal-sweep{0%{transform:translateX(-110%)}100%{transform:translateX(360%)}}
+@keyframes tal-draw{to{stroke-dashoffset:0}}
+@keyframes tal-ripple{0%{transform:scale(.5);opacity:.85}100%{transform:scale(2.1);opacity:0}}
+@keyframes tal-flare{0%{transform:scale(.4);opacity:0}35%{opacity:.9}100%{transform:scale(1.7);opacity:0}}
+@keyframes tal-stepin{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+@keyframes tal-rise{from{opacity:0;transform:translateY(10px) scale(.97)}to{opacity:1;transform:none}}
+</style>
+</helmet>
+
+<div data-drags-parent="1" style="position:absolute;left:0px;top:0px;width:1100px">
+  <div style="font-family:'Chakra Petch',sans-serif;font-size:15px;letter-spacing:8px;color:#cfe1ea;font-weight:600">TALARIA · MODEL SWITCH TRANSITION</div>
+  <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:2px;color:#5d7488;margin-top:9px">ModelsSettingsScreen · apply() coverage · tap → resolve · arc-reactor HUD</div>
+</div>
+
+<!-- ================= LIVE DEMO ================= -->
+<div style="position:absolute;left:0px;top:110px;width:392px">
+  <div data-drags-parent="1" style="display:flex;align-items:center;gap:9px;margin:0 0 14px 4px">
+    <span style="display:inline-flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1.6px;color:#04070c;background:var(--accent);padding:4px 9px;border-radius:6px;font-weight:700">▶ LIVE</span>
+    <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:2px;color:#7c93a6">HAPPY PATH · AUTO-LOOP</span>
+  </div>
+  <div data-screen-label="Live transition demo" style="width:392px;height:806px;background:#000;border-radius:46px;padding:11px;border:1px solid rgba(120,150,175,.18);box-shadow:0 30px 70px rgba(0,0,0,.55)">
+    <div style="position:relative;width:100%;height:100%;border-radius:36px;overflow:hidden;background:radial-gradient(120% 70% at 50% -8%, #0c2730 0%, #070d15 52%, #04070c 100%)">
+      <div style="position:absolute;inset:0;background-image:linear-gradient(rgba(84,230,240,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(84,230,240,.045) 1px,transparent 1px);background-size:26px 26px;opacity:var(--grid-op);pointer-events:none"></div>
+      <div style="position:absolute;top:11px;left:50%;transform:translateX(-50%);width:114px;height:32px;background:#000;border-radius:18px;z-index:6"></div>
+      <div style="position:absolute;top:0;left:0;right:0;height:50px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;z-index:5"><div style="font-family:'Chakra Petch',sans-serif;font-size:15px;color:#cfe1ea;letter-spacing:.5px;font-weight:600">9:41</div><div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#7c93a6;letter-spacing:1.4px">5G&nbsp;&nbsp;▮▮▮▮</div></div>
+      <div style="position:absolute;top:50px;left:0;right:0;bottom:0;padding:8px 20px 20px">
+        <div style="display:flex;align-items:center;gap:13px;padding:10px 2px 16px">
+          <div style="width:36px;height:36px;border-radius:50%;border:1px solid color-mix(in srgb,var(--accent) 26%,transparent);display:flex;align-items:center;justify-content:center;color:var(--accent-bright);font-size:18px;line-height:0;padding-bottom:3px;background:color-mix(in srgb,var(--accent) 6%,transparent);flex:none">‹</div>
+          <div><div style="font-family:'Chakra Petch',sans-serif;font-size:22px;font-weight:700;letter-spacing:3px;color:#eaf6f8">MODELS</div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:2.2px;color:#5d7488;margin-top:3px">INFERENCE</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:11px;background:rgba(8,18,26,.5);border:1px solid color-mix(in srgb,var(--accent) 14%,transparent);margin-bottom:13px">
+          <div style="width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px var(--accent);flex:none"></div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:1.4px;color:#9fb3c2;flex:1">SHIM · ojamd:8642 · v1.9.2</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.4px;color:var(--accent)">DIRECT</div>
+        </div>
+        <div style="padding:13px 15px;border-radius:13px;background:color-mix(in srgb,var(--accent) 7%,rgba(8,18,26,.55));border:1px solid color-mix(in srgb,var(--accent) 26%,transparent);margin-bottom:14px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px"><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:2.2px;color:#5d7488">ACTIVE MODEL</div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.4px;color:var(--accent);display:flex;align-items:center;gap:5px"><span style="width:5px;height:5px;border-radius:50%;background:var(--accent);box-shadow:0 0 5px var(--accent)"></span>ONLINE</div></div>
+          <div style="font-family:'Chakra Petch',sans-serif;font-size:18px;font-weight:700;letter-spacing:1.2px;color:#eaf6f8">{{ liveActiveName }}</div>
+        </div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:2.4px;color:#5d7488;margin:0 0 9px 4px">// AVAILABLE · 5</div>
+        <div style="position:relative;border-radius:13px;overflow:hidden;background:rgba(8,18,26,.5);border:1px solid color-mix(in srgb,var(--accent) 12%,transparent)">
+          <div style="display:flex;align-items:center;gap:11px;padding:12px 14px"><div style="width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 7px var(--accent);flex:none"></div><div style="flex:1;min-width:0"><div style="font-family:'Space Grotesk',sans-serif;font-size:14px;color:#eaf6f8">Claude Opus 4.6</div><div style="font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:1.3px;color:#7c93a6;margin-top:2px">ANTHROPIC · 200K · $$$</div></div><div style="color:var(--accent);font-size:13px;font-weight:700;flex:none">✓</div></div>
+          <div style="height:1px;background:color-mix(in srgb,var(--accent) 10%,transparent);margin:0 14px"></div>
+          <div style="display:flex;align-items:center;gap:11px;padding:12px 14px"><div style="width:7px;height:7px;border-radius:50%;background:#4d6273;flex:none"></div><div style="flex:1;min-width:0"><div style="font-family:'Space Grotesk',sans-serif;font-size:14px;color:#e8eef5">Claude Sonnet 4.6</div><div style="font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:1.3px;color:#5d7488;margin-top:2px">ANTHROPIC · 200K</div></div></div>
+          <div style="height:1px;background:color-mix(in srgb,var(--accent) 10%,transparent);margin:0 14px"></div>
+          <div style="display:flex;align-items:center;gap:11px;padding:12px 14px"><div style="width:7px;height:7px;border-radius:50%;background:#4d6273;flex:none"></div><div style="flex:1;min-width:0"><div style="font-family:'Space Grotesk',sans-serif;font-size:14px;color:#e8eef5">Claude Haiku 4.5</div><div style="font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:1.3px;color:#5d7488;margin-top:2px">ANTHROPIC · 200K</div></div></div>
+          <div style="height:1px;background:color-mix(in srgb,var(--accent) 10%,transparent);margin:0 14px"></div>
+          <div style="display:flex;align-items:center;gap:11px;padding:12px 14px"><div style="width:7px;height:7px;border-radius:50%;background:#4d6273;flex:none"></div><div style="flex:1;min-width:0"><div style="font-family:'Space Grotesk',sans-serif;font-size:14px;color:#e8eef5">GPT-5.5</div><div style="font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:1.3px;color:#5d7488;margin-top:2px">OPENAI · 256K · $$$</div></div></div>
+          <div style="height:1px;background:color-mix(in srgb,var(--accent) 10%,transparent);margin:0 14px"></div>
+          <div style="display:flex;align-items:center;gap:11px;padding:12px 14px"><div style="width:7px;height:7px;border-radius:50%;background:#4d6273;flex:none"></div><div style="flex:1;min-width:0"><div style="font-family:'Space Grotesk',sans-serif;font-size:14px;color:#e8eef5">Llama 4 70B</div><div style="font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:1.3px;color:#5d7488;margin-top:2px">LOCAL · 128K</div></div><div style="font-family:'JetBrains Mono',monospace;font-size:7.5px;letter-spacing:1.1px;color:var(--accent);padding:3px 6px;border-radius:5px;border:1px solid color-mix(in srgb,var(--accent) 30%,transparent);flex:none">ON-DEVICE</div></div>
+
+          <sc-if value="{{ liveActivating }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute;inset:0;background:rgba(5,9,14,.88);overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:18px;text-align:center;animation:tal-rise .3s ease both">
+              <div style="position:absolute;left:0;right:0;top:0;height:64px;background:linear-gradient(180deg,transparent,color-mix(in srgb,var(--accent) 12%,transparent),transparent);animation:tal-scan 2.2s linear infinite;pointer-events:none"></div>
+              <div style="position:relative;width:78px;height:78px">
+                <div style="position:absolute;inset:0;border-radius:50%;border:1.5px solid color-mix(in srgb,var(--accent) 28%,transparent);animation:tal-spin 5s linear infinite"></div>
+                <div style="position:absolute;inset:8px;border-radius:50%;border:2px solid transparent;border-top-color:var(--accent);border-right-color:color-mix(in srgb,var(--accent) 35%,transparent);animation:tal-spinfast 1s linear infinite"></div>
+                <div style="position:absolute;inset:19px;border-radius:50%;border:1.5px solid transparent;border-bottom-color:var(--accent);animation:tal-spinfast 1.7s linear infinite reverse"></div>
+                <div style="position:absolute;inset:28px;border-radius:50%;background:radial-gradient(circle at 50% 40%,var(--accent-bright),var(--accent) 50%,var(--accent-deep));box-shadow:0 0 calc(18px*var(--glow)) color-mix(in srgb,var(--accent) 75%,transparent);animation:tal-breathe 1.3s ease-in-out infinite"></div>
+              </div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:3px;color:var(--accent);margin-top:18px">CALIBRATING INFERENCE</div>
+              <div style="font-family:'Chakra Petch',sans-serif;font-size:19px;font-weight:700;letter-spacing:1.2px;color:#eaf6f8;margin-top:7px">CLAUDE SONNET 4.6</div>
+              <div style="width:100%;max-width:222px;margin-top:18px;display:flex;flex-direction:column;gap:8px">
+                <div style="display:flex;align-items:center;gap:9px;animation:tal-stepin .4s ease both;animation-delay:0s"><span style="color:var(--accent);font-size:11px;width:13px;text-align:center">✓</span><span style="flex:1;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:1px;color:#9fb3c2;text-align:left">HANDSHAKE</span><span style="font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--accent)">OK</span></div>
+                <div style="display:flex;align-items:center;gap:9px;animation:tal-stepin .4s ease both;animation-delay:.18s"><span style="width:13px;height:13px;position:relative;flex:none"><span style="position:absolute;inset:0;border-radius:50%;border:1.5px solid transparent;border-top-color:var(--accent);animation:tal-spinfast .8s linear infinite"></span></span><span style="flex:1;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:1px;color:#eaf6f8;text-align:left">LOADING WEIGHTS</span><span style="font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--accent)">···</span></div>
+                <div style="display:flex;align-items:center;gap:9px;animation:tal-stepin .4s ease both;animation-delay:.36s"><span style="width:13px;display:flex;justify-content:center"><span style="width:5px;height:5px;border-radius:50%;border:1px solid #4d6273"></span></span><span style="flex:1;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:1px;color:#5d7488;text-align:left">WARM-UP</span></div>
+                <div style="display:flex;align-items:center;gap:9px;animation:tal-stepin .4s ease both;animation-delay:.54s"><span style="width:13px;display:flex;justify-content:center"><span style="width:5px;height:5px;border-radius:50%;border:1px solid #4d6273"></span></span><span style="flex:1;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:1px;color:#5d7488;text-align:left">ONLINE</span></div>
+              </div>
+              <div style="width:100%;max-width:222px;height:3px;border-radius:2px;background:rgba(120,150,175,.16);overflow:hidden;margin-top:16px;position:relative"><div style="position:absolute;top:0;bottom:0;width:40%;background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:tal-sweep 1.3s ease-in-out infinite"></div></div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:2px;color:#5d7488;margin-top:14px">HOLD · 1–5S · DO NOT CLOSE</div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ liveSuccess }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute;inset:0;background:rgba(5,12,12,.9);overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:18px;text-align:center;animation:tal-rise .3s ease both">
+              <div style="position:relative;width:80px;height:80px">
+                <div style="position:absolute;inset:-6px;border-radius:50%;border:1.5px solid var(--accent);animation:tal-flare .9s ease-out forwards"></div>
+                <div style="position:absolute;inset:0;border-radius:50%;border:1.5px solid color-mix(in srgb,var(--accent) 55%,transparent)"></div>
+                <div style="position:absolute;inset:8px;border-radius:50%;border:1.5px solid color-mix(in srgb,var(--accent) 30%,transparent)"></div>
+                <div style="position:absolute;inset:24px;border-radius:50%;background:radial-gradient(circle at 50% 40%,var(--accent-bright),var(--accent) 55%,var(--accent-deep));box-shadow:0 0 calc(22px*var(--glow)) color-mix(in srgb,var(--accent) 80%,transparent)"></div>
+                <svg width="36" height="36" viewBox="0 0 36 36" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:2"><path d="M10 18.5 L16 24.5 L27 12" fill="none" stroke="#04070c" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="42" stroke-dashoffset="42" style="animation:tal-draw .45s ease-out .12s forwards"></path></svg>
+              </div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:3px;color:var(--accent);margin-top:18px">MODEL ACTIVATED</div>
+              <div style="font-family:'Chakra Petch',sans-serif;font-size:19px;font-weight:700;letter-spacing:1.2px;color:#eaf6f8;margin-top:7px">CLAUDE SONNET 4.6</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:1.6px;color:#9fb3c2;margin-top:9px">NOW ACTIVE · APPLIES TO NEXT TURN</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:2px;color:#5d7488;margin-top:16px">OVERLAY DISMISSES · 600MS</div>
+            </div>
+          </sc-if>
+        </div>
+        <div style="text-align:center;font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:2px;color:#4d6273;margin-top:13px">{{ liveCaption }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= STATIC: TAP ================= -->
+<div style="position:absolute;left:500px;top:110px;width:392px">
+  <div data-drags-parent="1" style="margin:0 0 14px 4px">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:2px;color:#cfe1ea">01 · TAP</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.4px;color:#5d7488;margin-top:4px">apply() fires · applyingModelID ← sonnet</div>
+  </div>
+  <div data-screen-label="Tap state" style="width:392px;height:806px;background:#000;border-radius:46px;padding:11px;border:1px solid rgba(120,150,175,.18);box-shadow:0 30px 70px rgba(0,0,0,.55)">
+    <div style="position:relative;width:100%;height:100%;border-radius:36px;overflow:hidden;background:radial-gradient(120% 70% at 50% -8%, #0c2730 0%, #070d15 52%, #04070c 100%)">
+      <div style="position:absolute;inset:0;background-image:linear-gradient(rgba(84,230,240,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(84,230,240,.045) 1px,transparent 1px);background-size:26px 26px;opacity:var(--grid-op);pointer-events:none"></div>
+      <div style="position:absolute;top:11px;left:50%;transform:translateX(-50%);width:114px;height:32px;background:#000;border-radius:18px;z-index:6"></div>
+      <div style="position:absolute;top:0;left:0;right:0;height:50px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;z-index:5"><div style="font-family:'Chakra Petch',sans-serif;font-size:15px;color:#cfe1ea;letter-spacing:.5px;font-weight:600">9:41</div><div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#7c93a6;letter-spacing:1.4px">5G&nbsp;&nbsp;▮▮▮▮</div></div>
+      <div style="position:absolute;top:50px;left:0;right:0;bottom:0;padding:8px 20px 20px">
+        <div style="display:flex;align-items:center;gap:13px;padding:10px 2px 16px"><div style="width:36px;height:36px;border-radius:50%;border:1px solid color-mix(in srgb,var(--accent) 26%,transparent);display:flex;align-items:center;justify-content:center;color:var(--accent-bright);font-size:18px;line-height:0;padding-bottom:3px;background:color-mix(in srgb,var(--accent) 6%,transparent);flex:none">‹</div><div><div style="font-family:'Chakra Petch',sans-serif;font-size:22px;font-weight:700;letter-spacing:3px;color:#eaf6f8">MODELS</div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:2.2px;color:#5d7488;margin-top:3px">INFERENCE</div></div></div>
+        <div style="display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:11px;background:rgba(8,18,26,.5);border:1px solid color-mix(in srgb,var(--accent) 14%,transparent);margin-bottom:13px"><div style="width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px var(--accent);flex:none"></div><div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:1.4px;color:#9fb3c2;flex:1">SHIM · ojamd:8642 · v1.9.2</div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.4px;color:var(--accent)">DIRECT</div></div>
+        <div style="padding:13px 15px;border-radius:13px;background:color-mix(in srgb,var(--accent) 7%,rgba(8,18,26,.55));border:1px solid color-mix(in srgb,var(--accent) 26%,transparent);margin-bottom:14px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px"><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:2.2px;color:#5d7488">ACTIVE MODEL</div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.4px;color:var(--accent);display:flex;align-items:center;gap:5px"><span style="width:5px;height:5px;border-radius:50%;background:var(--accent);box-shadow:0 0 5px var(--accent)"></span>ONLINE</div></div><div style="font-family:'Chakra Petch',sans-serif;font-size:18px;font-weight:700;letter-spacing:1.2px;color:#eaf6f8">CLAUDE OPUS 4.6</div></div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:2.4px;color:#5d7488;margin:0 0 9px 4px">// AVAILABLE · 5</div>
+        <div style="position:relative;border-radius:13px;overflow:hidden;background:rgba(8,18,26,.5);border:1px solid color-mix(in srgb,var(--accent) 12%,transparent)">
+          <div style="display:flex;align-items:center;gap:11px;padding:12px 14px"><div style="width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 7px var(--accent);flex:none"></div><div style="flex:1;min-width:0"><div style="font-family:'Space Grotesk',sans-serif;font-size:14px;color:#eaf6f8">Claude Opus 4.6</div><div style="font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:1.3px;color:#7c93a6;margin-top:2px">ANTHROPIC · 200K · $$$</div></div><div style="color:var(--accent);font-size:13px;font-weight:700;flex:none">✓</div></div>
+          <div style="height:1px;background:color-mix(in srgb,var(--accent) 10%,transparent);margin:0 14px"></div>
+          <div style="position:relative;display:flex;align-items:center;gap:11px;padding:13px 14px;background:color-mix(in srgb,var(--accent) 10%,transparent);border-left:2px solid var(--accent)"><div style="position:relative;width:7px;height:7px;flex:none"><span style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent)"></span><span style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:18px;height:18px;border-radius:50%;border:1.5px solid var(--accent);animation:tal-ripple 1.4s ease-out infinite"></span></div><div style="flex:1;min-width:0"><div style="font-family:'Space Grotesk',sans-serif;font-size:14px;color:#eaf6f8;font-weight:500">Claude Sonnet 4.6</div><div style="font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:1.3px;color:var(--accent);margin-top:2px">SELECTING…</div></div><div style="width:20px;height:20px;border-radius:50%;border:1.5px solid var(--accent);position:relative;flex:none;box-shadow:0 0 10px color-mix(in srgb,var(--accent) 50%,transparent)"><span style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:6px;height:6px;border-radius:50%;background:var(--accent)"></span></div></div>
+          <div style="height:1px;background:color-mix(in srgb,var(--accent) 10%,transparent);margin:0 14px"></div>
+          <div style="display:flex;align-items:center;gap:11px;padding:12px 14px;opacity:.55"><div style="width:7px;height:7px;border-radius:50%;background:#4d6273;flex:none"></div><div style="flex:1;min-width:0"><div style="font-family:'Space Grotesk',sans-serif;font-size:14px;color:#e8eef5">Claude Haiku 4.5</div><div style="font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:1.3px;color:#5d7488;margin-top:2px">ANTHROPIC · 200K</div></div></div>
+          <div style="height:1px;background:color-mix(in srgb,var(--accent) 10%,transparent);margin:0 14px"></div>
+          <div style="display:flex;align-items:center;gap:11px;padding:12px 14px;opacity:.55"><div style="width:7px;height:7px;border-radius:50%;background:#4d6273;flex:none"></div><div style="flex:1;min-width:0"><div style="font-family:'Space Grotesk',sans-serif;font-size:14px;color:#e8eef5">GPT-5.5</div><div style="font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:1.3px;color:#5d7488;margin-top:2px">OPENAI · 256K · $$$</div></div></div>
+          <div style="height:1px;background:color-mix(in srgb,var(--accent) 10%,transparent);margin:0 14px"></div>
+          <div style="display:flex;align-items:center;gap:11px;padding:12px 14px;opacity:.55"><div style="width:7px;height:7px;border-radius:50%;background:#4d6273;flex:none"></div><div style="flex:1;min-width:0"><div style="font-family:'Space Grotesk',sans-serif;font-size:14px;color:#e8eef5">Llama 4 70B</div><div style="font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:1.3px;color:#5d7488;margin-top:2px">LOCAL · 128K</div></div><div style="font-family:'JetBrains Mono',monospace;font-size:7.5px;letter-spacing:1.1px;color:var(--accent);padding:3px 6px;border-radius:5px;border:1px solid color-mix(in srgb,var(--accent) 30%,transparent);flex:none">ON-DEVICE</div></div>
+        </div>
+        <div style="text-align:center;font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:2px;color:#4d6273;margin-top:13px">ROW PRESS · HAPTIC · REQUEST DISPATCHED</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= STATIC: ACTIVATING ================= -->
+<div style="position:absolute;left:1000px;top:110px;width:392px">
+  <div data-drags-parent="1" style="margin:0 0 14px 4px">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:2px;color:#cfe1ea">02 · ACTIVATING</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.4px;color:#5d7488;margin-top:4px">applyingModelID ≠ nil · list-area overlay</div>
+  </div>
+  <div data-screen-label="Activating state" style="width:392px;height:806px;background:#000;border-radius:46px;padding:11px;border:1px solid rgba(120,150,175,.18);box-shadow:0 30px 70px rgba(0,0,0,.55)">
+    <div style="position:relative;width:100%;height:100%;border-radius:36px;overflow:hidden;background:radial-gradient(120% 70% at 50% -8%, #0c2730 0%, #070d15 52%, #04070c 100%)">
+      <div style="position:absolute;inset:0;background-image:linear-gradient(rgba(84,230,240,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(84,230,240,.045) 1px,transparent 1px);background-size:26px 26px;opacity:var(--grid-op);pointer-events:none"></div>
+      <div style="position:absolute;top:11px;left:50%;transform:translateX(-50%);width:114px;height:32px;background:#000;border-radius:18px;z-index:6"></div>
+      <div style="position:absolute;top:0;left:0;right:0;height:50px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;z-index:5"><div style="font-family:'Chakra Petch',sans-serif;font-size:15px;color:#cfe1ea;letter-spacing:.5px;font-weight:600">9:41</div><div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#7c93a6;letter-spacing:1.4px">5G&nbsp;&nbsp;▮▮▮▮</div></div>
+      <div style="position:absolute;top:50px;left:0;right:0;bottom:0;padding:8px 20px 20px">
+        <div style="display:flex;align-items:center;gap:13px;padding:10px 2px 16px"><div style="width:36px;height:36px;border-radius:50%;border:1px solid color-mix(in srgb,var(--accent) 18%,transparent);display:flex;align-items:center;justify-content:center;color:#5d7488;font-size:18px;line-height:0;padding-bottom:3px;flex:none">‹</div><div><div style="font-family:'Chakra Petch',sans-serif;font-size:22px;font-weight:700;letter-spacing:3px;color:#eaf6f8">MODELS</div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:2.2px;color:#5d7488;margin-top:3px">INFERENCE</div></div></div>
+        <div style="display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:11px;background:rgba(8,18,26,.5);border:1px solid color-mix(in srgb,var(--accent) 14%,transparent);margin-bottom:13px"><div style="width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px var(--accent);flex:none"></div><div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:1.4px;color:#9fb3c2;flex:1">SHIM · ojamd:8642 · v1.9.2</div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.4px;color:var(--accent)">DIRECT</div></div>
+        <div style="padding:13px 15px;border-radius:13px;background:color-mix(in srgb,var(--accent) 7%,rgba(8,18,26,.55));border:1px solid color-mix(in srgb,var(--accent) 26%,transparent);margin-bottom:14px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px"><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:2.2px;color:#5d7488">ACTIVE MODEL</div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.4px;color:var(--accent);display:flex;align-items:center;gap:5px"><span style="width:5px;height:5px;border-radius:50%;background:var(--accent);box-shadow:0 0 5px var(--accent)"></span>ONLINE</div></div><div style="font-family:'Chakra Petch',sans-serif;font-size:18px;font-weight:700;letter-spacing:1.2px;color:#eaf6f8">CLAUDE OPUS 4.6</div></div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:2.4px;color:#5d7488;margin:0 0 9px 4px">// AVAILABLE · 5</div>
+        <div style="position:relative;border-radius:13px;overflow:hidden;background:rgba(8,18,26,.5);border:1px solid color-mix(in srgb,var(--accent) 12%,transparent)">
+          <div style="opacity:.35">
+            <div style="display:flex;align-items:center;gap:11px;padding:12px 14px"><div style="width:7px;height:7px;border-radius:50%;background:#4d6273;flex:none"></div><div style="flex:1"><div style="font-family:'Space Grotesk',sans-serif;font-size:14px;color:#e8eef5">Claude Opus 4.6</div></div></div>
+            <div style="display:flex;align-items:center;gap:11px;padding:12px 14px"><div style="width:7px;height:7px;border-radius:50%;background:#4d6273;flex:none"></div><div style="flex:1"><div style="font-family:'Space Grotesk',sans-serif;font-size:14px;color:#e8eef5">Claude Sonnet 4.6</div></div></div>
+            <div style="display:flex;align-items:center;gap:11px;padding:12px 14px"><div style="width:7px;height:7px;border-radius:50%;background:#4d6273;flex:none"></div><div style="flex:1"><div style="font-family:'Space Grotesk',sans-serif;font-size:14px;color:#e8eef5">Claude Haiku 4.5</div></div></div>
+            <div style="display:flex;align-items:center;gap:11px;padding:12px 14px"><div style="width:7px;height:7px;border-radius:50%;background:#4d6273;flex:none"></div><div style="flex:1"><div style="font-family:'Space Grotesk',sans-serif;font-size:14px;color:#e8eef5">GPT-5.5</div></div></div>
+            <div style="display:flex;align-items:center;gap:11px;padding:12px 14px"><div style="width:7px;height:7px;border-radius:50%;background:#4d6273;flex:none"></div><div style="flex:1"><div style="font-family:'Space Grotesk',sans-serif;font-size:14px;color:#e8eef5">Llama 4 70B</div></div></div>
+          </div>
+          <div style="position:absolute;inset:0;background:rgba(5,9,14,.9);overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:18px;text-align:center">
+            <div style="position:absolute;left:0;right:0;top:0;height:64px;background:linear-gradient(180deg,transparent,color-mix(in srgb,var(--accent) 12%,transparent),transparent);animation:tal-scan 2.2s linear infinite;pointer-events:none"></div>
+            <div style="position:absolute;top:10px;left:12px;width:14px;height:14px;border-left:1.5px solid color-mix(in srgb,var(--accent) 45%,transparent);border-top:1.5px solid color-mix(in srgb,var(--accent) 45%,transparent)"></div>
+            <div style="position:absolute;top:10px;right:12px;width:14px;height:14px;border-right:1.5px solid color-mix(in srgb,var(--accent) 45%,transparent);border-top:1.5px solid color-mix(in srgb,var(--accent) 45%,transparent)"></div>
+            <div style="position:absolute;bottom:10px;left:12px;width:14px;height:14px;border-left:1.5px solid color-mix(in srgb,var(--accent) 45%,transparent);border-bottom:1.5px solid color-mix(in srgb,var(--accent) 45%,transparent)"></div>
+            <div style="position:absolute;bottom:10px;right:12px;width:14px;height:14px;border-right:1.5px solid color-mix(in srgb,var(--accent) 45%,transparent);border-bottom:1.5px solid color-mix(in srgb,var(--accent) 45%,transparent)"></div>
+            <div style="position:relative;width:78px;height:78px">
+              <div style="position:absolute;inset:0;border-radius:50%;border:1.5px solid color-mix(in srgb,var(--accent) 28%,transparent);animation:tal-spin 5s linear infinite"></div>
+              <div style="position:absolute;inset:8px;border-radius:50%;border:2px solid transparent;border-top-color:var(--accent);border-right-color:color-mix(in srgb,var(--accent) 35%,transparent);animation:tal-spinfast 1s linear infinite"></div>
+              <div style="position:absolute;inset:19px;border-radius:50%;border:1.5px solid transparent;border-bottom-color:var(--accent);animation:tal-spinfast 1.7s linear infinite reverse"></div>
+              <div style="position:absolute;inset:28px;border-radius:50%;background:radial-gradient(circle at 50% 40%,var(--accent-bright),var(--accent) 50%,var(--accent-deep));box-shadow:0 0 calc(18px*var(--glow)) color-mix(in srgb,var(--accent) 75%,transparent);animation:tal-breathe 1.3s ease-in-out infinite"></div>
+            </div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:3px;color:var(--accent);margin-top:18px">CALIBRATING INFERENCE</div>
+            <div style="font-family:'Chakra Petch',sans-serif;font-size:19px;font-weight:700;letter-spacing:1.2px;color:#eaf6f8;margin-top:7px">CLAUDE SONNET 4.6</div>
+            <div style="width:100%;max-width:222px;margin-top:18px;display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;align-items:center;gap:9px"><span style="color:var(--accent);font-size:11px;width:13px;text-align:center">✓</span><span style="flex:1;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:1px;color:#9fb3c2;text-align:left">HANDSHAKE</span><span style="font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--accent)">OK</span></div>
+              <div style="display:flex;align-items:center;gap:9px"><span style="width:13px;height:13px;position:relative;flex:none"><span style="position:absolute;inset:0;border-radius:50%;border:1.5px solid transparent;border-top-color:var(--accent);animation:tal-spinfast .8s linear infinite"></span></span><span style="flex:1;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:1px;color:#eaf6f8;text-align:left">LOADING WEIGHTS</span><span style="font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--accent)">···</span></div>
+              <div style="display:flex;align-items:center;gap:9px"><span style="width:13px;display:flex;justify-content:center"><span style="width:5px;height:5px;border-radius:50%;border:1px solid #4d6273"></span></span><span style="flex:1;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:1px;color:#5d7488;text-align:left">WARM-UP</span></div>
+              <div style="display:flex;align-items:center;gap:9px"><span style="width:13px;display:flex;justify-content:center"><span style="width:5px;height:5px;border-radius:50%;border:1px solid #4d6273"></span></span><span style="flex:1;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:1px;color:#5d7488;text-align:left">ONLINE</span></div>
+            </div>
+            <div style="width:100%;max-width:222px;height:3px;border-radius:2px;background:rgba(120,150,175,.16);overflow:hidden;margin-top:16px;position:relative"><div style="position:absolute;top:0;bottom:0;width:40%;background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:tal-sweep 1.3s ease-in-out infinite"></div></div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:2px;color:#5d7488;margin-top:14px">HOLD · 1–5S · DO NOT CLOSE</div>
+          </div>
+        </div>
+        <div style="text-align:center;font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:2px;color:#4d6273;margin-top:13px">HEADER + SHIM CONFIG REMAIN VISIBLE</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= STATIC: CONFIRM REQUIRED ================= -->
+<div style="position:absolute;left:1500px;top:110px;width:392px">
+  <div data-drags-parent="1" style="margin:0 0 14px 4px">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:2px;color:#ffe2a6">03 · CONFIRM REQUIRED</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.4px;color:#5d7488;margin-top:4px">pendingConfirm ≠ nil · confirm_required: true</div>
+  </div>
+  <div data-screen-label="Confirm required state" style="width:392px;height:806px;background:#000;border-radius:46px;padding:11px;border:1px solid rgba(120,150,175,.18);box-shadow:0 30px 70px rgba(0,0,0,.55)">
+    <div style="position:relative;width:100%;height:100%;border-radius:36px;overflow:hidden;background:radial-gradient(120% 70% at 50% -8%, #0c2730 0%, #070d15 52%, #04070c 100%)">
+      <div style="position:absolute;inset:0;background-image:linear-gradient(rgba(84,230,240,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(84,230,240,.045) 1px,transparent 1px);background-size:26px 26px;opacity:var(--grid-op);pointer-events:none"></div>
+      <div style="position:absolute;top:11px;left:50%;transform:translateX(-50%);width:114px;height:32px;background:#000;border-radius:18px;z-index:6"></div>
+      <div style="position:absolute;top:0;left:0;right:0;height:50px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;z-index:5"><div style="font-family:'Chakra Petch',sans-serif;font-size:15px;color:#cfe1ea;letter-spacing:.5px;font-weight:600">9:41</div><div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#7c93a6;letter-spacing:1.4px">5G&nbsp;&nbsp;▮▮▮▮</div></div>
+      <div style="position:absolute;top:50px;left:0;right:0;bottom:0;padding:8px 20px 20px">
+        <div style="display:flex;align-items:center;gap:13px;padding:10px 2px 16px"><div style="width:36px;height:36px;border-radius:50%;border:1px solid color-mix(in srgb,var(--accent) 18%,transparent);display:flex;align-items:center;justify-content:center;color:#5d7488;font-size:18px;line-height:0;padding-bottom:3px;flex:none">‹</div><div><div style="font-family:'Chakra Petch',sans-serif;font-size:22px;font-weight:700;letter-spacing:3px;color:#eaf6f8">MODELS</div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:2.2px;color:#5d7488;margin-top:3px">INFERENCE</div></div></div>
+        <div style="display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:11px;background:rgba(8,18,26,.5);border:1px solid color-mix(in srgb,var(--accent) 14%,transparent);margin-bottom:13px"><div style="width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px var(--accent);flex:none"></div><div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:1.4px;color:#9fb3c2;flex:1">SHIM · ojamd:8642 · v1.9.2</div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.4px;color:var(--accent)">DIRECT</div></div>
+        <div style="padding:13px 15px;border-radius:13px;background:color-mix(in srgb,var(--accent) 7%,rgba(8,18,26,.55));border:1px solid color-mix(in srgb,var(--accent) 26%,transparent);margin-bottom:14px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px"><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:2.2px;color:#5d7488">ACTIVE MODEL</div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.4px;color:var(--accent);display:flex;align-items:center;gap:5px"><span style="width:5px;height:5px;border-radius:50%;background:var(--accent);box-shadow:0 0 5px var(--accent)"></span>ONLINE</div></div><div style="font-family:'Chakra Petch',sans-serif;font-size:18px;font-weight:700;letter-spacing:1.2px;color:#eaf6f8">CLAUDE OPUS 4.6</div></div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:2.4px;color:#5d7488;margin:0 0 9px 4px">// AVAILABLE · 5</div>
+        <div style="position:relative;border-radius:13px;overflow:hidden;background:rgba(8,18,26,.5);border:1px solid color-mix(in srgb,var(--accent) 12%,transparent);min-height:300px">
+          <div style="opacity:.3">
+            <div style="display:flex;align-items:center;gap:11px;padding:12px 14px"><div style="width:7px;height:7px;border-radius:50%;background:#4d6273;flex:none"></div><div style="flex:1"><div style="font-family:'Space Grotesk',sans-serif;font-size:14px;color:#e8eef5">Claude Opus 4.6</div></div></div>
+            <div style="display:flex;align-items:center;gap:11px;padding:12px 14px"><div style="width:7px;height:7px;border-radius:50%;background:#4d6273;flex:none"></div><div style="flex:1"><div style="font-family:'Space Grotesk',sans-serif;font-size:14px;color:#e8eef5">Claude Sonnet 4.6</div></div></div>
+            <div style="display:flex;align-items:center;gap:11px;padding:12px 14px"><div style="width:7px;height:7px;border-radius:50%;background:#4d6273;flex:none"></div><div style="flex:1"><div style="font-family:'Space Grotesk',sans-serif;font-size:14px;color:#e8eef5">GPT-5.5</div></div></div>
+          </div>
+          <div style="position:absolute;inset:0;background:rgba(5,9,14,.86);display:flex;align-items:center;justify-content:center;padding:16px">
+            <div style="width:100%;max-width:262px;padding:21px 18px;border-radius:16px;background:linear-gradient(180deg,#12161c,#0a0e13);border:1px solid rgba(255,193,77,.4);box-shadow:0 22px 50px rgba(0,0,0,.6);text-align:center;animation:tal-rise .3s ease both">
+              <div style="position:relative;width:48px;height:48px;margin:0 auto 14px"><div style="position:absolute;inset:0;border:1.5px solid rgba(255,193,77,.3);transform:rotate(45deg);border-radius:6px"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#ffc14d;font-family:'Chakra Petch',sans-serif;font-size:22px;font-weight:700">!</div></div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:2.6px;color:#ffc14d">PREMIUM MODEL · CONFIRM</div>
+              <div style="font-family:'Chakra Petch',sans-serif;font-size:18px;font-weight:700;letter-spacing:1px;color:#ffe2a6;margin-top:8px">CLAUDE OPUS 4.6</div>
+              <div style="font-family:'Space Grotesk',sans-serif;font-size:12.5px;line-height:1.6;color:#a9bccb;margin-top:11px">This model uses metered API credits and may incur cost on every request. Activate it anyway?</div>
+              <div style="display:inline-flex;align-items:center;gap:6px;margin-top:14px;padding:6px 11px;border-radius:8px;background:rgba(255,193,77,.08);border:1px solid rgba(255,193,77,.28)"><span style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1px;color:#ffe2a6">~$15 / 1M TOKENS · METERED</span></div>
+              <div style="display:flex;gap:9px;margin-top:18px">
+                <div style="flex:1;text-align:center;padding:12px;border-radius:11px;font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:500;color:#cfe1ea;background:rgba(120,150,175,.1);border:1px solid rgba(120,150,175,.24)">Cancel</div>
+                <div style="flex:1;text-align:center;padding:12px;border-radius:11px;font-family:'Chakra Petch',sans-serif;font-size:13px;font-weight:600;letter-spacing:1px;color:#04070c;background:#ffc14d;box-shadow:0 0 18px rgba(255,193,77,.35)">ACTIVATE</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="text-align:center;font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:2px;color:#4d6273;margin-top:13px">AWAITS USER · NO AUTO-DISMISS</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= STATIC: SUCCESS ================= -->
+<div style="position:absolute;left:2000px;top:110px;width:392px">
+  <div data-drags-parent="1" style="margin:0 0 14px 4px">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:2px;color:#cfe1ea">04 · CONFIRMED</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.4px;color:#5d7488;margin-top:4px">apply() resolves · checkmark · dismiss 600ms</div>
+  </div>
+  <div data-screen-label="Success state" style="width:392px;height:806px;background:#000;border-radius:46px;padding:11px;border:1px solid rgba(120,150,175,.18);box-shadow:0 30px 70px rgba(0,0,0,.55)">
+    <div style="position:relative;width:100%;height:100%;border-radius:36px;overflow:hidden;background:radial-gradient(120% 70% at 50% -8%, #0c2730 0%, #070d15 52%, #04070c 100%)">
+      <div style="position:absolute;inset:0;background-image:linear-gradient(rgba(84,230,240,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(84,230,240,.045) 1px,transparent 1px);background-size:26px 26px;opacity:var(--grid-op);pointer-events:none"></div>
+      <div style="position:absolute;top:11px;left:50%;transform:translateX(-50%);width:114px;height:32px;background:#000;border-radius:18px;z-index:6"></div>
+      <div style="position:absolute;top:0;left:0;right:0;height:50px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;z-index:5"><div style="font-family:'Chakra Petch',sans-serif;font-size:15px;color:#cfe1ea;letter-spacing:.5px;font-weight:600">9:41</div><div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#7c93a6;letter-spacing:1.4px">5G&nbsp;&nbsp;▮▮▮▮</div></div>
+      <div style="position:absolute;top:50px;left:0;right:0;bottom:0;padding:8px 20px 20px">
+        <div style="display:flex;align-items:center;gap:13px;padding:10px 2px 16px"><div style="width:36px;height:36px;border-radius:50%;border:1px solid color-mix(in srgb,var(--accent) 26%,transparent);display:flex;align-items:center;justify-content:center;color:var(--accent-bright);font-size:18px;line-height:0;padding-bottom:3px;background:color-mix(in srgb,var(--accent) 6%,transparent);flex:none">‹</div><div><div style="font-family:'Chakra Petch',sans-serif;font-size:22px;font-weight:700;letter-spacing:3px;color:#eaf6f8">MODELS</div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:2.2px;color:#5d7488;margin-top:3px">INFERENCE</div></div></div>
+        <div style="display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:11px;background:rgba(8,18,26,.5);border:1px solid color-mix(in srgb,var(--accent) 14%,transparent);margin-bottom:13px"><div style="width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px var(--accent);flex:none"></div><div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:1.4px;color:#9fb3c2;flex:1">SHIM · ojamd:8642 · v1.9.2</div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.4px;color:var(--accent)">DIRECT</div></div>
+        <div style="padding:13px 15px;border-radius:13px;background:color-mix(in srgb,var(--accent) 9%,rgba(8,18,26,.55));border:1px solid color-mix(in srgb,var(--accent) 40%,transparent);margin-bottom:14px;box-shadow:0 0 calc(20px*var(--glow)) color-mix(in srgb,var(--accent) calc(14%*var(--glow)),transparent)"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px"><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:2.2px;color:#5d7488">ACTIVE MODEL</div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.4px;color:var(--accent);display:flex;align-items:center;gap:5px"><span style="width:5px;height:5px;border-radius:50%;background:var(--accent);box-shadow:0 0 5px var(--accent)"></span>UPDATED</div></div><div style="font-family:'Chakra Petch',sans-serif;font-size:18px;font-weight:700;letter-spacing:1.2px;color:#eaf6f8">CLAUDE SONNET 4.6</div></div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:2.4px;color:#5d7488;margin:0 0 9px 4px">// AVAILABLE · 5</div>
+        <div style="position:relative;border-radius:13px;overflow:hidden;background:rgba(8,18,26,.5);border:1px solid color-mix(in srgb,var(--accent) 12%,transparent);min-height:300px">
+          <div style="opacity:.3">
+            <div style="display:flex;align-items:center;gap:11px;padding:12px 14px"><div style="width:7px;height:7px;border-radius:50%;background:#4d6273;flex:none"></div><div style="flex:1"><div style="font-family:'Space Grotesk',sans-serif;font-size:14px;color:#e8eef5">Claude Opus 4.6</div></div></div>
+            <div style="display:flex;align-items:center;gap:11px;padding:12px 14px"><div style="width:7px;height:7px;border-radius:50%;background:#4d6273;flex:none"></div><div style="flex:1"><div style="font-family:'Space Grotesk',sans-serif;font-size:14px;color:#e8eef5">Claude Sonnet 4.6</div></div></div>
+            <div style="display:flex;align-items:center;gap:11px;padding:12px 14px"><div style="width:7px;height:7px;border-radius:50%;background:#4d6273;flex:none"></div><div style="flex:1"><div style="font-family:'Space Grotesk',sans-serif;font-size:14px;color:#e8eef5">GPT-5.5</div></div></div>
+          </div>
+          <div style="position:absolute;inset:0;background:rgba(5,12,12,.9);overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:18px;text-align:center">
+            <div style="position:relative;width:80px;height:80px">
+              <div style="position:absolute;inset:-6px;border-radius:50%;border:1.5px solid var(--accent);animation:tal-flare 1.4s ease-out infinite"></div>
+              <div style="position:absolute;inset:0;border-radius:50%;border:1.5px solid color-mix(in srgb,var(--accent) 55%,transparent)"></div>
+              <div style="position:absolute;inset:8px;border-radius:50%;border:1.5px solid color-mix(in srgb,var(--accent) 30%,transparent)"></div>
+              <div style="position:absolute;inset:24px;border-radius:50%;background:radial-gradient(circle at 50% 40%,var(--accent-bright),var(--accent) 55%,var(--accent-deep));box-shadow:0 0 calc(22px*var(--glow)) color-mix(in srgb,var(--accent) 80%,transparent)"></div>
+              <svg width="36" height="36" viewBox="0 0 36 36" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:2"><path d="M10 18.5 L16 24.5 L27 12" fill="none" stroke="#04070c" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="42" stroke-dashoffset="42" style="animation:tal-draw .45s ease-out .15s forwards"></path></svg>
+            </div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:3px;color:var(--accent);margin-top:18px">MODEL ACTIVATED</div>
+            <div style="font-family:'Chakra Petch',sans-serif;font-size:19px;font-weight:700;letter-spacing:1.2px;color:#eaf6f8;margin-top:7px">CLAUDE SONNET 4.6</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:1.6px;color:#9fb3c2;margin-top:9px">NOW ACTIVE · APPLIES TO NEXT TURN</div>
+            <div style="display:flex;gap:7px;margin-top:14px"><span style="font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:1.2px;color:#7c93a6;padding:4px 9px;border-radius:6px;background:rgba(120,150,175,.08);border:1px solid rgba(120,150,175,.18)">ANTHROPIC</span><span style="font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:1.2px;color:#7c93a6;padding:4px 9px;border-radius:6px;background:rgba(120,150,175,.08);border:1px solid rgba(120,150,175,.18)">200K</span><span style="font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:1.2px;color:#7c93a6;padding:4px 9px;border-radius:6px;background:rgba(120,150,175,.08);border:1px solid rgba(120,150,175,.18)">VISION</span></div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:2px;color:#5d7488;margin-top:16px">OVERLAY DISMISSES · 600MS</div>
+          </div>
+        </div>
+        <div style="text-align:center;font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:2px;color:#4d6273;margin-top:13px">SHIM RESPONSE OK · ACTIVE CARD UPDATED</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= STATIC: ERROR ================= -->
+<div style="position:absolute;left:2500px;top:110px;width:392px">
+  <div data-drags-parent="1" style="margin:0 0 14px 4px">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:2px;color:#ff8a86">05 · ERROR</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.4px;color:#5d7488;margin-top:4px">error ≠ nil · model unchanged</div>
+  </div>
+  <div data-screen-label="Error state" style="width:392px;height:806px;background:#000;border-radius:46px;padding:11px;border:1px solid rgba(120,150,175,.18);box-shadow:0 30px 70px rgba(0,0,0,.55)">
+    <div style="position:relative;width:100%;height:100%;border-radius:36px;overflow:hidden;background:radial-gradient(120% 70% at 50% -8%, #211010 0%, #0e0808 52%, #06070c 100%)">
+      <div style="position:absolute;inset:0;background-image:linear-gradient(rgba(224,98,95,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(224,98,95,.045) 1px,transparent 1px);background-size:26px 26px;opacity:var(--grid-op);pointer-events:none"></div>
+      <div style="position:absolute;top:11px;left:50%;transform:translateX(-50%);width:114px;height:32px;background:#000;border-radius:18px;z-index:6"></div>
+      <div style="position:absolute;top:0;left:0;right:0;height:50px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;z-index:5"><div style="font-family:'Chakra Petch',sans-serif;font-size:15px;color:#cfe1ea;letter-spacing:.5px;font-weight:600">9:41</div><div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#ff8a86;letter-spacing:1.4px">⚠ ERR</div></div>
+      <div style="position:absolute;top:50px;left:0;right:0;bottom:0;padding:8px 20px 20px">
+        <div style="display:flex;align-items:center;gap:13px;padding:10px 2px 16px"><div style="width:36px;height:36px;border-radius:50%;border:1px solid rgba(224,98,95,.26);display:flex;align-items:center;justify-content:center;color:#ffb3b0;font-size:18px;line-height:0;padding-bottom:3px;background:rgba(224,98,95,.06);flex:none">‹</div><div><div style="font-family:'Chakra Petch',sans-serif;font-size:22px;font-weight:700;letter-spacing:3px;color:#eaf6f8">MODELS</div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:2.2px;color:#5d7488;margin-top:3px">INFERENCE</div></div></div>
+        <div style="display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:11px;background:rgba(26,12,12,.5);border:1px solid rgba(224,98,95,.18);margin-bottom:13px"><div style="width:6px;height:6px;border-radius:50%;background:#e0625f;box-shadow:0 0 6px #e0625f;flex:none"></div><div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:1.4px;color:#c8a6a4;flex:1">SHIM · ojamd:8642 · v1.9.2</div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.4px;color:#ff8a86">TIMEOUT</div></div>
+        <div style="padding:13px 15px;border-radius:13px;background:rgba(26,12,12,.55);border:1px solid rgba(224,98,95,.2);margin-bottom:14px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px"><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:2.2px;color:#7c6b6b">ACTIVE MODEL</div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.4px;color:#9fb3c2;display:flex;align-items:center;gap:5px">UNCHANGED</div></div><div style="font-family:'Chakra Petch',sans-serif;font-size:18px;font-weight:700;letter-spacing:1.2px;color:#cfe1ea">CLAUDE OPUS 4.6</div></div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:2.4px;color:#7c6b6b;margin:0 0 9px 4px">// AVAILABLE · 5</div>
+        <div style="position:relative;border-radius:13px;overflow:hidden;background:rgba(26,12,12,.4);border:1px solid rgba(224,98,95,.14);min-height:300px">
+          <div style="opacity:.3">
+            <div style="display:flex;align-items:center;gap:11px;padding:12px 14px"><div style="width:7px;height:7px;border-radius:50%;background:#5d4d4d;flex:none"></div><div style="flex:1"><div style="font-family:'Space Grotesk',sans-serif;font-size:14px;color:#e8eef5">Claude Opus 4.6</div></div></div>
+            <div style="display:flex;align-items:center;gap:11px;padding:12px 14px"><div style="width:7px;height:7px;border-radius:50%;background:#5d4d4d;flex:none"></div><div style="flex:1"><div style="font-family:'Space Grotesk',sans-serif;font-size:14px;color:#e8eef5">GPT-5.5</div></div></div>
+            <div style="display:flex;align-items:center;gap:11px;padding:12px 14px"><div style="width:7px;height:7px;border-radius:50%;background:#5d4d4d;flex:none"></div><div style="flex:1"><div style="font-family:'Space Grotesk',sans-serif;font-size:14px;color:#e8eef5">Llama 4 70B</div></div></div>
+          </div>
+          <div style="position:absolute;inset:0;background:rgba(14,7,7,.9);overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:18px;text-align:center">
+            <div style="position:relative;width:74px;height:74px">
+              <div style="position:absolute;inset:0;border-radius:50%;border:1.5px dashed rgba(224,98,95,.4);animation:tal-spin 14s linear infinite"></div>
+              <div style="position:absolute;inset:9px;border-radius:50%;border:1.5px solid rgba(224,98,95,.45)"></div>
+              <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#ff8a86;font-size:26px;font-weight:300;animation:tal-blink 1.8s ease-in-out infinite">✕</div>
+            </div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:3px;color:#ff8a86;margin-top:18px">ACTIVATION FAILED</div>
+            <div style="font-family:'Chakra Petch',sans-serif;font-size:19px;font-weight:700;letter-spacing:1.2px;color:#eaf6f8;margin-top:7px">GPT-5.5</div>
+            <div style="font-family:'Space Grotesk',sans-serif;font-size:12.5px;line-height:1.6;color:#c8a6a4;margin-top:10px;max-width:228px">Host timed out after 5s. Active model unchanged.</div>
+            <div style="display:inline-flex;align-items:center;gap:6px;margin-top:13px;padding:5px 10px;border-radius:7px;background:rgba(224,98,95,.08);border:1px solid rgba(224,98,95,.3)"><span style="font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:1.2px;color:#ff8a86">ERR · SHIM_TIMEOUT</span></div>
+            <div style="display:flex;gap:9px;margin-top:18px;width:100%;max-width:236px">
+              <div style="flex:1;text-align:center;padding:12px;border-radius:11px;font-family:'Chakra Petch',sans-serif;font-size:13px;font-weight:600;letter-spacing:1px;color:#1a0808;background:#ff8a86;box-shadow:0 0 18px rgba(224,98,95,.35)">RETRY</div>
+              <div style="flex:1;text-align:center;padding:12px;border-radius:11px;font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:500;color:#ffb3b0;background:rgba(224,98,95,.08);border:1px solid rgba(224,98,95,.3)">Dismiss</div>
+            </div>
+          </div>
+        </div>
+        <div style="text-align:center;font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:2px;color:#6b5656;margin-top:13px">RECOVERABLE · NO STATE MUTATION</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= SPEC STRIP ================= -->
+<div style="position:absolute;left:0px;top:1010px;width:1492px">
+  <div data-drags-parent="1" style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:2px;color:#cfe1ea;margin:0 0 14px 4px">CHOREOGRAPHY · STATE MACHINE</div>
+  <div style="background:linear-gradient(180deg,#0a0f15,#070b10);border:1px solid color-mix(in srgb,var(--accent) 16%,transparent);border-radius:18px;padding:32px 34px">
+
+    <div style="display:flex;align-items:stretch;gap:0;margin-bottom:30px">
+      <div style="flex:1;text-align:center"><div style="font-family:'Chakra Petch',sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;color:#eaf6f8">TAP</div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--accent);margin-top:5px">0ms</div><div style="font-family:'Space Grotesk',sans-serif;font-size:11.5px;color:#7c93a6;margin-top:6px">row press → apply()</div></div>
+      <div style="width:46px;display:flex;align-items:center;justify-content:center;color:color-mix(in srgb,var(--accent) 55%,transparent);font-size:15px;padding-top:6px">→</div>
+      <div style="flex:1;text-align:center"><div style="font-family:'Chakra Petch',sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;color:#eaf6f8">ENGAGE</div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--accent);margin-top:5px">0–300ms</div><div style="font-family:'Space Grotesk',sans-serif;font-size:11.5px;color:#7c93a6;margin-top:6px">overlay in · rings spin-up</div></div>
+      <div style="width:46px;display:flex;align-items:center;justify-content:center;color:color-mix(in srgb,var(--accent) 55%,transparent);font-size:15px;padding-top:6px">→</div>
+      <div style="flex:1.3;text-align:center;border-radius:12px;background:color-mix(in srgb,var(--accent) 6%,transparent);border:1px solid color-mix(in srgb,var(--accent) 22%,transparent);padding:4px 8px"><div style="font-family:'Chakra Petch',sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;color:var(--accent-bright)">HOLD</div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--accent);margin-top:5px">1–5s · INDETERMINATE</div><div style="font-family:'Space Grotesk',sans-serif;font-size:11.5px;color:#9fb3c2;margin-top:6px">telemetry · awaiting shim</div></div>
+      <div style="width:46px;display:flex;align-items:center;justify-content:center;color:color-mix(in srgb,var(--accent) 55%,transparent);font-size:15px;padding-top:6px">→</div>
+      <div style="flex:1;text-align:center"><div style="font-family:'Chakra Petch',sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;color:#eaf6f8">RESOLVE</div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--accent);margin-top:5px">300ms</div><div style="font-family:'Space Grotesk',sans-serif;font-size:11.5px;color:#7c93a6;margin-top:6px">branch on response</div></div>
+      <div style="width:46px;display:flex;align-items:center;justify-content:center;color:color-mix(in srgb,var(--accent) 55%,transparent);font-size:15px;padding-top:6px">→</div>
+      <div style="flex:1;text-align:center"><div style="font-family:'Chakra Petch',sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;color:#eaf6f8">DISMISS</div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--accent);margin-top:5px">+600ms</div><div style="font-family:'Space Grotesk',sans-serif;font-size:11.5px;color:#7c93a6;margin-top:6px">overlay out</div></div>
+    </div>
+
+    <div style="height:1px;background:color-mix(in srgb,var(--accent) 12%,transparent);margin-bottom:24px"></div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;margin-bottom:26px">
+      <div style="border-radius:12px;border:1px solid color-mix(in srgb,var(--accent) 26%,transparent);background:color-mix(in srgb,var(--accent) 5%,transparent);padding:16px 17px"><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.6px;color:var(--accent)">✓ SUCCESS</div><div style="font-family:'Space Grotesk',sans-serif;font-size:12.5px;line-height:1.55;color:#9fb3c2;margin-top:9px">Core flares, checkmark draws, active card flips to the new model, overlay auto-dismisses.</div></div>
+      <div style="border-radius:12px;border:1px solid rgba(255,193,77,.3);background:rgba(255,193,77,.05);padding:16px 17px"><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.6px;color:#ffc14d">⚠ CONFIRM_REQUIRED</div><div style="font-family:'Space Grotesk',sans-serif;font-size:12.5px;line-height:1.55;color:#a9bccb;margin-top:9px">HOLD yields to the expensive-model guard dialog. No auto-dismiss — awaits Cancel / Activate.</div></div>
+      <div style="border-radius:12px;border:1px solid rgba(224,98,95,.3);background:rgba(224,98,95,.05);padding:16px 17px"><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.6px;color:#ff8a86">✕ ERROR</div><div style="font-family:'Space Grotesk',sans-serif;font-size:12.5px;line-height:1.55;color:#c8a6a4;margin-top:9px">Red state surfaces the message and Retry. Active model is never mutated on failure.</div></div>
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:10px 26px">
+      <div style="display:flex;align-items:center;gap:9px"><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--accent);letter-spacing:.5px">applyingModelID ≠ nil</span><span style="color:#4d6273">→</span><span style="font-family:'Space Grotesk',sans-serif;font-size:12px;color:#9fb3c2">overlay visible (ENGAGE + HOLD)</span></div>
+      <div style="display:flex;align-items:center;gap:9px"><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#ffc14d;letter-spacing:.5px">pendingConfirm ≠ nil</span><span style="color:#4d6273">→</span><span style="font-family:'Space Grotesk',sans-serif;font-size:12px;color:#9fb3c2">guard dialog</span></div>
+      <div style="display:flex;align-items:center;gap:9px"><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#ff8a86;letter-spacing:.5px">error ≠ nil</span><span style="color:#4d6273">→</span><span style="font-family:'Space Grotesk',sans-serif;font-size:12px;color:#9fb3c2">error overlay</span></div>
+      <div style="display:flex;align-items:center;gap:9px"><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#5d7488;letter-spacing:.5px">all nil</span><span style="color:#4d6273">→</span><span style="font-family:'Space Grotesk',sans-serif;font-size:12px;color:#9fb3c2">idle list · overlay covers list area only</span></div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:3000,&quot;height&quot;:1620},&quot;accent&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;cyan&quot;,&quot;amber&quot;,&quot;violet&quot;],&quot;default&quot;:&quot;cyan&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;glow&quot;:{&quot;editor&quot;:&quot;float&quot;,&quot;default&quot;:1,&quot;min&quot;:0,&quot;max&quot;:1.6,&quot;step&quot;:0.1,&quot;tsType&quot;:&quot;number&quot;},&quot;gridOverlay&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  state = { phase: 'idle' };
+  componentDidMount() { this._dead = false; this.applyVars(); this.run(); }
+  componentDidUpdate() { this.applyVars(); }
+  componentWillUnmount() { this._dead = true; clearTimeout(this._t); }
+  applyVars() {
+    const accents = {
+      cyan: ['#54e6f0', '#cdf8fb', '#14636e'],
+      amber: ['#ffc14d', '#ffe2a6', '#6e4d14'],
+      violet: ['#b18cff', '#e2d4ff', '#3a2d6e']
+    };
+    const a = accents[this.props.accent] || accents.cyan;
+    const r = document.documentElement.style;
+    r.setProperty('--accent', a[0]);
+    r.setProperty('--accent-bright', a[1]);
+    r.setProperty('--accent-deep', a[2]);
+    r.setProperty('--glow', String(this.props.glow ?? 1));
+    r.setProperty('--grid-op', String((this.props.gridOverlay ?? true) ? 1 : 0));
+  }
+  run() {
+    const steps = [['idle', 1000], ['activating', 2600], ['success', 1700]];
+    let i = 0;
+    const tick = () => {
+      if (this._dead) return;
+      const [p, d] = steps[i % steps.length];
+      this.setState({ phase: p });
+      i++;
+      this._t = setTimeout(tick, d);
+    };
+    tick();
+  }
+  renderVals() {
+    const accents = {
+      cyan: ['#54e6f0', '#cdf8fb', '#14636e'],
+      amber: ['#ffc14d', '#ffe2a6', '#6e4d14'],
+      violet: ['#b18cff', '#e2d4ff', '#3a2d6e']
+    };
+    const a = accents[this.props.accent] || accents.cyan;
+    const glow = this.props.glow ?? 1;
+    const grid = (this.props.gridOverlay ?? true) ? 1 : 0;
+    const rootStyle = `--accent:${a[0]};--accent-bright:${a[1]};--accent-deep:${a[2]};--glow:${glow};--grid-op:${grid}`;
+    const phase = this.state.phase;
+    const caption = phase === 'activating' ? 'APPLYING · AWAITING SHIM'
+      : phase === 'success' ? 'RESOLVED · MODEL ACTIVE'
+      : 'IDLE · TAP A MODEL TO SWITCH';
+    return {
+      rootStyle,
+      liveActivating: phase === 'activating',
+      liveSuccess: phase === 'success',
+      liveActiveName: phase === 'success' ? 'CLAUDE SONNET 4.6' : 'CLAUDE OPUS 4.6',
+      liveCaption: caption
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -41,6 +41,35 @@ def _load_token():
     return t
 
 TOKEN = _load_token()
+
+def _load_api_server_key():
+    """Load the Hermes API server key as an alternate auth token.
+
+    This lets the Talaria app authenticate with the shim using the SAME
+    bearer token it already stores for the Hermes Sessions API — no
+    second token needed. Checked in order:
+      1. API_SERVER_KEY environment variable
+      2. Hermes config.yaml → api_server → key
+    """
+    key = os.environ.get("API_SERVER_KEY", "").strip()
+    if key:
+        return key
+    try:
+        import yaml
+        cfg_path = os.path.expanduser("~/.hermes/config.yaml")
+        if os.path.exists(cfg_path):
+            with open(cfg_path) as f:
+                cfg = yaml.safe_load(f) or {}
+            # Hermes stores the key at api_server.key in config.yaml
+            api_server = cfg.get("api_server") or {}
+            key = (api_server.get("key") or "").strip()
+            if key:
+                return key
+    except Exception:
+        pass
+    return None
+
+API_SERVER_KEY = _load_api_server_key()
 _lock = threading.Lock()
 _cache = {"payload": None, "compiled_at": 0.0}
 
@@ -90,7 +119,12 @@ def _set_default(provider, model, confirm_expensive):
 class H(BaseHTTPRequestHandler):
     server_version = "TalariaModelsShim/1.0"
     def _authed(self):
-        return self.headers.get("Authorization", "") == f"Bearer {TOKEN}"
+        auth = self.headers.get("Authorization", "")
+        if auth == f"Bearer {TOKEN}":
+            return True
+        if API_SERVER_KEY and auth == f"Bearer {API_SERVER_KEY}":
+            return True
+        return False
     def _send(self, code, obj):
         body = json.dumps(obj).encode()
         self.send_response(code)
