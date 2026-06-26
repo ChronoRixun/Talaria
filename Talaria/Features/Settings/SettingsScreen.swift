@@ -39,6 +39,7 @@ struct SettingsScreen: View {
                     tempSessionsLink
                     tempDiagnosticsLink
                     tempAppearanceLink
+                    tempSystemLink
                     hermesAPISection
                     modelsSection
                     relaySection
@@ -409,6 +410,32 @@ struct SettingsScreen: View {
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Design.Brand.accent)
                     Text("Open APPEARANCE")
+                        .font(Design.Typography.body(15, weight: .medium))
+                        .foregroundStyle(Design.Colors.foreground)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Design.Colors.mutedForeground)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    // MARK: - TEMP (T3) — reach the new SYSTEM index for device testing.
+    // Remove once this index replaces SettingsScreen as the Settings root.
+
+    private var tempSystemLink: some View {
+        SettingsSectionView(title: "System Index (T3 preview)") {
+            NavigationLink {
+                SystemSettingsScreen()
+            } label: {
+                HStack(spacing: Design.Spacing.sm) {
+                    Image(systemName: "square.grid.2x2")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Design.Brand.accent)
+                    Text("Open SYSTEM INDEX")
                         .font(Design.Typography.body(15, weight: .medium))
                         .foregroundStyle(Design.Colors.foreground)
                     Spacer()
