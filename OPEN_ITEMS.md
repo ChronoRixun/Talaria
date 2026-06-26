@@ -95,6 +95,32 @@ Needs the Claude Design deliverable: the 8-screen **`Settings.dc.html`** (from
 **Unblocked (2026-06-25):** `design/Settings.dc.html` + `design/support.js` placed in repo
 (byte-perfect copy from the Claude Design canvas export in Downloads). Ready to build.
 
+**Built (2026-06-26):** SettingsScreenHeader (shared) + UPLINK (02), SESSIONS (07),
+DIAGNOSTICS (08), APPEARANCE (06, +4 persisted `UserSettings` fields), and the SYSTEM
+index (01). VOICE (05) cut. All build clean on simulator; reachable on-device via temporary
+"(T3 preview)" links in `SettingsScreen`. Landed to `main` (merge `a69e5bf`); big-work
+branch `feat/settings-index-swap` cut for the rest.
+
+**Remaining T3 work (on `feat/settings-index-swap`):**
+1. Build the 4 Claude-Design "additional pages" — RELAY (09), NOTIFICATIONS (10),
+   PRIVACY (11), DEVELOPER (12, DEBUG-only) — from `design/Settings-Additional.dc.html`,
+   homing the sections the index doesn't cover (relay config, auto-connect, notifications/
+   haptics, location, permissions, environment) so nothing is orphaned.
+2. Wire each new page as a row into its SYSTEM-index group.
+3. The swap: point `ContentView`'s settings sheet at `SystemSettingsScreen` and delete
+   the five temp preview links from `SettingsScreen`.
+
+**Build-truthfulness rule (Owen, 2026-06-26):** anything Claude Design mocked that isn't
+what the app actually does must be adjusted to the truth — real data only, `—` where a
+value is unknowable. Adjustments already identified:
+- **Health** permission row can't show a real read-auth status (iOS hides HealthKit read
+  grants) → `—` / share-only state, not WHILE-USING-style values.
+- **Developer `// BUILD` commit hash** isn't available at runtime → needs a build-time
+  Info.plist injection (Run Script → e.g. `GIT_COMMIT`) or `—`. Version/build are real.
+- Map all placeholders to real state: per-permission vocab (Notifications is authorized/
+  denied/provisional, not "ALWAYS"), Developer env host labels, the Notifications hero
+  summary (derive from real toggle states), relay/device readouts.
+
 ---
 
 ## 3. 📝 xcodegen needed when adding/removing source files
@@ -476,6 +502,10 @@ queries; for Location, stopping monitoring and resetting the sync preference; fo
 Notifications, deregistering from the relay. Some permissions (Camera, Photos) can only be
 toggled in iOS Settings — for those, surface a "Manage in Settings" deep-link.
 
+**Designed (2026-06-26):** the PRIVACY (11) page in `design/Settings-Additional.dc.html`
+provides this — per-permission `MANAGE ›` deep-links + a "Revoke / Reset Permissions"
+action. To be built on `feat/settings-index-swap` (see #2).
+
 Logged 2026-06-25.
 
 ---
@@ -531,6 +561,28 @@ This needs to be:
 
 Logged 2026-06-25.
 
+### 24f. Relay JWT signing secret + device registry not persisted across restarts
+
+**Root cause of the launch-splash lockout (2026-06-26).** When Hermes/the relay restarts it
+regenerates its JWT signing secret and loses the in-memory device registry, so every
+previously-paired device's tokens are invalidated → relay returns 401 to bootstrap
+(`registerDevice` / `/session` / refresh) and the phone is forced to re-pair. The app-side
+hard-abort that turned this into a permanent splash hang is fixed (soft fall-through, commit
+`114caf2`), but the **server-side gap remains**: persist the relay's JWT signing secret and
+device registry to disk so restarts don't brick paired devices. Until fixed, every Hermes
+restart forces a re-pair.
+
+### 24g. Shim API-key fallback can't locate the Hermes key on Windows
+
+The shim accepts *either* its dedicated token *or* the Hermes `API_SERVER_KEY` (the app's
+zero-token fallback, #14). But on OJAMD the shim never loads that key: `API_SERVER_KEY` env is
+unset and the shim looks for `~/.hermes/config.yaml` (doesn't exist on Windows), while the real
+key lives in `%LOCALAPPDATA%\hermes\.env`. So after any re-pair/reinstall (empty Keychain shim
+token) the app's key-fallback **401s** against the shim. Fix: have `run-shim.cmd` read
+`API_SERVER_KEY` from `%LOCALAPPDATA%\hermes\.env` and export it before launching python
+(OJAMD-local, no shim.py/repo divergence). Also harden the Task Scheduler trigger (24c) — it's
+logon-only and a console teardown took the shim down (2026-06-26).
+
 ---
 
 ## 25. 🐛 CTX meter always shows 0% — SSE usage not parsed
@@ -559,3 +611,15 @@ purely cosmetic and non-interactive — tapping them did nothing. Removed from
 `ChatInputBar.swift` (31 lines deleted).
 
 Fixed 2026-06-25.
+
+## 27. 📝 Developer screen flags — keep Verbose Logging, drop Mock Responses
+
+From the Claude Design DEVELOPER (12) mockup `// FLAGS` panel. Decision (Owen, 2026-06-26):
+
+- **Mock Responses:** **dropped** — no real backing, not building it.
+- **Verbose Logging:** **keep**, but only as a real control — wire the toggle to an actual
+  os_log level change (raise diagnostic-log visibility, e.g. `.info`→`.notice`/`.debug`, or
+  gate the verbose `privacy:.public` diagnostics). Persist as a DEBUG-scoped `UserSettings`
+  flag. Until wired, omit it rather than ship a dead toggle.
+
+Logged 2026-06-26.
