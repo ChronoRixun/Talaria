@@ -98,6 +98,7 @@
 		7D814964FE1AEA78D1EF2B5A /* DiagnosticsSettingsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51B5AE9C0BA3949E810C4FCE /* DiagnosticsSettingsScreen.swift */; };
 		815EE6171D00F62DD34EB321 /* HostEnrollmentCode.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3023E1DA6E802BB58BCA27C /* HostEnrollmentCode.swift */; };
 		82996206D5432D0F8A7A0F68 /* TalkStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8E28CB0E81CDA7297E66811 /* TalkStore.swift */; };
+		829EEABD606FCC1440D52798 /* ModelTransitionOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F2351D78A8E43CA90F5A982 /* ModelTransitionOverlay.swift */; };
 		833F59688DD58FD56BEF8802 /* HermesLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37C4631361E43482328C012F /* HermesLiveActivity.swift */; };
 		835FE1F3B6871E5A4015A5CC /* CarPlayVoiceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4D347133A2D2AA45285B7CD /* CarPlayVoiceManager.swift */; };
 		83948A16EB6570E79ABAF4B8 /* ResilientInboxService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BDDA71028647F44DB298B61 /* ResilientInboxService.swift */; };
@@ -339,6 +340,7 @@
 		9C033B79367C600767758EB0 /* LiveLocationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveLocationService.swift; sourceTree = "<group>"; };
 		9C3685099731A3903F45B2E1 /* ModelsShimClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelsShimClient.swift; sourceTree = "<group>"; };
 		9DF933619662DB426B20E614 /* InboxItemPriority.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxItemPriority.swift; sourceTree = "<group>"; };
+		9F2351D78A8E43CA90F5A982 /* ModelTransitionOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelTransitionOverlay.swift; sourceTree = "<group>"; };
 		9FF00556E91BFAF97209DC8C /* VoiceState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceState.swift; sourceTree = "<group>"; };
 		A11CBDFA2D8E88B99FE043B4 /* ReactorOrb.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReactorOrb.swift; sourceTree = "<group>"; };
 		A3A103D6FF3E893A48AE64C3 /* AppTemplateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTemplateTests.swift; sourceTree = "<group>"; };
@@ -700,6 +702,7 @@
 				D4BC51686A9E81353B562BC7 /* DeveloperSettingsScreen.swift */,
 				51B5AE9C0BA3949E810C4FCE /* DiagnosticsSettingsScreen.swift */,
 				E4397D4FA2DBFEF4C5B15923 /* ModelsSettingsScreen.swift */,
+				9F2351D78A8E43CA90F5A982 /* ModelTransitionOverlay.swift */,
 				430101FE07A1FC46A2952B6E /* NotificationsSettingsScreen.swift */,
 				B76E7696B16B5568AE4666F1 /* PrivacySettingsScreen.swift */,
 				F1AF98C43A705DB3DAC4A3CD /* RelaySettingsScreen.swift */,
@@ -1098,6 +1101,7 @@
 				9A11D07F54BD6937C3109961 /* MockSyncCoordinator.swift in Sources */,
 				BCC8170254358890FAE2B7F4 /* MockVoiceSessionService.swift in Sources */,
 				DAD55F32A9534B69E0F4E04A /* ModelSelector.swift in Sources */,
+				829EEABD606FCC1440D52798 /* ModelTransitionOverlay.swift in Sources */,
 				6CE9246ED97177E3B5530050 /* ModelsSettingsScreen.swift in Sources */,
 				26C073BAAC8A14B7A72900EE /* ModelsShimClient.swift in Sources */,
 				97823D8F07B7270822991959 /* NotificationServiceProtocol.swift in Sources */,

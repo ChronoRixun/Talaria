@@ -180,7 +180,7 @@ the `tailscale serve` HTTPS work. Add Shelley as the second tester when ready.
 
 ---
 
-## 9. 🐛 Model transition overlay — built, two on-device regressions (uncommitted)
+## 9. ✅ Model transition overlay — built + both regressions fixed
 
 When a model is tapped, the dual-write runs: shim `POST /models/default` **and** the
 gateway `/model` pin (the latter creates a session + sends a command turn and can be
@@ -210,6 +210,14 @@ On whoGoesThere Owen hit two bugs:
    that updates status async, and add a safety timeout so it can never lock. CONFIRM only
    shows for shim-flagged expensive models — opus 4.8 isn't flagged on this box, so no
    confirm there is expected. Status: uncommitted; fix pending before commit.
+
+**Fixed + committed 2026-06-27 — confirmed on whoGoesThere ("that works well now").**
+(1) Overlay moved to the body ZStack (**viewport-pinned**) so it no longer drifts with the
+scroll — tradeoff: the scrim now covers the full screen during a switch (header + shim
+included), accepted over the larger refactor of pulling them outside the ScrollView.
+(2) The gateway `/model` pin runs in the background (`pinSessionInBackground`) so `apply()`
+returns on the shim result; the overlay resolves promptly and rows re-enable immediately.
+(3) Added a 12s watchdog so the overlay can never visually lock.
 
 ---
 

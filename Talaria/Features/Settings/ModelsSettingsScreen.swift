@@ -26,6 +26,9 @@ final class ModelsSettingsModel {
     var applyingModelID: String?
     /// Pending expensive-model confirmation, if the shim asked for one.
     var pendingConfirm: PendingConfirm?
+    /// Last apply() target, captured so the transition overlay's Retry can re-run it.
+    private(set) var lastAppliedSlug: String?
+    private(set) var lastAppliedModel: String?
 
     /// Optimistic active pointer set right after a successful set-default. The shim
     /// caches its GET payload for an hour and does NOT bust the cache on set, so a
@@ -89,6 +92,8 @@ final class ModelsSettingsModel {
     func apply(providerSlug: String, modelID: String, confirmExpensive: Bool = false) async {
         guard applyingModelID == nil else { return }
         applyingModelID = modelID
+        lastAppliedSlug = providerSlug
+        lastAppliedModel = modelID
         errorMessage = nil
         statusMessage = nil
         defer { applyingModelID = nil }
@@ -106,15 +111,28 @@ final class ModelsSettingsModel {
                 // set, so a `refresh=0` re-GET would still show the OLD current. Move
                 // the active pointer optimistically; "Refresh models" reconciles later.
                 activeOverride = ActiveOverride(slug: providerSlug, model: modelID)
-                // Pin the live session too (gateway `/model`). Non-fatal if the
-                // gateway is unreachable — the persistent default still landed.
-                let sessionOK = await chat.selectModel(modelID)
-                statusMessage = sessionOK
-                    ? "Default → \(modelID) · pinned this session"
-                    : "Default → \(modelID) · session pin unavailable (gateway offline?)"
+                statusMessage = "Default → \(modelID) · pinning session…"
+                // Pin the live session (gateway `/model`) in the BACKGROUND. It is
+                // non-fatal and can be slow (~37s+) or hang when the gateway is offline,
+                // so it must not hold `applyingModelID` open — that would freeze the
+                // transition overlay and disable every model row (#9).
+                pinSessionInBackground(modelID: modelID)
             }
         } catch {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    /// Pins the live session to the new model via the gateway `/model` command, OFF the
+    /// blocking apply() path. Non-fatal and possibly slow/hanging, so it runs detached and
+    /// only refreshes the status line if this model is still the chosen default. (#9)
+    private func pinSessionInBackground(modelID: String) {
+        Task { @MainActor in
+            let sessionOK = await chat.selectModel(modelID)
+            guard activeOverride?.model == modelID else { return }
+            statusMessage = sessionOK
+                ? "Default → \(modelID) · pinned this session"
+                : "Default → \(modelID) · session pin unavailable (gateway offline?)"
         }
     }
 
@@ -126,6 +144,12 @@ final class ModelsSettingsModel {
 
     func cancelPending() {
         pendingConfirm = nil
+    }
+
+    /// Re-run the last apply() target (driven by the transition overlay's Retry).
+    func retryLast() async {
+        guard let slug = lastAppliedSlug, let id = lastAppliedModel else { return }
+        await apply(providerSlug: slug, modelID: id)
     }
 
     // MARK: Derived
@@ -217,6 +241,12 @@ struct ModelsSettingsScreen: View {
                 .padding(.horizontal, Design.Spacing.md)
                 .padding(.vertical, Design.Spacing.sm)
             }
+
+            // Transition overlay is pinned to the viewport (not the scrolling content) so
+            // it stays put during a model switch. (#9)
+            if let model {
+                ModelTransitionOverlay(model: model)
+            }
         }
         .navigationTitle("Models")
         .toolbarVisibility(.hidden, for: .navigationBar)
@@ -307,11 +337,6 @@ struct ModelsSettingsScreen: View {
 
     @ViewBuilder
     private func content(_ model: ModelsSettingsModel) -> some View {
-        let confirmBinding = Binding<Bool>(
-            get: { model.pendingConfirm != nil },
-            set: { if !$0 { model.cancelPending() } }
-        )
-
         VStack(spacing: Design.Spacing.lg) {
             freshnessBar(model)
 
@@ -339,12 +364,6 @@ struct ModelsSettingsScreen: View {
                         .padding(.top, Design.Spacing.xs)
                 }
             }
-        }
-        .alert("Confirm Model", isPresented: confirmBinding, presenting: model.pendingConfirm) { pending in
-            Button("Set Default", role: .destructive) { Task { await model.confirmPending() } }
-            Button("Cancel", role: .cancel) { model.cancelPending() }
-        } message: { pending in
-            Text(pending.message)
         }
     }
 
