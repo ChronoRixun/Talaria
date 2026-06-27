@@ -35,6 +35,19 @@ channel — never folded into the answer** (the old "thoughts fold into content"
 stale). Token usage rides on `run.completed`, Anthropic-style
 `input_tokens`/`output_tokens`/`total_tokens`.
 
+## Agent-generated files (#21)
+
+Files the agent produces land in its **host working dir** (`O:\Hermes\` on OJAMD) and are
+**never delivered to the phone**. Sync `/chat` is prose only; the **SSE stream** surfaces a
+write as `tool.started` `{tool_name:"write_file", args:{path, content}, preview:path}`
+(`tool.completed` is empty). So **text files can be reconstructed client-side from
+`args.content`** with no server change (#21 Tier 1). There is **no built-in file/download
+endpoint** (`/openapi.json`, `/v1/files`, `/api/files`, `/files` all 404). Durable host-side
+serving for binaries / other tools (#21 Tier 2) must live in **our relay sidecar**
+(`O:\Hermes\Talaria\relay`) — **never a patch to Hermes core**: `curl install.sh | bash`
+replaces `~/.hermes/hermes-agent` and wipes core edits, while `config.yaml`/`.env`/skills/
+sessions persist.
+
 ## Model switching (shim dual-write)
 
 Picker `apply()` = shim `POST /models/default` (the expensive-model guard can interrupt →
@@ -138,6 +151,8 @@ build tinted pills for amber/red), `GhostButton`, `ReactorOrb`
   Verbose Logging shipped + 27 diagnostics gated (#29). CTX meter usage now parsed (#25
   numerator done; denominator reads ~1.4× high — follow-up). All committed + pushed to
   `origin` (`ChronoRixun/Talaria`).
-- **In flight:** #9 model-transition overlay built but **uncommitted with two regressions**
-  (scroll-anchored; locks up on the gateway pin) — see `OPEN_ITEMS.md` #9.
-- **Next thread:** #21 (present/download agent-generated files).
+- #9 model-transition overlay shipped + both regressions fixed, committed (`64da247`).
+- **In progress:** #21 (present/download agent-generated files). Probe done — see the
+  "Agent-generated files" section. Building **Tier 1** (app-only file bubble + share-sheet
+  from the stream's `write_file` content); **Tier 2** (durable relay file-fetch route) is the
+  server-side follow-up.

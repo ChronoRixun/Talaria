@@ -487,7 +487,7 @@ dropdown, no popover, no "Start New Session" — straight to the shim-backed lis
 
 ---
 
-## 21. 📝 No way to present/download agent-generated files (reports, text, etc.)
+## 21. 🔧 Present/download agent-generated files — Tier 1 (app) in progress, Tier 2 (relay) follow-up
 
 Ask the agent to produce a file — a markdown report, a text file — and the app has **no
 surface to present it for viewing or download**, the way claude.ai and Hermes Desktop do.
@@ -509,6 +509,31 @@ surfaces file artifacts at all — inspect `/chat` sync payloads + the SSE strea
 landing in the agent's host working dir. If surfaced → file/download bubble in the
 transcript + share-sheet / save-to-Files (ties into Phase 2 markdown rendering); if not →
 the gateway needs a fetch endpoint first.
+
+**Probe + plan 2026-06-27.** Hit the live OJAMD API to settle the gating question.
+- **Sync `/chat`:** prose only — `message` is `{role, content}`; the agent just states the
+  host path. No artifact field, URL, or blob.
+- **SSE stream:** a write surfaces as `tool.started` `{tool_name:"write_file",
+  args:{path, content}, preview:<path>}`; `tool.completed` is empty; `run.completed.messages`
+  also carries the tool_calls. **Files land in the host working dir (`O:\Hermes\`) and are
+  never delivered to the phone.** No download URL / artifact event.
+- **No built-in file endpoint:** `/openapi.json`, `/v1/files`, `/api/files`, `/files` all 404
+  (`/v1/capabilities` 200).
+
+**Tier 1 (app-only, v1 — no server change):** parse `write_file` `tool.started` (path +
+content) in `SessionsHermesClient`, attach to the assistant message, render a transcript
+**file bubble + share-sheet** (covers Save to Files). Works today for agent-written text/
+markdown because the content rides in `args.content`.
+
+**Tier 2 (durable, server-side follow-up):** a small authed file-fetch route on the **relay**
+(`O:\Hermes\Talaria\relay`) — bearer auth, whitelisted to the agent output dir, no path
+traversal, Tailscale-reachable — for binaries / files not reconstructable from args. It must
+live in the relay (our sidecar), **not** a Hermes-core patch: `curl install.sh | bash`
+replaces `~/.hermes/hermes-agent` and would wipe core edits, while `config.yaml`/`.env`/
+skills/sessions persist. Zero-code stopgap: ask the agent to `read_file` the file back via a
+chat turn (durable but an LLM round-trip).
+
+Status (2026-06-27): Tier 1 = next build; Tier 2 = server-side follow-up.
 
 ---
 
