@@ -64,7 +64,6 @@
 		43C147AA3E020DA892F8F36D /* CodeDiff.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41698E3D9D5F2F4FE3C0F131 /* CodeDiff.swift */; };
 		45267CB3896C33D7A4D3E804 /* ReactorOrb.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11CBDFA2D8E88B99FE043B4 /* ReactorOrb.swift */; };
 		472716FCCACCEAA6F8B289A5 /* InboxItemRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58A8D3AC5A4CD172DB9B3B98 /* InboxItemRow.swift */; };
-		496A154015DFB805C2C80B5E /* SettingsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47CA949CB8AB567D33ACE211 /* SettingsScreen.swift */; };
 		4BC23867516A49731D7575B6 /* AppRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C85FA7AD7546950A9A3BEBD /* AppRootView.swift */; };
 		4CBE69826995E93F912B4F68 /* SessionsHermesClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58B4BF576EF1055C45F7E0B3 /* SessionsHermesClient.swift */; };
 		4E5AA772DBB57B51D9598C7E /* SystemSettingsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B6960308556A1B2ADA625CC /* SystemSettingsScreen.swift */; };
@@ -275,7 +274,6 @@
 		42D541DE8865DD6EAF2E07BB /* SessionBootstrapServiceProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionBootstrapServiceProtocol.swift; sourceTree = "<group>"; };
 		430101FE07A1FC46A2952B6E /* NotificationsSettingsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsSettingsScreen.swift; sourceTree = "<group>"; };
 		435E06A56ADB375CF5846D31 /* HUDComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDComponents.swift; sourceTree = "<group>"; };
-		47CA949CB8AB567D33ACE211 /* SettingsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsScreen.swift; sourceTree = "<group>"; };
 		48891721C03839B52AFA1F85 /* UplinkSettingsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UplinkSettingsScreen.swift; sourceTree = "<group>"; };
 		4AC9E25C07D7F4EE9CE95202 /* InboxActionResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxActionResult.swift; sourceTree = "<group>"; };
 		4B55CE6DA29BBF3D6B02E0C7 /* MockMediaService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockMediaService.swift; sourceTree = "<group>"; };
@@ -706,7 +704,6 @@
 				B76E7696B16B5568AE4666F1 /* PrivacySettingsScreen.swift */,
 				F1AF98C43A705DB3DAC4A3CD /* RelaySettingsScreen.swift */,
 				92672F43E2FCAF98C5F13FDD /* SessionsSettingsScreen.swift */,
-				47CA949CB8AB567D33ACE211 /* SettingsScreen.swift */,
 				25935CD9A0AD28B30B6FFBE1 /* SettingsScreenHeader.swift */,
 				61E8C06E456A6825E0B020C3 /* SettingsSectionView.swift */,
 				4B6960308556A1B2ADA625CC /* SystemSettingsScreen.swift */,
@@ -1133,7 +1130,6 @@
 				14E0934A0632FE0624FF0687 /* SessionsDrawer.swift in Sources */,
 				4CBE69826995E93F912B4F68 /* SessionsHermesClient.swift in Sources */,
 				2F6057CE3E050CA5FE899316 /* SessionsSettingsScreen.swift in Sources */,
-				496A154015DFB805C2C80B5E /* SettingsScreen.swift in Sources */,
 				F0D7B45CD46C5059C16EAD54 /* SettingsScreenHeader.swift in Sources */,
 				9E7BD9196926A1DC9732B4AC /* SettingsSectionView.swift in Sources */,
 				051B582BC2F877D6AA89BD3E /* SettingsStore.swift in Sources */,
