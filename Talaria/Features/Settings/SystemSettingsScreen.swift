@@ -6,16 +6,17 @@ import SwiftUI
 // navigation into the drill-down sub-screens. The Voice row is intentionally
 // absent (the VOICE screen was cut from T3).
 //
-// NOTE: this does not yet REPLACE the live SettingsScreen. The monolith still owns
-// sections with no index home yet — notifications/haptics, location, permissions,
-// relay configuration, internal environment. Retiring the monolith requires
-// deciding where those land first; until then this index is reachable via a temp
-// preview link for review.
+// As of T3 sub-pages 09–12 this index now has a home for every section the
+// monolith owned — relay (09), notifications/haptics (10), permissions/location
+// (11), and internal environment + flags (12, DEBUG-only). ContentView presents
+// this index as the live Settings entry; the old monolith remains in the tree
+// only as dead code pending removal.
 struct SystemSettingsScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppContainer.self) private var container
     @Environment(AppSessionStore.self) private var sessionStore
     @Environment(HermesHostStore.self) private var hostStore
+    @Environment(PairingStore.self) private var pairingStore
     @Environment(SettingsStore.self) private var settingsStore
 
     @State private var sessionCount: Int?
@@ -32,6 +33,9 @@ struct SystemSettingsScreen: View {
                     connectionGroup
                     experienceGroup
                     dataSystemGroup
+                    #if DEBUG
+                    developerGroup
+                    #endif
                     footer
                 }
                 .padding(.horizontal, Design.Spacing.md)
@@ -101,6 +105,11 @@ struct SystemSettingsScreen: View {
                     UplinkSettingsScreen()
                 }
                 rowDivider
+                navRow(icon: "point.3.connected.trianglepath.dotted", title: "Relay", value: relayValue,
+                       valueColor: relayColor) {
+                    RelaySettingsScreen()
+                }
+                rowDivider
                 navRow(icon: "cpu", title: "Models", value: modelValue) {
                     ModelsSettingsScreen()
                 }
@@ -115,6 +124,16 @@ struct SystemSettingsScreen: View {
             VStack(spacing: 0) {
                 navRow(icon: "paintpalette", title: "Appearance & HUD", value: "REACTOR") {
                     AppearanceSettingsScreen()
+                }
+                rowDivider
+                navRow(icon: "bell", title: "Notifications", value: notificationsValue,
+                       valueColor: notificationsColor) {
+                    NotificationsSettingsScreen()
+                }
+                rowDivider
+                navRow(icon: "lock.shield", title: "Privacy", value: "MANAGE",
+                       valueColor: Design.Colors.secondaryForeground) {
+                    PrivacySettingsScreen()
                 }
             }
             .groupPanel()
@@ -138,6 +157,21 @@ struct SystemSettingsScreen: View {
             .groupPanel()
         }
     }
+
+    #if DEBUG
+    private var developerGroup: some View {
+        VStack(alignment: .leading, spacing: Design.Spacing.sm) {
+            groupLabel("// Developer")
+            VStack(spacing: 0) {
+                navRow(icon: "hammer", title: "Developer", value: environmentValue,
+                       valueColor: Design.Colors.secondaryForeground) {
+                    DeveloperSettingsScreen()
+                }
+            }
+            .groupPanel()
+        }
+    }
+    #endif
 
     // MARK: Row builder
 
@@ -268,6 +302,28 @@ struct SystemSettingsScreen: View {
     private var diagnosticsColor: Color {
         effectiveConnectionState == .online ? Design.Brand.accent : Design.Brand.forge
     }
+
+    private var relayValue: String {
+        pairingStore.isPaired ? "PAIRED" : "SET UP"
+    }
+
+    private var relayColor: Color {
+        pairingStore.isPaired ? Design.Brand.accent : Design.Colors.mutedForeground
+    }
+
+    private var notificationsValue: String {
+        settingsStore.settings.notificationsEnabled ? "ON" : "OFF"
+    }
+
+    private var notificationsColor: Color {
+        settingsStore.settings.notificationsEnabled ? Design.Brand.accent : Design.Colors.mutedForeground
+    }
+
+    #if DEBUG
+    private var environmentValue: String {
+        settingsStore.settings.environment.displayLabel.uppercased()
+    }
+    #endif
 
     private var appVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0.0"

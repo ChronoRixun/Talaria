@@ -282,6 +282,7 @@ struct UserSettings: Codable, Hashable, Sendable {
     var hudGlowIntensity: Double
     var gridDensity: GridDensity
     var reduceMotion: Bool
+    var verboseLogging: Bool
 
     init(
         userName: String = "User",
@@ -297,7 +298,8 @@ struct UserSettings: Codable, Hashable, Sendable {
         appearanceAccent: AppearanceAccent = .cyan,
         hudGlowIntensity: Double = 1.0,
         gridDensity: GridDensity = .faint,
-        reduceMotion: Bool = false
+        reduceMotion: Bool = false,
+        verboseLogging: Bool = false
     ) {
         self.userName = userName
         self.avatarInitials = avatarInitials
@@ -313,6 +315,7 @@ struct UserSettings: Codable, Hashable, Sendable {
         self.hudGlowIntensity = hudGlowIntensity
         self.gridDensity = gridDensity
         self.reduceMotion = reduceMotion
+        self.verboseLogging = verboseLogging
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -330,6 +333,7 @@ struct UserSettings: Codable, Hashable, Sendable {
         case hudGlowIntensity
         case gridDensity
         case reduceMotion
+        case verboseLogging
     }
 
     init(from decoder: Decoder) throws {
@@ -349,6 +353,7 @@ struct UserSettings: Codable, Hashable, Sendable {
         hudGlowIntensity = try container.decodeIfPresent(Double.self, forKey: .hudGlowIntensity) ?? 1.0
         gridDensity = try container.decodeIfPresent(GridDensity.self, forKey: .gridDensity) ?? .faint
         reduceMotion = try container.decodeIfPresent(Bool.self, forKey: .reduceMotion) ?? false
+        verboseLogging = try container.decodeIfPresent(Bool.self, forKey: .verboseLogging) ?? false
     }
 
     func encode(to encoder: Encoder) throws {
@@ -367,6 +372,7 @@ struct UserSettings: Codable, Hashable, Sendable {
         try container.encode(hudGlowIntensity, forKey: .hudGlowIntensity)
         try container.encode(gridDensity, forKey: .gridDensity)
         try container.encode(reduceMotion, forKey: .reduceMotion)
+        try container.encode(verboseLogging, forKey: .verboseLogging)
     }
 
     func applyingEnvironmentPolicy(

@@ -663,3 +663,60 @@ From the Claude Design DEVELOPER (12) mockup `// FLAGS` panel. Decision (Owen, 2
   flag. Until wired, omit it rather than ship a dead toggle.
 
 Logged 2026-06-26.
+
+---
+
+## 28. ✅ T3 — Settings sub-pages 09–12 built + SYSTEM index swap
+
+Built the four remaining T3 Settings sub-screens from
+`design/Settings-Additional.dc.html`, real-data-only, matching the existing
+sub-screen + HUD patterns:
+
+- **09 RELAY** (`RelaySettingsScreen`) — relay mode/URL via real `RelayConfiguration`
+  (validation + normalize), reachability from the live relay session, DEVICE via
+  `PairingStore` (PAIRED host name, RE-PAIR → pairing flow, FORGET → `disconnect()`),
+  auto-connect toggle. Relay locked while paired.
+- **10 NOTIFICATIONS** (`NotificationsSettingsScreen`) — Push toggle drives
+  `notificationsEnabled` + re-runs `registerPushTokenIfNeeded`; hero + token row reflect
+  live OS auth (`PermissionsStore`) and `sessionStore.state.pushTokenRegistered`.
+- **11 PRIVACY** (`PrivacySettingsScreen`) — permission rows from live
+  `PermissionsStore.capabilities`; not-determined → in-app prompt, else MANAGE →
+  iOS Settings; location accuracy + foreground/background sync segmented.
+  "Revoke/Reset" reworded to an honest "Manage in System Settings" deep-link (the app
+  can't revoke OS grants; real in-app revoke is #23).
+- **12 DEVELOPER** (`DeveloperSettingsScreen`, DEBUG-only) — environment radio from
+  `availableEnvironments` with real endpoints; Verbose Logging (see #27/#29); Mock
+  Responses dropped; COMMIT renders "—" (no build-injected hash). Index row compiled
+  out of Release via `#if DEBUG`.
+
+Wired all four into `SystemSettingsScreen` (Relay→Connection, Notifications+Privacy→
+Experience, DEBUG Developer group) and **swapped the live Settings entry**:
+`ContentView` now presents the SYSTEM index instead of the monolith `SettingsScreen`.
+
+Build: SUCCEEDED (Debug, iOS Simulator, Xcode-beta). Not yet committed; on-device pass
+on whoGoesThere pending. Logged 2026-06-26.
+
+## 29. 🔧 Verbose Logging — downstream adoption
+
+`TalariaLog` (`Talaria/Core/TalariaLog.swift`) now backs the Developer screen's Verbose
+Logging toggle: it persists `UserSettings.verboseLogging`, mirrors the flag into a
+UserDefaults bridge (`talaria.verboseLogging`), and emits a real, observable os_log
+`.notice` on every change — so the toggle has a genuine effect today (supersedes #27's
+"omit until wired").
+
+Remaining: route the existing per-service `Logger(...)` call sites
+(`ChatStore`, `LiveHermesClient`, `SessionsHermesClient`, `SensorUploadService`,
+`LiveSpeechService`, `LiveVoiceSessionService`, `AppContainer`) through
+`TalariaLog.verbose(_:)` so they actually fall silent when the flag is off. Also consider
+syncing `TalariaLog` from settings at launch (today the toggle is the only writer).
+
+Logged 2026-06-26.
+
+## 30. 📝 Remove dead monolith `SettingsScreen.swift` after on-device confirmation
+
+The #28 index swap makes `Talaria/Features/Settings/SettingsScreen.swift` unreachable
+(its only entry was `ContentView` `.settings`, now repointed; its internal TEMP preview
+links to the sub-screens go with it). Keep it as dead code until the SYSTEM index is
+validated on whoGoesThere, then delete the file + run `xcodegen generate`.
+
+Logged 2026-06-26.

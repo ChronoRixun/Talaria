@@ -49,7 +49,9 @@ struct MainTabView: View {
         switch destination {
         case .settings:
             NavigationStack {
-                SettingsScreen()
+                // T3 index swap: SYSTEM index is now the live Settings entry.
+                // The old monolith (SettingsScreen) is retained as dead code pending removal.
+                SystemSettingsScreen()
             }
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
