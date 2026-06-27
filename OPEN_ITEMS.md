@@ -180,7 +180,7 @@ the `tailscale serve` HTTPS work. Add Shelley as the second tester when ready.
 
 ---
 
-## 9. 📝 Model-selection waiting / transition animation (needs Claude Design)
+## 9. 🐛 Model transition overlay — built, two on-device regressions (uncommitted)
 
 When a model is tapped, the dual-write runs: shim `POST /models/default` **and** the
 gateway `/model` pin (the latter creates a session + sends a command turn and can be
@@ -192,6 +192,24 @@ deliberate and the wait is covered.
 it to `ModelsSettingsModel.applyingModelID` (already drives the in-flight state). Should
 cover the whole apply() window and dismiss on success / surface the error or confirm
 dialog. Ties to the existing optimistic-checkmark behavior.
+
+**Built 2026-06-27 — `ModelTransitionOverlay.swift` (uncommitted) — two on-device regressions.**
+Overlay driven by `applyingModelID` / `pendingConfirm` / `errorMessage`, with ACTIVATING
+(reactor + stepped telemetry) → SUCCESS / CONFIRM (amber) / ERROR (retry); real copy only.
+On whoGoesThere Owen hit two bugs:
+1. **Scroll misalignment** — overlay is attached to the list `content` *inside* the
+   ScrollView, so it scrolls / renders out of position. Fix: pin to the viewport (attach at
+   the body ZStack level, fixed below header + shim config) instead of the scrolling frame.
+2. **Lock-up, never resolves** — `apply()` keeps `applyingModelID` set through the whole
+   window, including the slow/hang-prone gateway `/model` pin (`chat.selectModel`, ~37s+ or
+   indefinite when the gateway is slow/offline). Overlay stays in ACTIVATING forever; mean-
+   while every row is `.disabled(applyingModelID != nil)`, so the *next* tap (e.g. opus 4.8)
+   does nothing. Backing out + in re-inits the screen and the shim's optimistic override had
+   already landed, so the switch "took." Fix: resolve the overlay on the **shim** result (the
+   authoritative persistent default), run the gateway pin as a non-blocking background task
+   that updates status async, and add a safety timeout so it can never lock. CONFIRM only
+   shows for shim-flagged expensive models — opus 4.8 isn't flagged on this box, so no
+   confirm there is expected. Status: uncommitted; fix pending before commit.
 
 ---
 
@@ -477,6 +495,13 @@ The content is effectively stuck in (or absent from) the chat stream.
 
 Feature gap, not a regression. Reported on-device 2026-06-24.
 
+**Selected as next thread (2026-06-27).** First step: determine whether the Sessions API
+surfaces file artifacts at all — inspect `/chat` sync payloads + the SSE stream
+(`tool.completed` results, any artifact/file event) for a path or blob, vs. files only
+landing in the agent's host working dir. If surfaced → file/download bubble in the
+transcript + share-sheet / save-to-Files (ties into Phase 2 markdown rendering); if not →
+the gateway needs a fetch endpoint first.
+
 ---
 
 ## 22. ✅ Shim token re-established — model switching works (shim now on OJAMD)
@@ -625,7 +650,7 @@ add the token, restart the task.
 
 ---
 
-## 25. 🐛 CTX meter always shows 0% — SSE usage not parsed
+## 25. 🔧 CTX meter — 0% fixed (usage parsed); denominator reads ~1.4x high
 
 The "CTX 0%" telemetry in the agent identity strip never updates. Root cause:
 `SessionsHermesClient` emits `.finished(message, nil, nil)` at the `assistant.completed`
@@ -672,6 +697,9 @@ From the Claude Design DEVELOPER (12) mockup `// FLAGS` panel. Decision (Owen, 2
   gate the verbose `privacy:.public` diagnostics). Persist as a DEBUG-scoped `UserSettings`
   flag. Until wired, omit it rather than ship a dead toggle.
 
+**Resolved 2026-06-27.** Verbose Logging shipped & wired (#29, committed 9d3972f); Mock
+Responses dropped from the Developer screen (#28).
+
 Logged 2026-06-26.
 
 ---
@@ -703,8 +731,7 @@ Wired all four into `SystemSettingsScreen` (Relay→Connection, Notifications+Pr
 Experience, DEBUG Developer group) and **swapped the live Settings entry**:
 `ContentView` now presents the SYSTEM index instead of the monolith `SettingsScreen`.
 
-Build: SUCCEEDED (Debug, iOS Simulator, Xcode-beta). Not yet committed; on-device pass
-on whoGoesThere pending. Logged 2026-06-26.
+Build: SUCCEEDED (Debug, iOS Simulator, Xcode-beta). Committed (2468471); SYSTEM index validated on whoGoesThere 2026-06-27. Logged 2026-06-26.
 
 ## 29. 🔧 Verbose Logging — downstream adoption
 
@@ -720,13 +747,39 @@ Remaining: route the existing per-service `Logger(...)` call sites
 `TalariaLog.verbose(_:)` so they actually fall silent when the flag is off. Also consider
 syncing `TalariaLog` from settings at launch (today the toggle is the only writer).
 
+**Update 2026-06-27 — committed (9d3972f).** 27 diagnostic sites (LiveSpeechService 26,
+SensorUploadService 1) routed through `TalariaLog.verbose`; error/warning/`.notice` kept
+always-on. Verified on whoGoesThere — the Verbose toggle emits real `.notice` and gated
+diagnostics fall silent when off. Remaining (minor): sync the flag from settings at launch.
+
 Logged 2026-06-26.
 
-## 30. 📝 Remove dead monolith `SettingsScreen.swift` after on-device confirmation
+## 30. ✅ Removed dead monolith `SettingsScreen.swift`
 
 The #28 index swap makes `Talaria/Features/Settings/SettingsScreen.swift` unreachable
 (its only entry was `ContentView` `.settings`, now repointed; its internal TEMP preview
 links to the sub-screens go with it). Keep it as dead code until the SYSTEM index is
 validated on whoGoesThere, then delete the file + run `xcodegen generate`.
 
+**Done 2026-06-27 (7ae4643):** SYSTEM index validated on whoGoesThere → `git rm` +
+`xcodegen generate`; ContentView comment fixed.
+
 Logged 2026-06-26.
+
+---
+
+## 31. 📝 Paste image into the chat composer (clipboard)
+
+On-device (whoGoesThere, 2026-06-27): pasting an image from the clipboard into the chat
+input does nothing, while adding an image from the local photo store works. Add clipboard
+paste support to the composer.
+
+**Feasible — yes.** The photo-picker path already proves the app can attach + send image
+data, so the missing piece is only an ingest route from `UIPasteboard`:
+- A paste handler / "Paste" affordance on the input that reads `UIPasteboard.general.image`
+  (and image-type items) and routes the data into the same attachment pipeline the photo
+  picker feeds.
+- Mirror the local-store path's size/encoding limits and send payload, so pasted and picked
+  images are indistinguishable downstream.
+
+Reported on-device 2026-06-27. Feature gap, not a regression.
