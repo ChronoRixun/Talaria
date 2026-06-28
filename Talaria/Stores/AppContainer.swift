@@ -396,6 +396,7 @@ final class AppContainer {
         await sensorUploadService?.handleAppDidBecomeActive()
         talkStore.handleAppDidBecomeActive()
         await talkStore.refreshReadiness()
+        await chatStore.reconcilePendingRuns()
         reconcileLiveActivities()
         await reportAppStateIfNeeded("foreground")
         updateWidgetData()

@@ -38,6 +38,11 @@ protocol HermesClientProtocol {
     /// Opens an existing session: adopts its id and returns its message history
     /// as a Conversation. New messages continue that thread.
     func openSession(_ id: String) async throws -> Conversation
+
+    /// Re-fetches the current session's messages from the host (GET /messages)
+    /// so a run that completed while the stream was dropped can be reconciled.
+    /// Returns nil for clients without a server-backed session (relay / mock).
+    func reconcileFromServer() async -> Conversation?
 }
 
 extension HermesClientProtocol {
@@ -49,4 +54,5 @@ extension HermesClientProtocol {
     func switchModel(_ identifier: String) async throws {}
     func listSessions() async throws -> [HermesSessionInfo] { [] }
     func openSession(_ id: String) async throws -> Conversation { await loadConversation() }
+    func reconcileFromServer() async -> Conversation? { nil }
 }

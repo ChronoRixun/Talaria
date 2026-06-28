@@ -79,4 +79,8 @@ final class ResilientHermesClient: HermesClientProtocol {
     func openSession(_ id: String) async throws -> Conversation {
         try await primary.openSession(id)
     }
+
+    func reconcileFromServer() async -> Conversation? {
+        await primary.reconcileFromServer()
+    }
 }

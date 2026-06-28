@@ -98,8 +98,12 @@ final class SessionsHermesClient: HermesClientProtocol {
                     return
                 }
 
+                var capturedSessionId = ""
+                var runId: String?
+                var runStarted = false
                 do {
                     let sessionId = try await self.ensureSession()
+                    capturedSessionId = sessionId
                     let path = "\(Self.sessionsPath)/\(sessionId)/chat/stream"
                     let body = try self.encoder.encode(ChatTurnBody(input: content))
                     let request = try self.makeRequest(path: path, method: "POST", body: body, accept: "text/event-stream")
@@ -132,6 +136,11 @@ final class SessionsHermesClient: HermesClientProtocol {
                         }
                         guard !currentData.isEmpty else { return }
                         switch currentEvent {
+                        case "run.started":
+                            runStarted = true
+                            if let rid = self.decodeJSONString(currentData, key: "run_id") {
+                                runId = rid
+                            }
                         case "assistant.delta":
                             if let delta = self.decodeJSONString(currentData, key: "delta"),
                                !delta.isEmpty {
@@ -220,7 +229,13 @@ final class SessionsHermesClient: HermesClientProtocol {
                 } catch {
                     self.connectionStatus = .error
                     Self.logger.warning("Sessions API stream failed: \(error.localizedDescription)")
-                    continuation.yield(.failed(self.failureMessage(for: error)))
+                    if runStarted {
+                        // Run committed server-side; a dropped stream (e.g. the app
+                        // suspended on lock) is recoverable, not a failure.
+                        continuation.yield(.interrupted(sessionId: capturedSessionId, runId: runId))
+                    } else {
+                        continuation.yield(.failed(self.failureMessage(for: error)))
+                    }
                     continuation.finish()
                 }
             }
@@ -232,6 +247,13 @@ final class SessionsHermesClient: HermesClientProtocol {
         let fresh = Conversation(title: "Hermes")
         currentConversation = fresh
         return fresh
+    }
+
+    /// Re-fetches the active session's messages from the host so an interrupted
+    /// run can be reconciled. Reuses openSession's GET /messages + mapping.
+    func reconcileFromServer() async -> Conversation? {
+        guard let id = apiSessionId else { return nil }
+        return try? await openSession(id)
     }
 
     func clearConversation() async throws -> Conversation {

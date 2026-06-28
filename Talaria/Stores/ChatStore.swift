@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import os
 
 private let chatLog = Logger(subsystem: "org.aethyrion.talaria", category: "ChatStore")
@@ -40,7 +41,21 @@ final class ChatStore {
 
     private let hermesClient: any HermesClientProtocol
     private let chatLiveActivity = LiveActivityService()
+    private let notifications = LocalNotificationService()
     let persistence: any AppPersistenceStoreProtocol
+
+    /// A run whose stream dropped (e.g. backgrounded on lock) but which is still
+    /// running server-side. Reconciled via the Sessions messages endpoint when it
+    /// completes. `sentAt` is captured here so reconcile is insulated from the
+    /// relay-poll machinery that owns `pendingMessageSentAt`.
+    private struct PendingRun {
+        let sessionId: String
+        let runId: String?
+        let userMessageID: UUID
+        let sentAt: Date
+    }
+    private var pendingRun: PendingRun?
+    private var reconcileTask: Task<Void, Never>?
 
     /// Called when conversation content changes (new message, streaming complete).
     /// Used by AppContainer to push widget data updates.
@@ -117,6 +132,7 @@ final class ChatStore {
         streamingMessageID = placeholderID
         restartPendingPollingIfNeeded()
 
+        Task { await self.notifications.requestAuthorizationIfNeeded() }
         let stream = hermesClient.sendStreaming(message: trimmedContent, attachments: attachments, clientMessageID: clientMessageID)
         var acceptedJobID: UUID?
         var needsPollingFallback = false
@@ -185,6 +201,26 @@ final class ChatStore {
                     self.pendingMessageSentAt = nil
                     self.chatLiveActivity.endActivity()
 
+                case .interrupted(let sessionId, let runId):
+                    // Run committed server-side but the stream dropped (lock /
+                    // background). Not a failure: mark the turn working and let the
+                    // reconcile loop pick up the reply when it lands.
+                    if let idx = self.conversation?.messages.firstIndex(where: { $0.id == placeholderID }) {
+                        self.conversation?.messages.remove(at: idx)
+                    }
+                    if let idx = self.conversation?.messages.firstIndex(where: { $0.id == clientMessageID }) {
+                        self.conversation?.messages[idx].status = .working
+                    }
+                    self.streamingMessageID = nil
+                    self.chatLiveActivity.endActivity()
+                    self.pendingRun = PendingRun(
+                        sessionId: sessionId,
+                        runId: runId,
+                        userMessageID: clientMessageID,
+                        sentAt: self.pendingMessageSentAt ?? .now
+                    )
+                    self.startReconcileLoopIfNeeded()
+
                 case .failed(let errorMessage):
                     if let idx = self.conversation?.messages.firstIndex(where: { $0.id == placeholderID }) {
                         if acceptedJobID == nil {
@@ -236,6 +272,9 @@ final class ChatStore {
     }
 
     func clearConversation() async throws {
+        reconcileTask?.cancel()
+        reconcileTask = nil
+        pendingRun = nil
         streamingTask?.cancel()
         streamingTask = nil
         streamingMessageID = nil
@@ -543,6 +582,62 @@ final class ChatStore {
     /// Re-attaches transient streaming artifacts (tool timeline, code diff) onto the
     /// canonical conversation that the relay returned, since the relay knows nothing
     /// about those client-only fields.
+    // MARK: - Interrupted-run reconcile (Phase 1)
+
+    /// Called on app foreground to catch a run that finished while the app was
+    /// suspended and the in-app loop couldn't tick.
+    func reconcilePendingRuns() async {
+        guard let pending = pendingRun else { return }
+        if await attemptReconcile(pending) == false {
+            startReconcileLoopIfNeeded()
+        }
+    }
+
+    private func startReconcileLoopIfNeeded() {
+        guard reconcileTask == nil, pendingRun != nil else { return }
+        reconcileTask = Task { [weak self] in
+            guard let self else { return }
+            var attempts = 0
+            let maxAttempts = 60 // 60 x 2s = ~2 min, the background-run ceiling
+            while !Task.isCancelled, attempts < maxAttempts {
+                attempts += 1
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled, let pending = self.pendingRun else { break }
+                if await self.attemptReconcile(pending) { break }
+            }
+            self.reconcileTask = nil
+        }
+    }
+
+    /// One reconcile pass: fetch the server's view of the session; if the
+    /// assistant reply landed after the run started, adopt it, notify, and clear
+    /// the pending run. Returns true when resolved.
+    @discardableResult
+    private func attemptReconcile(_ pending: PendingRun) async -> Bool {
+        guard let serverConvo = await hermesClient.reconcileFromServer() else { return false }
+        let reply = serverConvo.messages.last(where: {
+            $0.sender == .hermes
+                && $0.timestamp > pending.sentAt
+                && !$0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        })
+        guard let reply else { return false }
+
+        conversation = mergeConversationMetadata(from: conversation, into: serverConvo)
+        if let latestUsage = conversation?.latestUsage {
+            lastTokenUsage = latestUsage
+        }
+        pendingRun = nil
+        pendingMessageSentAt = nil
+        if let conversation {
+            persistence.saveConversationCache(conversation)
+            onConversationChanged?()
+        }
+        if UIApplication.shared.applicationState != .active {
+            notifications.notifyRunCompleted(preview: reply.content)
+        }
+        return true
+    }
+
     private func mergeConversationMetadata(
         from localConversation: Conversation?,
         into refreshedConversation: Conversation?
