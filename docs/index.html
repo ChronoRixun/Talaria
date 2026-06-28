@@ -77,13 +77,13 @@ h1 { font-family:'Chakra Petch',sans-serif; font-weight:700; font-size:clamp(52p
 .screens-hdr .sbody { margin:0 auto; }
 .phone-row { display:flex; gap:20px; overflow-x:auto; padding:16px 0 24px; scrollbar-width:thin; scrollbar-color:var(--border2) transparent; justify-content:center; flex-wrap:wrap; }
 .phone-card { flex:none; display:flex; flex-direction:column; align-items:center; gap:12px; }
-.phone-card img { width:188px; border-radius:26px; border:1px solid rgba(84,230,240,.16); box-shadow:0 12px 40px rgba(0,0,0,.65),0 0 0 1px rgba(84,230,240,.07); transition:transform .3s,box-shadow .3s; display:block; }
+.phone-card img { width:188px; height:auto; aspect-ratio:780/1646; object-fit:contain; border-radius:26px; border:1px solid rgba(84,230,240,.16); box-shadow:0 12px 40px rgba(0,0,0,.65),0 0 0 1px rgba(84,230,240,.07); transition:transform .3s,box-shadow .3s; display:block; }
 .phone-card img:hover { transform:translateY(-6px) scale(1.025); box-shadow:0 24px 60px rgba(0,0,0,.75),0 0 32px rgba(84,230,240,.2); }
 .phone-label { font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.2em; color:var(--dim); text-align:center; }
 
 /* about */
 #about { padding:100px 24px; max-width:1100px; margin:0 auto; display:grid; grid-template-columns:1fr 1fr; gap:80px; align-items:center; }
-.about-phone img { width:260px; border-radius:32px; box-shadow:0 20px 60px rgba(0,0,0,.7),0 0 40px rgba(84,230,240,.15); }
+.about-phone img { width:260px; height:auto; aspect-ratio:780/1646; object-fit:contain; border-radius:32px; box-shadow:0 20px 60px rgba(0,0,0,.7),0 0 40px rgba(84,230,240,.15); }
 
 /* architecture */
 #architecture { padding:100px 24px; background:var(--bg2); border-top:1px solid var(--border); border-bottom:1px solid var(--border); }
