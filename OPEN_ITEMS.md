@@ -712,6 +712,20 @@ hard-abort that turned this into a permanent splash hang is fixed (soft fall-thr
 device registry to disk so restarts don't brick paired devices. Until fixed, every Hermes
 restart forces a re-pair.
 
+**Update 2026-06-29 — app-side investigation + instrumentation (branch
+`fix/pairing-token-recovery`).** Console logs from a failing launch showed
+`initialize: ABORT — not paired` (not the token-nil path) — meaning the
+`PairedRelayConfiguration` was gone from both UserDefaults and the Keychain mirror
+before `initialize()` ran. Relay was NOT restarted, so this isn't a relay-JWT issue;
+the data loss is intermittent and app-side (possibly container-level). Two commits:
+  `3d1eacc` — silent re-registration before forcing re-pair (prevents
+  `clearLocalPairing` from nuking the Keychain mirror when tokens are missing).
+  `3cb9b60` — diagnostic `TalariaLog.event` breadcrumbs in PairingStore.init /
+  hydrate / storeConfigurationInKeychain covering every failure path. Next
+  occurrence will show exactly which store lost the data. Two subsequent
+  Play-deploys with instrumentation active showed `UserDefaults config PRESENT`
+  and worked fine — failure is intermittent, not every-build.
+
 ### 24g. ✅ Shim API-key fallback on Windows — RESOLVED (2026-06-26)
 
 The shim accepts *either* its dedicated token *or* the Hermes `API_SERVER_KEY` (the app's
@@ -870,7 +884,7 @@ Experience, DEBUG Developer group) and **swapped the live Settings entry**:
 
 Build: SUCCEEDED (Debug, iOS Simulator, Xcode-beta). Committed (2468471); SYSTEM index validated on whoGoesThere 2026-06-27. Logged 2026-06-26.
 
-## 29. 🔧 Verbose Logging — downstream adoption
+## 29. ✅ Verbose Logging — downstream adoption
 
 `TalariaLog` (`Talaria/Core/TalariaLog.swift`) now backs the Developer screen's Verbose
 Logging toggle: it persists `UserSettings.verboseLogging`, mirrors the flag into a
@@ -888,6 +902,29 @@ syncing `TalariaLog` from settings at launch (today the toggle is the only write
 SensorUploadService 1) routed through `TalariaLog.verbose`; error/warning/`.notice` kept
 always-on. Verified on whoGoesThere — the Verbose toggle emits real `.notice` and gated
 diagnostics fall silent when off. Remaining (minor): sync the flag from settings at launch.
+
+**Update 2026-06-29 — launch-sync committed (4ce7d91, branch `feat/verbose-logging-sync`).**
+TASK 1 done: `AppContainer.makeDefault()` now mirrors `settingsStore.settings.verboseLogging`
+into `TalariaLog.setVerbose(...)` at the composition root (next to the `ThemeRuntime` seed),
+so verbose state is reconciled from the canonical settings struct on every cold launch — no
+re-toggle needed. Builds clean, 0 warnings. On-device cold-launch verification on whoGoesThere
+still pending (set toggle -> force-quit -> relaunch the SAME install; a dev deploy wipes
+UserDefaults, so don't redeploy between the two).
+
+TASK 2 (route the remaining per-service diagnostics) — **no eligible sites.** Verified against
+source: `ChatStore`, `LiveHermesClient`, `SessionsHermesClient`, `LiveVoiceSessionService`, and
+`AppContainer` contain **zero** `.debug`/`.info` lines (and no `print`/`NSLog`/`os_log`); every
+log call in them is already `.notice`/`.warning`/`.error` — the always-on levels this item says
+to preserve. So nothing remains to route through `.verbose(_:)`. The original remaining-list
+assumed these files carried `.info`/`.debug` chatter; they don't — this codebase logs
+operational info at `.notice`.
+
+**Resolved 2026-06-29.** Both tasks complete:
+- TASK 1 (launch-sync): committed `4ce7d91` on `feat/verbose-logging-sync`.
+- TASK 2 (route remaining diagnostics): no-op — all 5 named files contain zero
+  `.debug`/`.info` sites; every call is `.notice`/`.warning`/`.error` (always-on).
+  Confirmed by Owen as intended (verbose-logging only, no `.notice` demotion).
+- On-device regression test passed on whoGoesThere (no issues found).
 
 Logged 2026-06-26.
 
