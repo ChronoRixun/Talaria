@@ -391,6 +391,8 @@ samples — distance_walking, steps`.
 
 ## 17. 🐛 Relay sensor delivery returns `retry` — connector handoff failing
 
+**Update (2026-06-28 — relay health contract verified on OJAMD):** The 422 is purely the sample cap. `SensorHealthRequest.samples` is `Field(min_length=1, max_length=100)` (`relay/app/schemas.py`), so any batch >100 is rejected by Pydantic before the handler runs (the phone drains ~1607 at once). Delivery codes (shared with location via `forward_sensor_payload`): 200 = `delivered` (drop), 202 = `retry` (keep + back off), 422 = fix-and-resend. Per-sample schema: `metric` / `value` / `unit` / `startAt` (required) / `endAt` (optional). **Remaining fix is iOS-side (#24a):** chunk health to <=100/request, sequential, drop-chunk on 200 / keep-and-stop on 202, match those sample fields. No relay change needed.
+
 **Status:** Confirmed blocker — location uploads reach the relay but never deliver.
 
 The phone successfully uploads sensor data to the relay on `:8000`, but the relay responds
@@ -1274,7 +1276,9 @@ on-device send test + client read 2026-06-28.
 
 ---
 
-## 44. 📝 Configure `vision_analyze_tool` vision backend on OJAMD (non-vision models can't analyze attached images)
+## 44. ✅ Image attachments work for Kimi/MiniMax — native vision routing (premise corrected)
+
+**Resolved 2026-06-28 — native vision routing enabled on OJAMD; verified on-device (image sent through a Kimi chat, processed natively).** Premise was wrong: Kimi K2.6 (MoonViT encoder) and MiniMax are both vision-capable. Real cause (verified in `agent/image_routing.py`): an explicit `auxiliary.vision` block (`kimi-coding` / `kimi-k2.6`) trips `_explicit_aux_vision_override`, which in `auto` mode forces EVERY inbound image through the lossy text/`vision_analyze` describe pipeline — bypassing native vision regardless of the model's capability. Fix (OJAMD `config.yaml`): blanked `auxiliary.vision` (provider -> `auto`, model -> empty string) to clear the gate, and added top-level `model.supports_vision: true` so `decide_image_input_mode` resolves `native` (models.dev returns no caps for kimi-k2.6). Restarted HermesGateway (elevated). Backup at `config.yaml.bak-20260628-231653`. Server-side only — no Mac-repo change.
 
 **Discovered 2026-06-28, follow-on from #43.** App-side image transmission (#43) is correct and
 verified on-device: the inline `data:image/jpeg;base64,…` content part the app sends is exactly
