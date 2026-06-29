@@ -381,11 +381,29 @@ final class SensorUploadService {
             }
 
             if !outboxState.pendingHealthSamples.isEmpty {
-                let delivered = await uploadHealth(outboxState.pendingHealthSamples)
-                sensorLog.notice("drain: health upload (\(self.outboxState.pendingHealthSamples.count) samples) \(delivered ? "delivered" : "FAILED", privacy: .public)")
-                guard delivered else { recordDrain("Health upload failed"); break }
-                outboxState.pendingHealthSamples.removeAll()
-                persistOutboxState()
+                // Relay caps health uploads at 100 samples/request (SensorHealthRequest.samples,
+                // max_length=100); sending the whole outbox 422s once the backlog is larger.
+                // Chunk to <=100, send sequentially, drop delivered samples by dedupeKey, and
+                // back off on the first non-delivery (202 retry / transient error) so the
+                // remainder is retried on the next drain.
+                let batch = outboxState.pendingHealthSamples
+                let chunkSize = 100
+                var deliveredKeys = Set<String>()
+                var backedOff = false
+                var offset = 0
+                while offset < batch.count {
+                    let end = min(offset + chunkSize, batch.count)
+                    let delivered = await uploadHealth(Array(batch[offset..<end]))
+                    guard delivered else { backedOff = true; break }
+                    for sample in batch[offset..<end] { deliveredKeys.insert(sample.dedupeKey) }
+                    offset = end
+                }
+                if !deliveredKeys.isEmpty {
+                    outboxState.pendingHealthSamples.removeAll { deliveredKeys.contains($0.dedupeKey) }
+                    persistOutboxState()
+                }
+                sensorLog.notice("drain: health \(deliveredKeys.count)/\(batch.count) samples delivered in chunks of \(chunkSize)\(backedOff ? " — backed off (retry)" : "", privacy: .public)")
+                if backedOff { break }
                 continue
             }
 
