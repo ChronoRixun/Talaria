@@ -605,7 +605,9 @@ never used the mini shim.
 
 ---
 
-## 23. 📝 Add a "revoke permissions" affordance
+## 23. ✅ Add a "revoke permissions" affordance — superseded by the shipped Privacy screen
+
+**Resolved 2026-06-28 — superseded; no build needed (analysis this session).** `PrivacySettingsScreen` (which landed after this was logged) already delivers the affordance: per-permission `ENABLE ›`/`MANAGE ›` deep-links (location/health/motion/notifications/microphone), a "Manage in System Settings" action with the honest "app can't change OS grants" caption, and the Foreground/Background location sync control (the real in-app background-location lever). iOS won't let an app revoke an OS grant, so the deep-link IS the correct revoke path. The only unbuilt sliver — in-app "pause sync" teardown for Health (background delivery/observer queries) + Notifications (relay dereg) — is a convenience, not a gap, and a "granted-but-paused" state would muddy the #15 diagnostics; deliberately not built.
 
 The app can request permissions (HealthKit, Location, Notifications, etc.) via the
 Permissions/Onboarding screens, but there is **no in-app way to revoke** them. Users must
@@ -1018,7 +1020,9 @@ it isn't rediscovered later.
 
 Deferred 2026-06-27 — revisit after the active items clear.
 
-## 35. 🎙️ VOICE settings screen — build truthful status/launch panel
+## 35. ✅ VOICE settings screen — built (status/launch panel) + compiles + committed
+
+**Resolved 2026-06-28 — built from the corrected "05 · VOICE" design; compiles clean (0 errors/0 warnings, iOS Simulator); committed as `2ff9487`.** New read-only `VoiceSettingsScreen` (status / session / last-session latency) + a START action gated on `canStartSession` → `VoiceOverlayScreen` via `TabRouter` (dismisses the Settings sheet first); a `waveform` "Voice → TALK" row added to `SystemSettingsScreen`'s EXPERIENCE group. Plumbed the previously-discarded `talk/readiness` fields (hostOnline, configured, selectedModel, voice, voiceContextUpdatedAt) through LiveVoiceSessionService → TalkSessionSnapshot → TalkStore for real-data binding; model/voice stay server-driven + read-only. On-device visual check deferred — voice not actively used and a dev install would force a re-pair.
 
 **Status:** Design resolved 2026-06-27 (truthful); SwiftUI build pending.
 
