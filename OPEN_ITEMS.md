@@ -325,7 +325,9 @@ OJAMD blockers.
 
 ---
 
-## 15. 📝 In-app sensor diagnostics panel
+## 15. ✅ In-app sensor diagnostics panel — built + verified + committed
+
+**Resolved 2026-06-28 — built and the Diag page confirmed by Owen on whoGoesThere; committed as `c5f01a4`.** Shipped as a Sensors section in Settings → Diagnostics (additive, read-only), not a new screen. `SensorUploadService` exposes a read-only `sensorDiagnostics` snapshot + `hasValidAccessToken()` and records a `lastDrainSummary`/`lastDrainAt` at each drain outcome.
 
 Add a diagnostic section to Settings (or a hidden debug screen) that surfaces the sensor
 pipeline's internal state at a glance:
@@ -897,7 +899,9 @@ Logged 2026-06-26.
 
 ---
 
-## 31. 🔧 Paste image into the chat composer (clipboard) — UI built & verified; HELD, blocked on image transmission (#43)
+## 31. ✅ Paste image into the chat composer (clipboard) — unblocked by #43, verified + committed
+
+**Resolved 2026-06-28 — paste UI unblocked by #43 and verified on whoGoesThere; committed as `a3ad9f9`.** Pasted images route through the same attachment pipeline as the photo picker and now transmit via #43.
 
 **Update 2026-06-28 (on-device, whoGoesThere):** the paste UI works — the button shows in the
 composer and pasting attaches the image correctly. Switched from a `hasImages`-gated button to
@@ -1188,7 +1192,9 @@ closure trail.
 
 ---
 
-## 41. 🔧 Keychain-back the relay pairing config so reinstalls don't drop pairing
+## 41. ✅ Keychain-back the relay pairing config so reinstalls don't drop pairing — implemented + tested + committed
+
+**Resolved 2026-06-28 — implemented + unit-tested (5 tests, run from Xcode's runner; `xcodebuild test` can't resolve TEST_HOST in this xcodegen scheme); committed as `f7f3bb0` (fix) + `b4253dc` (tests).** The mirror covers same-identity reinstalls (UserDefaults wiped, Keychain survives). A signing-identity change rotates the Keychain access group too, so neither store survives that case and a re-pair is unavoidable — that's the dev-build install behavior on whoGoesThere, not a regression. Real proving ground is a TestFlight update.
 
 **Diagnosed 2026-06-28 on whoGoesThere.** A device "lost pairing" event was traced to a
 wholesale wipe of the app's `.standard` UserDefaults container — an on-device read showed
@@ -1215,7 +1221,9 @@ sitting safe in the Keychain the whole time.
 
 Found via on-device `RunCodeSnippet` forensics 2026-06-28.
 
-## 42. 📝 Pairing-config loader silently swallows decode errors
+## 42. ✅ Pairing-config loader silently swallows decode errors — fixed + committed
+
+**Resolved 2026-06-28 — committed as `f7f3bb0`.** `UserDefaultsAppPersistenceStore.load<T>` now logs decode failures via `TalariaLog.event` (always-on) instead of swallowing them with `try?`, so a schema-change failure is distinguishable from a never-stored key in the log.
 
 `UserDefaultsAppPersistenceStore.load(_:key:)` (generic loader, ~line 120) uses
 `try? decoder.decode(...)`, so any decode failure returns `nil` with no log. For
@@ -1230,7 +1238,9 @@ have turned tonight's triage into a one-line log read instead of an on-device pr
 
 ---
 
-## 43. 🔧 Wire image attachments into the Hermes API-server chat payload (unblocks #31 + photo picker)
+## 43. ✅ Wire image attachments into the Hermes API-server chat payload — verified + committed (unblocks #31 + photo picker)
+
+**Resolved 2026-06-28 — verified on whoGoesThere (image transmits; analyzed by native-vision models); committed as `574033f`.** `ChatTurnBody` now serializes image attachments as OpenAI-style `image_url` data-URL content parts, matching the API server's `_normalize_multimodal_content` contract; text-only turns stay byte-identical and image-only turns no longer 400. Non-vision models (Kimi/MiniMax) need the OJAMD `vision_analyze_tool` backend — tracked as #44.
 
 **Diagnosed 2026-06-28 on whoGoesThere.** Image attachments — pasted or picked — never reach
 Hermes. `SessionsHermesClient.send()` and `sendStreaming()` accept `attachments:
@@ -1257,3 +1267,33 @@ body limits.
 **Net:** unblocks #31 (paste) and makes the photo picker actually send images. Found via
 on-device send test + client read 2026-06-28.
 
+
+---
+
+## 44. 📝 Configure `vision_analyze_tool` vision backend on OJAMD (non-vision models can't analyze attached images)
+
+**Discovered 2026-06-28, follow-on from #43.** App-side image transmission (#43) is correct and
+verified on-device: the inline `data:image/jpeg;base64,…` content part the app sends is exactly
+what the Hermes API server's `_normalize_multimodal_content` accepts and what `run_agent.py`
+consumes. No app change is needed.
+
+Behavior splits by the active model's vision capability
+(`run_agent._model_supports_vision()`, resolved via config →
+`providers.<p>.models.<m>.supports_vision` → models.dev lookup):
+- **Native-vision models** (Gemini 2.5 Flash Lite, Claude Haiku 4.5) receive the image part
+  directly and analyze it. Verified working.
+- **Non-vision models** (Kimi K2.7 Code, MiniMax) hit the fallback
+  `_describe_image_for_anthropic_fallback`, which materializes the data-URL to a temp file and
+  calls `tools/vision_tools.py::vision_analyze_tool` to produce a description injected into the
+  turn. On OJAMD this tool **fails** ("Image analysis failed: …"), which the model paraphrases
+  on-device as "the vision tool failed — needs a file path or URL." Seen on whoGoesThere
+  2026-06-28 with Kimi K2.7 Code active.
+
+**Not an app issue — server-side config.** `vision_analyze_tool` needs a working vision backend
+(a vision-capable provider + credential) configured in OJAMD's Hermes for the fallback to run.
+
+**Action (OJAMD session):** confirm which provider `vision_analyze_tool` uses, ensure a
+vision-capable model + credential is wired there, then re-test image analysis from the phone on a
+non-vision chat model. Until then, use a native-vision model for image analysis.
+
+Logged 2026-06-28.
