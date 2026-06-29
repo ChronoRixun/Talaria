@@ -389,7 +389,9 @@ samples — distance_walking, steps`.
 
 ---
 
-## 17. 🐛 Relay sensor delivery returns `retry` — connector handoff failing
+## 17. ✅ Relay sensor delivery — health-upload 422 fixed via iOS chunking
+
+**Resolved 2026-06-28 — health uploads now chunk to <=100 samples/request (commit `051a6af`); compiles clean.** Two-part item. The original `retry`/connector symptom was iCloud Private Relay intercepting Tailscale traffic — resolved earlier (location delivers). The remaining 422 was the relay's 100-sample cap on `SensorHealthRequest.samples`: the iOS drain (`SensorUploadService.drainOutboxIfPossible`) sent the whole backlog (~1600) in a single request. It now batches sequentially in chunks of 100, drops delivered samples from the outbox by `dedupeKey`, and backs off on the first non-delivery (202 retry / transient error) so the remainder retries on the next drain. This *is* the #24a iOS chunking fix — mark #24a done on the OJAMD tracker too. On-device verification still pending: a dev deploy wipes pairing, so this is best exercised via a TestFlight build with a real health backlog draining through multiple chunks.
 
 **Update (2026-06-28 — relay health contract verified on OJAMD):** The 422 is purely the sample cap. `SensorHealthRequest.samples` is `Field(min_length=1, max_length=100)` (`relay/app/schemas.py`), so any batch >100 is rejected by Pydantic before the handler runs (the phone drains ~1607 at once). Delivery codes (shared with location via `forward_sensor_payload`): 200 = `delivered` (drop), 202 = `retry` (keep + back off), 422 = fix-and-resend. Per-sample schema: `metric` / `value` / `unit` / `startAt` (required) / `endAt` (optional). **Remaining fix is iOS-side (#24a):** chunk health to <=100/request, sequential, drop-chunk on 200 / keep-and-stop on 202, match those sample fields. No relay change needed.
 
