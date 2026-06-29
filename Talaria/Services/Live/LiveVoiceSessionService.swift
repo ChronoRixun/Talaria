@@ -75,6 +75,11 @@ final class LiveVoiceSessionService: NSObject, VoiceSessionServiceProtocol {
     var statusMessage: String? { didSet { publishSnapshot() } }
     var canStartSession = false { didSet { publishSnapshot() } }
     var latencyMetrics = TalkLatencyMetrics() { didSet { publishSnapshot() } }
+    var readinessHostOnline = false { didSet { publishSnapshot() } }
+    var readinessConfigured = false { didSet { publishSnapshot() } }
+    var selectedModel: String? { didSet { publishSnapshot() } }
+    var serverVoice: String? { didSet { publishSnapshot() } }
+    var voiceContextUpdatedAt: Date? { didSet { publishSnapshot() } }
 
     var snapshot: TalkSessionSnapshot {
         TalkSessionSnapshot(
@@ -87,7 +92,12 @@ final class LiveVoiceSessionService: NSObject, VoiceSessionServiceProtocol {
             statusMessage: statusMessage,
             canStartSession: canStartSession,
             latencyMetrics: latencyMetrics,
-            voiceSessionID: voiceSessionID
+            voiceSessionID: voiceSessionID,
+            hostOnline: readinessHostOnline,
+            configured: readinessConfigured,
+            selectedModel: selectedModel,
+            serverVoice: serverVoice,
+            voiceContextUpdatedAt: voiceContextUpdatedAt
         )
     }
 
@@ -161,6 +171,11 @@ final class LiveVoiceSessionService: NSObject, VoiceSessionServiceProtocol {
             }
             blockedReason = response.blockedReason
             canStartSession = response.ready
+            readinessHostOnline = response.hostOnline
+            readinessConfigured = response.configured
+            selectedModel = response.selectedModel
+            serverVoice = response.voice
+            voiceContextUpdatedAt = response.voiceContextUpdatedAt
             statusMessage = response.ready ? "Hermes talk is ready." : (response.blockedReason ?? "Talk is unavailable.")
             connectionState = response.ready ? .ready : .blocked
             if !response.ready {
@@ -169,6 +184,8 @@ final class LiveVoiceSessionService: NSObject, VoiceSessionServiceProtocol {
         } catch {
             blockedReason = error.localizedDescription
             canStartSession = false
+            readinessHostOnline = false
+            readinessConfigured = false
             statusMessage = friendlyStatusMessage(for: error)
             connectionState = .failed
             voiceState = .disconnected

@@ -20,6 +20,11 @@ final class TalkStore {
     var statusMessage: String?
     var canStartSession = true
     var latencyMetrics = TalkLatencyMetrics()
+    var hostOnline = false
+    var configured = false
+    var selectedModel: String?
+    var serverVoice: String?
+    var voiceContextUpdatedAt: Date?
     var voiceSessionID: UUID?
 
     /// Set after a voice session ends; consumed by MainTabView to trigger transcript injection.
@@ -159,6 +164,11 @@ final class TalkStore {
         canStartSession = snapshot.canStartSession
         latencyMetrics = snapshot.latencyMetrics
         voiceSessionID = snapshot.voiceSessionID
+        hostOnline = snapshot.hostOnline
+        configured = snapshot.configured
+        selectedModel = snapshot.selectedModel
+        serverVoice = snapshot.serverVoice
+        voiceContextUpdatedAt = snapshot.voiceContextUpdatedAt
         isSessionActive = connectionState == .connecting || connectionState == .connected
 
         // Update Live Activity on voice state changes

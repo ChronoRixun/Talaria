@@ -134,6 +134,11 @@ struct TalkSessionSnapshot: Hashable, Sendable {
     var canStartSession: Bool
     var latencyMetrics: TalkLatencyMetrics
     var voiceSessionID: UUID?
+    var hostOnline: Bool = false
+    var configured: Bool = false
+    var selectedModel: String? = nil
+    var serverVoice: String? = nil
+    var voiceContextUpdatedAt: Date? = nil
 }
 
 enum TalkSessionEvent: Hashable, Sendable {

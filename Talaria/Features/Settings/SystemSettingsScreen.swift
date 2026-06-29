@@ -135,6 +135,11 @@ struct SystemSettingsScreen: View {
                        valueColor: Design.Colors.secondaryForeground) {
                     PrivacySettingsScreen()
                 }
+                rowDivider
+                navRow(icon: "waveform", title: "Voice", value: "TALK",
+                       valueColor: Design.Colors.secondaryForeground) {
+                    VoiceSettingsScreen()
+                }
             }
             .groupPanel()
         }
