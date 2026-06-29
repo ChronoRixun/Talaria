@@ -144,6 +144,10 @@ final class SensorUploadService {
     private var isDraining = false
     private var outboxState: SensorOutboxState
 
+    /// Most recent drain attempt outcome (for the #15 sensor diagnostics panel).
+    private(set) var lastDrainSummary: String?
+    private(set) var lastDrainAt: Date?
+
     private let iso8601Formatter: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -169,6 +173,58 @@ final class SensorUploadService {
         self.healthService = healthService
         self.motionService = motionService
         self.outboxState = persistence.loadSensorOutboxState()
+    }
+
+    // MARK: - Diagnostics surface (#15)
+
+    /// Read-only snapshot of the sensor pipeline's internal state for the in-app
+    /// diagnostics panel. Computed from observable state, so a SwiftUI view that
+    /// reads it updates as the pipeline changes.
+    struct SensorDiagnostics {
+        let isActive: Bool
+        let isPaired: Bool
+        let pendingLocation: PendingLocationInfo?
+        let pendingHealthCount: Int
+        let lastDrainSummary: String?
+        let lastDrainAt: Date?
+        let locationAuthorization: LocationAuthorizationLevel
+        let locationAccuracyLabel: String
+        let healthAuthorization: PermissionStatus
+        let motionAuthorization: PermissionStatus
+
+        struct PendingLocationInfo {
+            let latitude: Double
+            let longitude: Double
+            let recordedAt: Date
+        }
+    }
+
+    var sensorDiagnostics: SensorDiagnostics {
+        SensorDiagnostics(
+            isActive: isActive,
+            isPaired: isPairedProvider(),
+            pendingLocation: outboxState.pendingLocation.map {
+                .init(latitude: $0.latitude, longitude: $0.longitude, recordedAt: $0.recordedAt)
+            },
+            pendingHealthCount: outboxState.pendingHealthSamples.count,
+            lastDrainSummary: lastDrainSummary,
+            lastDrainAt: lastDrainAt,
+            locationAuthorization: locationService.authorizationLevel,
+            locationAccuracyLabel: locationService.accuracyLevel.displayLabel,
+            healthAuthorization: healthService.authorizationStatus,
+            motionAuthorization: motionService?.authorizationStatus ?? .unsupported
+        )
+    }
+
+    /// Whether a non-empty access token is currently retrievable (async).
+    func hasValidAccessToken() async -> Bool {
+        let token = await accessTokenProvider()
+        return token?.isEmpty == false
+    }
+
+    private func recordDrain(_ summary: String) {
+        lastDrainSummary = summary
+        lastDrainAt = Date()
     }
 
     func start() {
@@ -309,15 +365,18 @@ final class SensorUploadService {
         }
         guard isActive else {
             sensorLog.warning("drain: BLOCKED — service not active (start() never called or stop()'d)")
+            recordDrain("Blocked: pipeline inactive")
             return
         }
         guard isPairedProvider() else {
             sensorLog.warning("drain: BLOCKED — isPairedProvider() returned false")
+            recordDrain("Blocked: not paired")
             return
         }
 
         guard let accessToken = await accessTokenProvider(), !accessToken.isEmpty else {
             sensorLog.warning("drain: BLOCKED — accessTokenProvider() returned nil/empty")
+            recordDrain("Blocked: no access token")
             return
         }
         _ = accessToken
@@ -333,7 +392,7 @@ final class SensorUploadService {
             if let pendingLocation = outboxState.pendingLocation {
                 let delivered = await uploadLocation(pendingLocation)
                 sensorLog.notice("drain: location upload \(delivered ? "delivered" : "FAILED", privacy: .public)")
-                guard delivered else { break }
+                guard delivered else { recordDrain("Location upload failed"); break }
                 outboxState.pendingLocation = nil
                 persistOutboxState()
                 continue
@@ -365,6 +424,7 @@ final class SensorUploadService {
             break
         }
         sensorLog.notice("drain: finished. Outbox remaining: loc=\(self.outboxState.pendingLocation != nil), health=\(self.outboxState.pendingHealthSamples.count)")
+        recordDrain(outboxState.isEmpty ? "Delivered · outbox clear" : "Partial · loc=\(outboxState.pendingLocation != nil ? 1 : 0), health=\(outboxState.pendingHealthSamples.count)")
     }
 
     private func persistOutboxState() {
