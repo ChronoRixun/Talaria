@@ -86,10 +86,15 @@ final class AppContainer {
             resolvedDefaults = .standard
         }
 
-        let persistence = UserDefaultsAppPersistenceStore(defaults: resolvedDefaults)
         let buildConfiguration = AppBuildConfiguration.current()
         let secureStore = KeychainSecureStore(
             serviceName: processEnvironment["UITEST_KEYCHAIN_SERVICE"] ?? "org.aethyrion.talaria.session"
+        )
+        // Keychain-mirrored so the pairing config survives clean reinstalls,
+        // like the session tokens already do (#41).
+        let persistence = UserDefaultsAppPersistenceStore(
+            defaults: resolvedDefaults,
+            keychainMirror: secureStore
         )
         let settingsStore = SettingsStore(
             persistence: persistence,
