@@ -243,7 +243,9 @@ fallback when relay is down.
 
 ---
 
-## 11. 🐛 Settings back-nav exits Settings instead of popping
+## 11. ✅ Settings back-nav exits Settings instead of popping — resolved by T3 redesign (#28)
+
+**Resolved by the T3 Settings redesign (#28, 2026-06-28).** The monolith `SettingsScreen.swift` was replaced with a proper NavigationStack sub-screen architecture; back-nav now pops within the Settings stack as expected.
 
 Navigating into some Settings sub-screens and tapping Back exits Settings entirely instead
 of returning to the previous screen. Back should pop to the prior screen within the
