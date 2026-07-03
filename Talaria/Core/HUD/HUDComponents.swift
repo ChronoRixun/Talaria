@@ -4,10 +4,11 @@ import SwiftUI
 // Reusable arc-reactor HUD building blocks. Every screen composes these instead
 // of hand-rolling shapes. See design/Talaria.dc.html.
 
-// MARK: Screen background (radial field + faint cyan grid)
+// MARK: Screen background (radial field + texture + faint grid)
 
-/// The base HUD field: deep radial gradient with an optional faint cyan grid.
-/// Drop behind a screen's content with `.ignoresSafeArea()`.
+/// The base HUD field: the theme's radial gradient, its background texture
+/// (embers / scanlines / paper grain — none for Deep Field), and an optional
+/// faint grid. Drop behind a screen's content with `.ignoresSafeArea()`.
 struct HUDScreenBackground: View {
     /// Optional fixed override. When nil (the default), the grid intensity
     /// follows the user's APPEARANCE → Grid Density pref via `ThemeRuntime`.
@@ -17,6 +18,7 @@ struct HUDScreenBackground: View {
         ZStack {
             Design.Colors.background
             Design.Colors.screenGradient
+            ThemeTextureView()
             GridOverlay()
                 .opacity(gridIntensity ?? ThemeRuntime.shared.gridDensity.gridIntensity)
         }
@@ -25,29 +27,64 @@ struct HUDScreenBackground: View {
 
 // MARK: Grid overlay
 
-/// Faint cyan grid (default 26pt cells) drawn with a Canvas.
+/// Faint background grid drawn with a Canvas. Style, color, and cell size
+/// follow the active theme (lines / phosphor dots / ledger rules) unless
+/// overridden.
 struct GridOverlay: View {
-    var cell: CGFloat = Design.Size.gridCell
-    var lineColor: Color = Design.Colors.accentTint(0.05)
+    var cell: CGFloat? = nil
+    var lineColor: Color? = nil
+    var style: ThemeGridStyle? = nil
 
     var body: some View {
+        let palette = ThemeRuntime.shared.palette
+        let cell = self.cell ?? palette.gridCell
+        let color = self.lineColor ?? palette.gridLineColor
+        let style = self.style ?? palette.gridStyle
+
         Canvas { context, size in
-            let stroke = GraphicsContext.Shading.color(lineColor)
-            var x: CGFloat = 0
-            while x <= size.width {
+            switch style {
+            case .lines:
                 var path = Path()
-                path.move(to: CGPoint(x: x, y: 0))
-                path.addLine(to: CGPoint(x: x, y: size.height))
-                context.stroke(path, with: stroke, lineWidth: 1)
-                x += cell
-            }
-            var y: CGFloat = 0
-            while y <= size.height {
+                var x: CGFloat = 0
+                while x <= size.width {
+                    path.move(to: CGPoint(x: x, y: 0))
+                    path.addLine(to: CGPoint(x: x, y: size.height))
+                    x += cell
+                }
+                var y: CGFloat = 0
+                while y <= size.height {
+                    path.move(to: CGPoint(x: 0, y: y))
+                    path.addLine(to: CGPoint(x: size.width, y: y))
+                    y += cell
+                }
+                context.stroke(path, with: .color(color), lineWidth: 1)
+
+            case .dots:
+                // Phosphor dot pitch — a dot at each cell intersection.
+                var dots = Path()
+                let radius: CGFloat = 0.8
+                var x: CGFloat = 0
+                while x <= size.width {
+                    var y: CGFloat = 0
+                    while y <= size.height {
+                        dots.addEllipse(in: CGRect(x: x - radius, y: y - radius,
+                                                   width: radius * 2, height: radius * 2))
+                        y += cell
+                    }
+                    x += cell
+                }
+                context.fill(dots, with: .color(color))
+
+            case .rules:
+                // Ledger rules — horizontal lines only.
                 var path = Path()
-                path.move(to: CGPoint(x: 0, y: y))
-                path.addLine(to: CGPoint(x: size.width, y: y))
-                context.stroke(path, with: stroke, lineWidth: 1)
-                y += cell
+                var y: CGFloat = 0
+                while y <= size.height {
+                    path.move(to: CGPoint(x: 0, y: y))
+                    path.addLine(to: CGPoint(x: size.width, y: y))
+                    y += cell
+                }
+                context.stroke(path, with: .color(color), lineWidth: 1)
             }
         }
         .allowsHitTesting(false)
