@@ -7,6 +7,8 @@ Talaria is a native SwiftUI iPhone client for a self-hosted [Hermes AI agent](ht
 
 **→ [Full documentation and screenshots at ChronoRixun.github.io/Talaria](https://ChronoRixun.github.io/Talaria)**
 
+Developers note: This functions for the most part, but is definitely a work in progress. The chat works, tool calls work, sensors work but can be a little buggy when resuming and don't drain properly. Notifications don't work right yet. 
+
 ---
 
 ## What it does
