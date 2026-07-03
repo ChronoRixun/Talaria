@@ -224,6 +224,34 @@ enum LocationSyncPreference: String, Codable, Hashable, Sendable {
     }
 }
 
+/// Full visual environment (background, foregrounds, surfaces, textures, orb
+/// identity). The accent (`AppearanceAccent`) selects the energetic hue *inside*
+/// a theme — see `ThemePaletteCore.swift` for the resolved color tables.
+enum AppearanceTheme: String, Codable, CaseIterable, Hashable, Sendable {
+    case deepField
+    case solarForge
+    case terminal
+    case paperTape
+
+    var displayLabel: String {
+        switch self {
+        case .deepField:  "Deep Field"
+        case .solarForge: "Solar Forge"
+        case .terminal:   "Terminal"
+        case .paperTape:  "Paper Tape"
+        }
+    }
+
+    /// Paper Tape is the one light environment — drives the root
+    /// `preferredColorScheme` so system chrome (keyboard, sheets, toggles)
+    /// follows the theme.
+    var isLight: Bool { self == .paperTape }
+}
+
+/// Three persisted accent *slots*. Raw values are stable (`cyan`/`amber`/`violet`,
+/// no migration); each theme re-interprets the slots as its own hue family, with
+/// the `.cyan` slot always resolving to the theme's hero accent (Cyan Arc /
+/// Forge Amber / Phosphor Green / Tracker Red).
 enum AppearanceAccent: String, Codable, CaseIterable, Hashable, Sendable {
     case cyan
     case amber
@@ -234,6 +262,32 @@ enum AppearanceAccent: String, Codable, CaseIterable, Hashable, Sendable {
         case .cyan: "Cyan · Arc"
         case .amber: "Amber · Forge"
         case .violet: "Violet · Flux"
+        }
+    }
+
+    /// Contextual label for the slot as resolved inside a theme.
+    func displayLabel(for theme: AppearanceTheme) -> String {
+        switch theme {
+        case .deepField:
+            displayLabel
+        case .solarForge:
+            switch self {
+            case .cyan: "Amber · Forge"
+            case .amber: "Cyan · Plasma"
+            case .violet: "Violet · Flux"
+            }
+        case .terminal:
+            switch self {
+            case .cyan: "Green · Phosphor"
+            case .amber: "Amber · Phosphor"
+            case .violet: "Cyan · IBM"
+            }
+        case .paperTape:
+            switch self {
+            case .cyan: "Red · Tracker"
+            case .amber: "Cyan · Ink"
+            case .violet: "Amber · Ink"
+            }
         }
     }
 }
@@ -278,6 +332,7 @@ struct UserSettings: Codable, Hashable, Sendable {
     var locationSyncPreference: LocationSyncPreference
     var hermesAPIBaseURL: String
     var modelsShimBaseURL: String
+    var appearanceTheme: AppearanceTheme
     var appearanceAccent: AppearanceAccent
     var hudGlowIntensity: Double
     var gridDensity: GridDensity
@@ -295,6 +350,7 @@ struct UserSettings: Codable, Hashable, Sendable {
         locationSyncPreference: LocationSyncPreference = .foregroundOnly,
         hermesAPIBaseURL: String = UserSettings.defaultHermesAPIBaseURL,
         modelsShimBaseURL: String = UserSettings.defaultModelsShimBaseURL,
+        appearanceTheme: AppearanceTheme = .deepField,
         appearanceAccent: AppearanceAccent = .cyan,
         hudGlowIntensity: Double = 1.0,
         gridDensity: GridDensity = .faint,
@@ -311,6 +367,7 @@ struct UserSettings: Codable, Hashable, Sendable {
         self.locationSyncPreference = locationSyncPreference
         self.hermesAPIBaseURL = hermesAPIBaseURL
         self.modelsShimBaseURL = modelsShimBaseURL
+        self.appearanceTheme = appearanceTheme
         self.appearanceAccent = appearanceAccent
         self.hudGlowIntensity = hudGlowIntensity
         self.gridDensity = gridDensity
@@ -329,6 +386,7 @@ struct UserSettings: Codable, Hashable, Sendable {
         case locationSyncPreference
         case hermesAPIBaseURL
         case modelsShimBaseURL
+        case appearanceTheme
         case appearanceAccent
         case hudGlowIntensity
         case gridDensity
@@ -349,6 +407,7 @@ struct UserSettings: Codable, Hashable, Sendable {
         locationSyncPreference = try container.decodeIfPresent(LocationSyncPreference.self, forKey: .locationSyncPreference) ?? .foregroundOnly
         hermesAPIBaseURL = try container.decodeIfPresent(String.self, forKey: .hermesAPIBaseURL) ?? UserSettings.defaultHermesAPIBaseURL
         modelsShimBaseURL = try container.decodeIfPresent(String.self, forKey: .modelsShimBaseURL) ?? UserSettings.defaultModelsShimBaseURL
+        appearanceTheme = try container.decodeIfPresent(AppearanceTheme.self, forKey: .appearanceTheme) ?? .deepField
         appearanceAccent = try container.decodeIfPresent(AppearanceAccent.self, forKey: .appearanceAccent) ?? .cyan
         hudGlowIntensity = try container.decodeIfPresent(Double.self, forKey: .hudGlowIntensity) ?? 1.0
         gridDensity = try container.decodeIfPresent(GridDensity.self, forKey: .gridDensity) ?? .faint
@@ -368,6 +427,7 @@ struct UserSettings: Codable, Hashable, Sendable {
         try container.encode(locationSyncPreference, forKey: .locationSyncPreference)
         try container.encode(hermesAPIBaseURL, forKey: .hermesAPIBaseURL)
         try container.encode(modelsShimBaseURL, forKey: .modelsShimBaseURL)
+        try container.encode(appearanceTheme, forKey: .appearanceTheme)
         try container.encode(appearanceAccent, forKey: .appearanceAccent)
         try container.encode(hudGlowIntensity, forKey: .hudGlowIntensity)
         try container.encode(gridDensity, forKey: .gridDensity)
