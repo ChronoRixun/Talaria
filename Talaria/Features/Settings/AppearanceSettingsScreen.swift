@@ -2,22 +2,30 @@ import SwiftUI
 
 // MARK: - Appearance settings screen (Settings → APPEARANCE)
 //
-// HUD appearance prefs. Mirrors design/Settings.dc.html screen 06. These are
-// PERSISTED to UserSettings and now drive the whole app live: accent / glow /
-// grid / reduce-motion are mirrored into `ThemeRuntime` at the app root, so the
-// `Design.*` accent tokens re-skin every surface on change. The on-screen PREVIEW
-// mirrors the same prefs; the Theme row reflects the active accent (the deep
-// "Deep Field" background is fixed — the single field option).
+// HUD appearance prefs. Mirrors design/Settings.dc.html screen 06, extended
+// with the theme system (design/THEME_SYSTEM_PLAN.md). Theme / accent / glow /
+// grid / reduce-motion are PERSISTED to UserSettings and drive the whole app
+// live via `ThemeRuntime` at the app root.
+//
+// Preview helpers here resolve `ThemePalette(theme:accent:)` DIRECTLY (not the
+// live runtime) so each theme card can render its own environment while a
+// different theme is active. The accent swatches show the slot colors as the
+// *current* theme resolves them (hero-slot model — see ThemePaletteCore.swift).
 struct AppearanceSettingsScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(SettingsStore.self) private var settingsStore
 
     @State private var spin = false
 
+    private var theme: AppearanceTheme { settingsStore.settings.appearanceTheme }
     private var accent: AppearanceAccent { settingsStore.settings.appearanceAccent }
     private var glow: Double { settingsStore.settings.hudGlowIntensity }
     private var grid: GridDensity { settingsStore.settings.gridDensity }
     private var reduceMotion: Bool { settingsStore.settings.reduceMotion }
+
+    /// Palette for the *selected* (theme, accent) — matches the live runtime
+    /// once the app root mirrors the settings change.
+    private var palette: ThemePalette { ThemePalette(theme: theme.themeID, accent: accent.slot) }
 
     var body: some View {
         ZStack {
@@ -28,6 +36,7 @@ struct AppearanceSettingsScreen: View {
                 VStack(spacing: Design.Spacing.lg) {
                     SettingsScreenHeader(title: "Appearance", subtitle: "Heads-Up Display") { dismiss() }
                     previewPanel
+                    themeSection
                     accentSection
                     glowSection
                     gridSection
@@ -45,70 +54,62 @@ struct AppearanceSettingsScreen: View {
     // MARK: Preview
 
     private var previewPanel: some View {
-        let c = accentColors(accent)
+        let p = palette
         return ZStack {
             RoundedRectangle(cornerRadius: Design.CornerRadius.xl)
-                .fill(LinearGradient(colors: [Color(hex: 0x0C2730), Color(hex: 0x04070C)],
+                .fill(LinearGradient(colors: p.screenGradientStops.map(\.color),
                                      startPoint: .top, endPoint: .bottom))
 
-            previewGrid(color: c.base)
-            previewBrackets(color: c.base)
+            previewGrid(p)
+            previewBrackets(color: p.base)
 
             VStack {
                 HStack {
                     MonoLabel("PREVIEW", size: 8, weight: .medium,
-                              tracking: Design.Tracking.monoWide, color: Design.Colors.mutedForeground)
+                              tracking: Design.Tracking.monoWide, color: p.mutedForeground)
                     Spacer()
                 }
                 Spacer()
                 HStack {
                     Spacer()
                     MonoLabel("REACTOR · GLOW \(String(format: "%.1f", glow))", size: 8, weight: .medium,
-                              tracking: Design.Tracking.mono, color: c.base)
+                              tracking: Design.Tracking.mono, color: p.base)
                 }
             }
             .padding(Design.Spacing.sm)
 
-            previewReactor(c)
+            previewReactor(p)
         }
         .frame(height: 150)
         .clipShape(RoundedRectangle(cornerRadius: Design.CornerRadius.xl))
         .overlay {
             RoundedRectangle(cornerRadius: Design.CornerRadius.xl)
-                .strokeBorder(c.base.opacity(0.22), lineWidth: 1)
+                .strokeBorder(p.base.opacity(0.22), lineWidth: 1)
         }
     }
 
-    private func previewReactor(_ c: AccentColors) -> some View {
+    private func previewReactor(_ p: ThemePalette) -> some View {
         ZStack {
             Circle()
-                .strokeBorder(c.base.opacity(0.35), lineWidth: 1.5)
+                .strokeBorder(p.base.opacity(0.35), lineWidth: 1.5)
             Circle()
                 .trim(from: 0, to: 0.28)
-                .stroke(c.base, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                .stroke(p.base, style: StrokeStyle(lineWidth: 2, lineCap: .round))
                 .padding(6)
                 .rotationEffect(.degrees(spin ? 360 : 0))
                 .animation(reduceMotion ? nil : .linear(duration: 4).repeatForever(autoreverses: false), value: spin)
             Circle()
-                .fill(RadialGradient(colors: [c.bright, c.base, c.deep],
+                .fill(RadialGradient(colors: [p.bright, p.base, p.deep],
                                      center: UnitPoint(x: 0.5, y: 0.4), startRadius: 0, endRadius: 13))
                 .padding(16)
-                .shadow(color: c.base.opacity(0.7), radius: max(2, 16 * glow))
+                .shadow(color: p.base.opacity(0.7 * p.glowScale), radius: max(2, 16 * glow))
         }
         .frame(width: 58, height: 58)
     }
 
-    private func previewGrid(color: Color) -> some View {
-        Canvas { ctx, size in
-            let step: CGFloat = 22
-            var path = Path()
-            var x: CGFloat = 0
-            while x <= size.width { path.move(to: CGPoint(x: x, y: 0)); path.addLine(to: CGPoint(x: x, y: size.height)); x += step }
-            var y: CGFloat = 0
-            while y <= size.height { path.move(to: CGPoint(x: 0, y: y)); path.addLine(to: CGPoint(x: size.width, y: y)); y += step }
-            ctx.stroke(path, with: .color(color.opacity(0.12)), lineWidth: 1)
-        }
-        .opacity(gridPreviewOpacity)
+    private func previewGrid(_ p: ThemePalette) -> some View {
+        GridOverlay(cell: 22, lineColor: p.base.opacity(0.12), style: p.gridStyle)
+            .opacity(gridPreviewOpacity)
     }
 
     private var gridPreviewOpacity: Double {
@@ -147,6 +148,65 @@ struct AppearanceSettingsScreen: View {
         .rotationEffect(rotation)
     }
 
+    // MARK: Theme
+
+    private var themeSection: some View {
+        VStack(alignment: .leading, spacing: Design.Spacing.sm) {
+            MonoLabel("// Theme", size: 10, tracking: Design.Tracking.monoXWide,
+                      color: Design.Colors.mutedForeground)
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: Design.Spacing.sm),
+                                GridItem(.flexible())],
+                      spacing: Design.Spacing.sm) {
+                ForEach(AppearanceTheme.allCases, id: \.self) { themeCard($0) }
+            }
+        }
+    }
+
+    private func themeCard(_ t: AppearanceTheme) -> some View {
+        // Each card renders its own environment, resolved with the user's
+        // current accent slot so it previews what they'd actually get.
+        let p = ThemePalette(theme: t.themeID, accent: accent.slot)
+        let selected = (t == theme)
+        return Button {
+            settingsStore.settings.appearanceTheme = t
+        } label: {
+            VStack(spacing: Design.Spacing.xs) {
+                ZStack {
+                    Circle()
+                        .strokeBorder(p.base.opacity(0.4), lineWidth: 1.5)
+                        .frame(width: 34, height: 34)
+                    Circle()
+                        .fill(RadialGradient(colors: [p.bright, p.base, p.deep],
+                                             center: UnitPoint(x: 0.5, y: 0.4),
+                                             startRadius: 0, endRadius: 9))
+                        .frame(width: 16, height: 16)
+                        .shadow(color: p.base.opacity(0.6 * p.glowScale), radius: 6)
+                }
+                .padding(.top, Design.Spacing.sm)
+
+                MonoLabel(t.displayLabel, size: 9, weight: .medium,
+                          tracking: Design.Tracking.mono, color: p.foreground)
+                    .padding(.bottom, Design.Spacing.sm)
+            }
+            .frame(maxWidth: .infinity)
+            .background(
+                LinearGradient(colors: p.screenGradientStops.map(\.color),
+                               startPoint: .top, endPoint: .bottom),
+                in: RoundedRectangle(cornerRadius: Design.CornerRadius.lg)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: Design.CornerRadius.lg)
+                    .strokeBorder(selected ? p.base.opacity(0.7) : p.hairline,
+                                  lineWidth: selected ? 1.5 : 1)
+            }
+            .shadow(color: selected ? p.base.opacity(0.35 * p.glowScale) : .clear, radius: 8)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(t.displayLabel)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
     // MARK: Accent
 
     private var accentSection: some View {
@@ -156,15 +216,16 @@ struct AppearanceSettingsScreen: View {
             HStack(spacing: Design.Spacing.md) {
                 ForEach(AppearanceAccent.allCases, id: \.self) { accentSwatch($0) }
                 Spacer()
-                MonoLabel(accent.displayLabel.uppercased(), size: 9, weight: .medium,
-                          tracking: Design.Tracking.mono, color: accentColors(accent).base)
+                MonoLabel(accent.displayLabel(for: theme).uppercased(), size: 9, weight: .medium,
+                          tracking: Design.Tracking.mono, color: palette.base)
             }
             .padding(.horizontal, Design.Spacing.xs)
         }
     }
 
     private func accentSwatch(_ a: AppearanceAccent) -> some View {
-        let c = accentColors(a)
+        // The slot swatch shows the color the CURRENT theme resolves it to.
+        let c = ThemePalette(theme: theme.themeID, accent: a.slot)
         let selected = (a == accent)
         return Button {
             settingsStore.settings.appearanceAccent = a
@@ -174,7 +235,7 @@ struct AppearanceSettingsScreen: View {
                     Circle()
                         .strokeBorder(c.base, lineWidth: 1.5)
                         .frame(width: 34, height: 34)
-                        .shadow(color: c.base.opacity(0.45), radius: 6)
+                        .shadow(color: c.base.opacity(0.45 * c.glowScale), radius: 6)
                 }
                 Circle()
                     .fill(c.base)
@@ -185,7 +246,7 @@ struct AppearanceSettingsScreen: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(a.displayLabel)
+        .accessibilityLabel(a.displayLabel(for: theme))
     }
 
     // MARK: Glow
@@ -197,10 +258,10 @@ struct AppearanceSettingsScreen: View {
                           color: Design.Colors.mutedForeground)
                 Spacer()
                 MonoLabel(String(format: "%.1f", glow), size: 11, weight: .medium,
-                          tracking: Design.Tracking.mono, color: accentColors(accent).base)
+                          tracking: Design.Tracking.mono, color: palette.base)
             }
             Slider(value: glowBinding, in: 0...1.6, step: 0.1)
-                .tint(accentColors(accent).base)
+                .tint(palette.base)
                 .padding(.horizontal, Design.Spacing.xxs)
         }
     }
@@ -226,7 +287,7 @@ struct AppearanceSettingsScreen: View {
 
     private func gridSegment(_ d: GridDensity) -> some View {
         let selected = (d == grid)
-        let c = accentColors(accent).base
+        let c = palette.base
         return Button {
             settingsStore.settings.gridDensity = d
         } label: {
@@ -242,7 +303,7 @@ struct AppearanceSettingsScreen: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: Reduce motion + theme (locked)
+    // MARK: Reduce motion + theme summary
 
     private var togglePanel: some View {
         VStack(spacing: 0) {
@@ -253,7 +314,7 @@ struct AppearanceSettingsScreen: View {
                 Spacer()
                 Toggle("", isOn: reduceMotionBinding)
                     .labelsHidden()
-                    .tint(accentColors(accent).base)
+                    .tint(palette.base)
             }
             .padding(.horizontal, Design.Spacing.md)
             .padding(.vertical, Design.Spacing.sm)
@@ -268,8 +329,9 @@ struct AppearanceSettingsScreen: View {
                     .font(Design.Typography.callout)
                     .foregroundStyle(Design.Colors.foreground)
                 Spacer()
-                MonoLabel("Deep Field · \(accent.displayLabel)", size: 10, weight: .medium,
-                          tracking: Design.Tracking.mono, color: accentColors(accent).base)
+                MonoLabel("\(theme.displayLabel) · \(accent.displayLabel(for: theme))",
+                          size: 10, weight: .medium,
+                          tracking: Design.Tracking.mono, color: palette.base)
             }
             .padding(.horizontal, Design.Spacing.md)
             .padding(.vertical, Design.Spacing.sm)
@@ -296,21 +358,5 @@ struct AppearanceSettingsScreen: View {
             get: { settingsStore.settings.reduceMotion },
             set: { settingsStore.settings.reduceMotion = $0 }
         )
-    }
-
-    // MARK: Accent colors
-
-    private struct AccentColors {
-        let base: Color
-        let bright: Color
-        let deep: Color
-    }
-
-    private func accentColors(_ a: AppearanceAccent) -> AccentColors {
-        switch a {
-        case .cyan:   AccentColors(base: Color(hex: 0x54E6F0), bright: Color(hex: 0xCDF8FB), deep: Color(hex: 0x14636E))
-        case .amber:  AccentColors(base: Color(hex: 0xFFC14D), bright: Color(hex: 0xFFE2A6), deep: Color(hex: 0x6E4D14))
-        case .violet: AccentColors(base: Color(hex: 0xB18CFF), bright: Color(hex: 0xE2D4FF), deep: Color(hex: 0x3A2D6E))
-        }
     }
 }
