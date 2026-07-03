@@ -121,17 +121,33 @@ works against OJAMD.
 
 ## Design system
 
-Tokens in `Talaria/Core/Design.swift` — note the **two** namespaces:
-- `Design.Brand.*` — `accent` #54E6F0, `accentBright` #CDF8FB, `accentDeep`, **`forge`**
-  amber #FFC14D.
-- `Design.Colors.*` — `foreground`/`foregroundBright`, `mutedForeground`, `dimForeground`,
-  `danger` #E0625F, `dangerBright` #FF8A86, `surface`, `cyanHairline`, `accentTint(_)`.
+**Theme system (2026-07-03, `design/THEME_SYSTEM_PLAN.md`):** a THEME (Deep Field /
+Solar Forge / Terminal / Paper Tape) owns the whole color environment; the ACCENT is one
+of three persisted slots (`cyan`/`amber`/`violet` raw values — never rename) that each
+theme re-interprets, slot `.cyan` always = the theme's hero hue (Cyan Arc / Forge Amber /
+Phosphor Green / Tracker Red). **All color values live in
+`Shared/ThemePaletteCore.swift`** (compiled into app + widget targets); `ThemeRuntime`
+(theme/accent/glow/grid/reduce-motion) resolves them live. Deep Field × cyan is
+byte-identical to the pre-theming app (guarded by `DesignThemeTests`). Paper Tape is
+light: root `preferredColorScheme` follows `theme.isLight`, and `hudGlow` multiplies by
+`palette.glowScale` (≈0.15 on paper).
 
-HUD components in `Talaria/Core/HUD/`: `MonoLabel`, `StatusPip`, `GlowButton` (cyan-only —
-build tinted pills for amber/red), `GhostButton`, `ReactorOrb`
-(`.minimal`/`.standard`/`.onboarding`/`.voice`), `HUDScreenBackground`,
-`SettingsScreenHeader`, `GlassCircleButton`; modifiers `.hudPanel` / `.hudGlow` /
-`.continuousRotation`; `Color(hex:opacity:)`.
+Tokens in `Talaria/Core/Design.swift` — note the **two** namespaces:
+- `Design.Brand.*` — `accent`/`accentBright`/`accentDeep` (theme-resolved; Deep Field
+  cyan #54E6F0/#CDF8FB), **`forge`** warning (amber on Deep Field).
+- `Design.Colors.*` — `foreground`/`foregroundBright`, `mutedForeground`, `dimForeground`,
+  `danger`, `dangerBright`, `surface`, `hairline`/`strongBorder` (ex-`cyanHairline`/
+  `cyanBorder`), `accentTint(_)`, `scrim`, `screenGradient`, `drawerGradient`.
+
+HUD components in `Talaria/Core/HUD/`: `MonoLabel`, `StatusPip`, `GlowButton` (accent —
+build tinted pills for forge/danger), `GhostButton`, `ReactorOrb`
+(`.minimal`/`.standard`/`.onboarding`/`.voice`; drawing re-skins per theme),
+`HUDScreenBackground` (gradient + `ThemeTextureView` + `GridOverlay`
+lines/dots/rules), `SettingsScreenHeader`, `GlassCircleButton`; modifiers `.hudPanel` /
+`.hudGlow` / `.continuousRotation`; `Color(hex:opacity:)` (defined in
+`Shared/ThemePaletteCore.swift`). Widgets pick a theme per instance
+(`WidgetTheme`, default Match App via `HermesWidgetData.appearanceTheme` — kept in
+lockstep across BOTH `HermesWidgetData.swift` copies).
 
 ## Conventions
 
@@ -144,8 +160,14 @@ build tinted pills for amber/red), `GhostButton`, `ReactorOrb`
 - Issues tracked in `OPEN_ITEMS.md` (dated update notes); session continuity in
   the local `handoffs/` notes (gitignored) + `CLEAN_CHAT_PATH.md`.
 
-## Current state (2026-06-27)
+## Current state (2026-07-03)
 
+- **Theme system built on `claude/theming-options-plan-c4356l`** (#49): four themes ×
+  three accent slots, palette core in `Shared/`, textures, per-theme orbs, theme picker,
+  themed widgets with per-instance selection. **Not yet compiled or device-verified** —
+  written in the cloud session without Xcode; next Mac session must `xcodegen generate`
+  (project.yml now declares `aps-environment`, closing the #44/#48 strip trap), run the
+  CLI build, fix any stragglers, and verify Deep Field is pixel-identical on device.
 - Branch `feat/settings-index-swap`. T3 Settings sub-pages 09–12 built + SYSTEM index
   swapped live in `ContentView`; dead monolith `SettingsScreen.swift` removed (#28/#30).
   Verbose Logging shipped + 27 diagnostics gated (#29). CTX meter usage now parsed (#25
