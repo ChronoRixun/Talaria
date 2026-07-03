@@ -7,7 +7,9 @@ import SwiftUI
 
 extension View {
     /// Outer accent glow. `intensity` maps to the design's `--glowK` (driven by
-    /// the user's Glow Intensity pref via `Design.Glow.k`).
+    /// the user's Glow Intensity pref via `Design.Glow.k`). The theme's
+    /// `glowScale` rides on top — 1.0 on the dark themes, near-zero on Paper
+    /// Tape where a glow becomes a faint ink shadow.
     @MainActor
     func hudGlow(
         _ color: Color = Design.Brand.accent,
@@ -15,7 +17,10 @@ extension View {
         strength: Double = 0.4,
         intensity: Double = Design.Glow.k
     ) -> some View {
-        shadow(color: color.opacity(strength * intensity), radius: radius)
+        shadow(
+            color: color.opacity(strength * intensity * ThemeRuntime.shared.palette.glowScale),
+            radius: radius
+        )
     }
 }
 

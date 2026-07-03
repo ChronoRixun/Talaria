@@ -37,7 +37,9 @@ enum VoiceState: String, Codable, Hashable, Sendable, CaseIterable {
         case .thinking: .purple
         case .speaking: .green
         case .interrupted: .orange
-        case .disconnected: Color.white.opacity(0.15)
+        // Adaptive: white on the dark themes (pre-theming value), ink on
+        // Paper Tape via the root preferredColorScheme.
+        case .disconnected: Color.primary.opacity(0.15)
         }
     }
 }

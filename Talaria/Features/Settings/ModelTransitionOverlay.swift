@@ -109,7 +109,9 @@ struct ModelTransitionOverlay: View {
     // MARK: Scrim + card router
 
     private var scrim: some View {
-        Color(hex: 0x06080C, opacity: 0.92)
+        // Theme background at near-full strength (Deep Field: #06080C @ .92,
+        // byte-identical to the pre-theming constant).
+        Design.Colors.background.opacity(0.92)
             .overlay(alignment: .center) {
                 RadialGradient(
                     colors: [Design.Colors.accentTint(0.10), .clear],

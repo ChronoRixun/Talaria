@@ -25,6 +25,9 @@ struct AppRootView: View {
         .animation(Design.Motion.standard, value: container.pairingStore.isPaired)
         .animation(Design.Motion.standard, value: container.pairingStore.needsPermissionsOnboarding)
         .animation(Design.Motion.gentle, value: shouldShowSplash)
+        // System chrome (keyboard, sheets, toggles, context menus) follows the
+        // theme: light only for Paper Tape, dark for the HUD themes.
+        .preferredColorScheme(ThemeRuntime.shared.theme.isLight ? .light : .dark)
         .task {
             try? await Task.sleep(for: Self.minimumSplashDuration)
             hasSatisfiedMinimumSplashTime = true
