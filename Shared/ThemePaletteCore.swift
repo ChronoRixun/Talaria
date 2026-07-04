@@ -31,6 +31,17 @@ enum AccentSlot: String, CaseIterable, Codable, Hashable, Sendable {
     case violet
 }
 
+extension ThemeID {
+    /// A theme whose identity IS a single hue exposes no accent choice: palette
+    /// resolution pins the effective slot to this hero regardless of the
+    /// persisted accent, so a slot picked under another theme can't bleed
+    /// through (#12). The stored pref stays untouched — switching away restores
+    /// the user's prior accent. `nil` = the theme re-interprets all three slots.
+    var lockedAccentSlot: AccentSlot? {
+        self == .terminal ? .cyan : nil
+    }
+}
+
 /// How `GridOverlay` draws the background grid for a theme.
 enum ThemeGridStyle: Hashable, Sendable {
     /// Vertical + horizontal hairlines (Deep Field, Solar Forge).
@@ -107,11 +118,15 @@ struct ThemePalette: Equatable, Sendable {
     let isLight: Bool
 
     init(theme: ThemeID, accent: AccentSlot) {
+        // Locked themes (Terminal) resolve their hero slot no matter what
+        // accent was persisted — this is the single pin point for the app,
+        // the Appearance previews, and both widget resolution paths (#12).
+        let effective = theme.lockedAccentSlot ?? accent
         switch theme {
-        case .deepField: self.init(deepField: accent)
-        case .solarForge: self.init(solarForge: accent)
-        case .terminal: self.init(terminal: accent)
-        case .paperTape: self.init(paperTape: accent)
+        case .deepField: self.init(deepField: effective)
+        case .solarForge: self.init(solarForge: effective)
+        case .terminal: self.init(terminal: effective)
+        case .paperTape: self.init(paperTape: effective)
         }
     }
 

@@ -31,10 +31,28 @@ struct DesignThemeTests {
         }
     }
 
-    @Test func accentSlotsAreDistinctWithinEachTheme() {
-        for theme in ThemeID.allCases {
+    @Test func accentSlotsAreDistinctWithinEachUnlockedTheme() {
+        for theme in ThemeID.allCases where theme.lockedAccentSlot == nil {
             let bases = AccentSlot.allCases.map { ThemePalette(theme: theme, accent: $0).base }
             #expect(Set(bases).count == bases.count)
+        }
+    }
+
+    @Test func terminalPinsEveryAccentSlotToPhosphorGreen() {
+        // Terminal's identity IS the phosphor green (#12): whatever slot was
+        // persisted under another theme, resolution lands on the hero palette.
+        #expect(ThemeID.terminal.lockedAccentSlot == .cyan)
+        let hero = ThemePalette(theme: .terminal, accent: .cyan)
+        for accent in AccentSlot.allCases {
+            let p = ThemePalette(theme: .terminal, accent: accent)
+            #expect(p == hero)
+            #expect(p.base == Color(hex: 0x33FF00))
+        }
+    }
+
+    @Test func onlyTerminalLocksItsAccent() {
+        for theme in ThemeID.allCases {
+            #expect((theme.lockedAccentSlot != nil) == (theme == .terminal))
         }
     }
 

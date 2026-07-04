@@ -27,6 +27,14 @@ struct AppearanceSettingsScreen: View {
     /// once the app root mirrors the settings change.
     private var palette: ThemePalette { ThemePalette(theme: theme.themeID, accent: accent.slot) }
 
+    /// The accent palette resolution actually uses. Locked themes (Terminal)
+    /// pin to their hero slot (#12), so labels must not echo a stale stored
+    /// accent while the screen renders the hero hue.
+    private var effectiveAccent: AppearanceAccent {
+        guard let locked = theme.themeID.lockedAccentSlot else { return accent }
+        return AppearanceAccent(rawValue: locked.rawValue) ?? accent
+    }
+
     var body: some View {
         ZStack {
             HUDScreenBackground()
@@ -37,7 +45,11 @@ struct AppearanceSettingsScreen: View {
                     SettingsScreenHeader(title: "Appearance", subtitle: "Heads-Up Display") { dismiss() }
                     previewPanel
                     themeSection
-                    accentSection
+                    // Locked themes (Terminal) offer no accent choice — their
+                    // identity is the hero hue (#12).
+                    if theme.themeID.lockedAccentSlot == nil {
+                        accentSection
+                    }
                     glowSection
                     gridSection
                     togglePanel
@@ -329,7 +341,7 @@ struct AppearanceSettingsScreen: View {
                     .font(Design.Typography.callout)
                     .foregroundStyle(Design.Colors.foreground)
                 Spacer()
-                MonoLabel("\(theme.displayLabel) · \(accent.displayLabel(for: theme))",
+                MonoLabel("\(theme.displayLabel) · \(effectiveAccent.displayLabel(for: theme))",
                           size: 10, weight: .medium,
                           tracking: Design.Tracking.mono, color: palette.base)
             }
