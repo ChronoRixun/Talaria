@@ -878,14 +878,14 @@ final class SessionsHermesClient: HermesClientProtocol {
                 let c = try decoder.container(keyedBy: CodingKeys.self)
                 var resolved: String?
                 for key in [CodingKeys.name, .toolName, .tool] {
-                    if let value = try? c.decodeIfPresent(String.self, forKey: key), value?.isEmpty == false {
+                    if let value = try? c.decodeIfPresent(String.self, forKey: key), value.isEmpty == false {
                         resolved = value
                         break
                     }
                 }
                 if resolved == nil,
                    let function = try? c.decodeIfPresent(FunctionEnvelope.self, forKey: .function) {
-                    resolved = function?.name
+                    resolved = function.name
                 }
                 name = resolved
                 detail = (try? c.decodeIfPresent(String.self, forKey: .preview)) ?? nil
