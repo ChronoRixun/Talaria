@@ -90,7 +90,8 @@ final class LivePairingService: PairingServiceProtocol {
             configuration: PairedRelayConfiguration(
                 baseURLString: resolvedEndpoint,
                 hostDisplayName: URL(string: resolvedEndpoint)?.host ?? resolvedEndpoint,
-                pairedAt: .now
+                pairedAt: .now,
+                relayUserID: response.user.id
             ),
             state: AppSessionState(
                 userID: response.user.id,

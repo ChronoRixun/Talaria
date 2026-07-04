@@ -355,6 +355,10 @@ final class AppContainer {
 
         await permissionsStore.reloadCapabilities()
         await sessionStore.bootstrap()
+        // #3/#46: a reinstall can resurrect a previous relay identity from the
+        // Keychain — verify the bootstrapped session's user matches the one
+        // this pairing minted before relay-backed features run on it.
+        pairingStore.validateRestoredIdentity()
         if sessionStore.state.connectionStatus != .connected {
             // Relay bootstrap failed (e.g. the relay restarted and invalidated this
             // device's tokens → 401 on register/session/refresh). Do NOT strand the

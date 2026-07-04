@@ -62,6 +62,8 @@ struct DiagnosticsSettingsScreen: View {
             rowDivider
             statusRow("Relay Link", relayStatus)
             rowDivider
+            statusRow("Relay Identity", identityStatus)
+            rowDivider
             statusRow("Push Token", pushStatus)
             rowDivider
             statusRow("Location", locationStatus)
@@ -111,6 +113,27 @@ struct DiagnosticsSettingsScreen: View {
         case .disconnected: RowStatus(text: "STANDBY",    color: Design.Brand.forge,   blinks: true)
         case .error:        RowStatus(text: "ERROR",      color: Design.Colors.danger, blinks: false)
         }
+    }
+
+    // #3/#46: which relay user this session actually authenticates as. A
+    // Keychain-resurrected identity from a previous install shows as a
+    // mismatch against the user the current pairing minted — the "sensors
+    // 202-forever while chat works" failure is a glance here, not a forensic
+    // session. "—" when there's no session user yet.
+    private var identityStatus: RowStatus {
+        if container.pairingStore.identityMismatchDetected {
+            return RowStatus(text: "STALE — RE-PAIR", color: Design.Colors.danger, blinks: true)
+        }
+        guard let userID = sessionStore.state.userID else {
+            return RowStatus(text: "—", color: Design.Colors.mutedForeground, blinks: false)
+        }
+        let short = userID.uuidString.prefix(8).uppercased()
+        if container.pairingStore.expectedRelayUserID == nil {
+            // Pre-#3 pairing: identity shown but unverifiable until a re-pair
+            // records the minted user.
+            return RowStatus(text: "USER \(short) · UNVERIFIED", color: Design.Brand.forge, blinks: false)
+        }
+        return RowStatus(text: "USER \(short)", color: Design.Brand.accent, blinks: false)
     }
 
     // Same three-state source of truth the Notifications screen renders

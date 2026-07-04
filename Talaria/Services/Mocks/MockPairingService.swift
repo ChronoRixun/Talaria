@@ -11,14 +11,16 @@ final class MockPairingService: PairingServiceProtocol {
         request: DeviceRegistrationRequest
     ) async throws -> PairingRedeemResult {
         let normalizedCode = try normalizePairingCode(normalizedCode)
+        let mintedUserID = UUID()
         return PairingRedeemResult(
             configuration: PairedRelayConfiguration(
                 baseURLString: request.relayBaseURLString,
                 hostDisplayName: URL(string: request.relayBaseURLString)?.host ?? request.relayBaseURLString,
-                pairedAt: .now
+                pairedAt: .now,
+                relayUserID: mintedUserID
             ),
             state: AppSessionState(
-                userID: UUID(),
+                userID: mintedUserID,
                 displayName: "Morgan",
                 deviceID: UUID(),
                 installationID: request.installationID,
