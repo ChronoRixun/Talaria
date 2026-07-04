@@ -110,6 +110,8 @@ struct AppStoresTests {
 
     @MainActor
     private final class RecordingPairingService: PairingServiceProtocol {
+        private(set) var lastMintedUserID: UUID?
+
         func normalizePairingCode(_ rawCode: String) throws -> String {
             try PhonePairingCode.normalize(rawCode)
         }
@@ -118,14 +120,17 @@ struct AppStoresTests {
             _ normalizedCode: String,
             request: DeviceRegistrationRequest
         ) async throws -> PairingRedeemResult {
-            PairingRedeemResult(
+            let mintedUserID = UUID()
+            lastMintedUserID = mintedUserID
+            return PairingRedeemResult(
                 configuration: PairedRelayConfiguration(
                     baseURLString: request.relayBaseURLString,
                     hostDisplayName: URL(string: request.relayBaseURLString)?.host ?? request.relayBaseURLString,
-                    pairedAt: .now
+                    pairedAt: .now,
+                    relayUserID: mintedUserID
                 ),
                 state: AppSessionState(
-                    userID: UUID(),
+                    userID: mintedUserID,
                     displayName: "Morgan",
                     deviceID: UUID(),
                     installationID: request.installationID,
@@ -1730,10 +1735,127 @@ struct AppStoresTests {
 
         await pairingStore.disconnect()
 
+        // Clear-on-disconnect guard (#3): the Keychain must hold NO relay
+        // identity after an unpair — both token keys gone, config gone from
+        // both stores.
         #expect(pairingStore.pairedRelayConfiguration == nil)
         #expect(persistence.loadPairedRelayConfiguration() == nil)
         #expect(await secureStore.retrieve(key: "session.accessToken") == nil)
+        #expect(await secureStore.retrieve(key: "session.refreshToken") == nil)
         #expect(sessionStore.state.deviceRegistered == false)
+    }
+
+    // MARK: - Stale Keychain identity (#3 / #46)
+
+    @Test @MainActor
+    func pairingWipesStaleKeychainIdentityAndRecordsMintedUser() async throws {
+        let suiteName = "pairing-store-stale-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+
+        let persistence = UserDefaultsAppPersistenceStore(defaults: defaults)
+        let secureStore = MockSecureStore()
+
+        // Simulate a reinstall-resurrected identity: stale tokens in the
+        // Keychain, a stale pairing config, and a stale session user.
+        let staleUserID = UUID()
+        await secureStore.store(key: "session.accessToken", value: "stale-access-token")
+        await secureStore.store(key: "session.refreshToken", value: "stale-refresh-token")
+        persistence.savePairedRelayConfiguration(
+            PairedRelayConfiguration(
+                baseURLString: "https://old.relay.test/v1",
+                hostDisplayName: "old.relay.test",
+                pairedAt: .distantPast,
+                relayUserID: staleUserID
+            )
+        )
+        persistence.saveSessionState(AppSessionState(userID: staleUserID, deviceRegistered: true))
+
+        let sessionStore = AppSessionStore(
+            bootstrapService: MockSessionBootstrapService(),
+            syncCoordinator: MockSyncCoordinator(),
+            secureStore: secureStore,
+            persistence: persistence,
+            notificationService: MockNotificationService(),
+            environmentProvider: { .production }
+        )
+        let pairingService = RecordingPairingService()
+        let pairingStore = PairingStore(
+            pairingService: pairingService,
+            sessionStore: sessionStore,
+            persistence: persistence,
+            environmentProvider: { .production },
+            relayBaseURLProvider: { "https://relay.example.test/v1" }
+        )
+
+        let didPair = await pairingStore.pair(using: makeSetupCode())
+
+        // No stale survivor: tokens are the freshly minted ones, the pairing
+        // records the minted relay user, and the session matches it.
+        #expect(didPair)
+        #expect(await secureStore.retrieve(key: "session.accessToken") == "paired-access-token-ABCDEFGH")
+        #expect(await secureStore.retrieve(key: "session.refreshToken") == "paired-refresh-token-ABCDEFGH")
+        #expect(pairingStore.pairedRelayConfiguration?.relayUserID == pairingService.lastMintedUserID)
+        #expect(sessionStore.state.userID == pairingService.lastMintedUserID)
+        #expect(pairingStore.identityMismatchDetected == false)
+        pairingStore.validateRestoredIdentity()
+        #expect(pairingStore.identityMismatchDetected == false)
+    }
+
+    @Test @MainActor
+    func validateRestoredIdentityFlagsResurrectedStaleUser() async throws {
+        let suiteName = "pairing-store-mismatch-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+
+        let persistence = UserDefaultsAppPersistenceStore(defaults: defaults)
+        let sessionStore = AppSessionStore(
+            bootstrapService: MockSessionBootstrapService(),
+            syncCoordinator: MockSyncCoordinator(),
+            secureStore: MockSecureStore(),
+            persistence: persistence,
+            notificationService: MockNotificationService(),
+            environmentProvider: { .production }
+        )
+
+        let pairedUserID = UUID()
+        persistence.savePairedRelayConfiguration(
+            PairedRelayConfiguration(
+                baseURLString: "https://relay.example.test/v1",
+                hostDisplayName: "relay.example.test",
+                pairedAt: .now,
+                relayUserID: pairedUserID
+            )
+        )
+        let pairingStore = PairingStore(
+            pairingService: RecordingPairingService(),
+            sessionStore: sessionStore,
+            persistence: persistence,
+            environmentProvider: { .production },
+            relayBaseURLProvider: { "https://relay.example.test/v1" }
+        )
+
+        // Session restored as a DIFFERENT user than the pairing minted —
+        // the reinstall-resurrection signature (#46).
+        sessionStore.state.userID = UUID()
+        pairingStore.validateRestoredIdentity()
+        #expect(pairingStore.identityMismatchDetected)
+
+        // Matching identity clears the flag.
+        sessionStore.state.userID = pairedUserID
+        pairingStore.validateRestoredIdentity()
+        #expect(pairingStore.identityMismatchDetected == false)
+
+        // Pre-#3 pairings (no recorded user) can't be validated — no flag.
+        persistence.clearPairedRelayConfiguration()
+        pairingStore.pairedRelayConfiguration = PairedRelayConfiguration(
+            baseURLString: "https://relay.example.test/v1",
+            hostDisplayName: "relay.example.test",
+            pairedAt: .now
+        )
+        sessionStore.state.userID = UUID()
+        pairingStore.validateRestoredIdentity()
+        #expect(pairingStore.identityMismatchDetected == false)
     }
 
     @Test @MainActor
