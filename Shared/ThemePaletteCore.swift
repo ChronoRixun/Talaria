@@ -37,8 +37,9 @@ extension ThemeID {
     /// persisted accent, so a slot picked under another theme can't bleed
     /// through (#12). The stored pref stays untouched — switching away restores
     /// the user's prior accent. `nil` = the theme re-interprets all three slots.
+    /// Carried as catalog data (#49), not a hard-coded special case.
     var lockedAccentSlot: AccentSlot? {
-        self == .terminal ? .cyan : nil
+        ThemePaletteCatalog.definition(for: self).lockedAccentSlot
     }
 }
 
@@ -265,27 +266,7 @@ struct ThemePalette: Equatable, Sendable {
     let orbStyle: ThemeOrbStyle
 
     init(theme: ThemeID, accent: AccentSlot) {
-        // Ported themes (#49) resolve from the shared data catalog; the rest
-        // still use their hand-written legacy arms until their port lands.
-        if let definition = ThemePaletteCatalog.definitions[theme] {
-            self.init(definition: definition, accent: accent)
-            return
-        }
-        // Locked themes (Terminal) resolve their hero slot no matter what
-        // accent was persisted — this is the single pin point for the app,
-        // the Appearance previews, and both widget resolution paths (#12).
-        let effective = theme.lockedAccentSlot ?? accent
-        switch theme {
-        case .deepField: self.init(deepField: effective)
-        case .solarForge:
-            // Ported — handled by the catalog lookup above; compiler-required arm.
-            self.init(definition: ThemePaletteCatalog.solarForge, accent: accent)
-        case .terminal:
-            // Ported — handled by the catalog lookup above; compiler-required arm.
-            self.init(definition: ThemePaletteCatalog.terminal, accent: accent)
-        case .paperTape:
-            self.init(definition: ThemePaletteCatalog.paperTape, accent: accent)
-        }
+        self.init(definition: ThemePaletteCatalog.definition(for: theme), accent: accent)
     }
 
     /// Resolve one (definition, accent) pair into the flat palette every view
@@ -354,66 +335,6 @@ struct ThemePalette: Equatable, Sendable {
         isLight = definition.isLight
         orbStyle = definition.orbStyle
     }
-
-    // MARK: Deep Field — the original arc-reactor HUD (values byte-identical
-    // to the pre-theming constants; cyan/amber/violet keep their meanings).
-
-    private init(deepField accent: AccentSlot) {
-        let base: Color, bright: Color, deep: Color
-        let coreHighlight: Color, coreShadow: Color
-        switch accent {
-        case .cyan:
-            base = Color(hex: 0x54E6F0); bright = Color(hex: 0xCDF8FB); deep = Color(hex: 0x14636E)
-            coreHighlight = Color(hex: 0xE2FBFD); coreShadow = Color(hex: 0x0F5867)
-        case .amber:
-            base = Color(hex: 0xFFC14D); bright = Color(hex: 0xFFE2A6); deep = Color(hex: 0x6E4D14)
-            coreHighlight = Color(hex: 0xFFF1D2); coreShadow = Color(hex: 0x3E2C08)
-        case .violet:
-            base = Color(hex: 0xB18CFF); bright = Color(hex: 0xE2D4FF); deep = Color(hex: 0x3A2D6E)
-            coreHighlight = Color(hex: 0xF1E8FF); coreShadow = Color(hex: 0x241A47)
-        }
-
-        background = Color(hex: 0x06080C)
-        screenGradientStops = [
-            ThemeGradientStop(color: Color(hex: 0x0C2730), location: 0.0),
-            ThemeGradientStop(color: Color(hex: 0x070D15), location: 0.52),
-            ThemeGradientStop(color: Color(hex: 0x04070C), location: 1.0),
-        ]
-        drawerColors = [Color(hex: 0x0A1822), Color(hex: 0x060C13), Color(hex: 0x05090F)]
-        texture = .none
-
-        foreground = Color(hex: 0xE8EEF5)
-        foregroundBright = Color(hex: 0xEAF6F8)
-        secondaryForeground = Color(hex: 0x7C93A6)
-        mutedForeground = Color(hex: 0x5D7488)
-        dimForeground = Color(hex: 0x4D6273)
-        coolForeground = Color(hex: 0xCFE1EA)
-
-        surface = Color(hex: 0x08121A, opacity: 0.6)
-        chipSurface = Color(hex: 0x7896AF, opacity: 0.08)
-        divider = Color(hex: 0x7896AF, opacity: 0.16)
-        chipBorder = Color(hex: 0x7896AF, opacity: 0.22)
-        hairline = base.opacity(0.14)
-        strongBorder = base.opacity(0.30)
-        scrim = Color(hex: 0x02060A, opacity: 0.85)
-
-        self.base = base; self.bright = bright; self.deep = deep
-        self.coreHighlight = coreHighlight; self.coreShadow = coreShadow
-
-        // Warning stays separable from the accent: distinct orange under the
-        // amber slot, forge amber otherwise (pre-theming behavior).
-        forge = accent == .amber ? Color(hex: 0xFF7A18) : Color(hex: 0xFFC14D)
-        danger = Color(hex: 0xE0625F)
-        dangerBright = Color(hex: 0xFF8A86)
-
-        glowScale = 1.0
-        gridStyle = .lines
-        gridLineColor = base.opacity(0.05)
-        gridCell = 26
-        isLight = false
-        orbStyle = .arcReactor
-    }
-
 }
 
 // MARK: - Palette catalog (#49)
@@ -424,14 +345,97 @@ struct ThemePalette: Equatable, Sendable {
 
 enum ThemePaletteCatalog {
 
-    /// All ported theme definitions. During the #49 port this fills up one
-    /// theme at a time; `ThemePalette.init(theme:accent:)` falls back to the
-    /// legacy hand-written arms for themes not yet listed here.
+    /// Every shipped theme's definition, keyed by render identity. Adding a
+    /// theme = one entry here (+ its `ThemeID` case and app-catalog
+    /// `ThemeDefinition`) — no switch-arm edits anywhere in resolution.
     static let definitions: [ThemeID: ThemePaletteDefinition] = [
+        .deepField: deepField,
         .solarForge: solarForge,
         .terminal: terminal,
         .paperTape: paperTape,
     ]
+
+    /// Total lookup over the shipped themes (coverage guarded by
+    /// `DesignThemeTests`). The Deep Field fallback exists so a future gap
+    /// fails visibly in Debug instead of crashing resolution in Release.
+    static func definition(for theme: ThemeID) -> ThemePaletteDefinition {
+        guard let definition = definitions[theme] else {
+            assertionFailure("ThemePaletteCatalog has no definition for \(theme.rawValue)")
+            return deepField
+        }
+        return definition
+    }
+
+    // MARK: Deep Field — the original arc-reactor HUD (values byte-identical
+    // to the pre-theming constants; cyan/amber/violet keep their meanings —
+    // verified by TalariaTests/DesignThemeTests. Do not retune).
+
+    static let deepField = ThemePaletteDefinition(
+        lockedAccentSlot: nil,
+        background: Color(hex: 0x06080C),
+        screenGradientStops: [
+            ThemeGradientStop(color: Color(hex: 0x0C2730), location: 0.0),
+            ThemeGradientStop(color: Color(hex: 0x070D15), location: 0.52),
+            ThemeGradientStop(color: Color(hex: 0x04070C), location: 1.0),
+        ],
+        drawerColors: [Color(hex: 0x0A1822), Color(hex: 0x060C13), Color(hex: 0x05090F)],
+        texture: .none,
+        ramp: ThemeForegroundRamp(
+            foreground: Color(hex: 0xE8EEF5),
+            foregroundBright: Color(hex: 0xEAF6F8),
+            secondaryForeground: Color(hex: 0x7C93A6),
+            mutedForeground: Color(hex: 0x5D7488),
+            dimForeground: Color(hex: 0x4D6273),
+            coolForeground: Color(hex: 0xCFE1EA)
+        ),
+        surface: Color(hex: 0x08121A, opacity: 0.6),
+        chips: .fixed(
+            surface: Color(hex: 0x7896AF, opacity: 0.08),
+            divider: Color(hex: 0x7896AF, opacity: 0.16),
+            border: Color(hex: 0x7896AF, opacity: 0.22)
+        ),
+        borders: .accentTinted(hairline: 0.14, strong: 0.30),
+        scrim: Color(hex: 0x02060A, opacity: 0.85),
+        danger: Color(hex: 0xE0625F),
+        dangerBright: Color(hex: 0xFF8A86),
+        accents: ThemeAccentVariants(
+            cyan: ThemeAccentVariant(   // hero — Cyan Arc
+                displayName: "Cyan · Arc",
+                base: Color(hex: 0x54E6F0),
+                bright: Color(hex: 0xCDF8FB),
+                deep: Color(hex: 0x14636E),
+                coreHighlight: Color(hex: 0xE2FBFD),
+                coreShadow: Color(hex: 0x0F5867),
+                forge: Color(hex: 0xFFC14D)
+            ),
+            amber: ThemeAccentVariant(
+                displayName: "Amber · Forge",
+                base: Color(hex: 0xFFC14D),
+                bright: Color(hex: 0xFFE2A6),
+                deep: Color(hex: 0x6E4D14),
+                coreHighlight: Color(hex: 0xFFF1D2),
+                coreShadow: Color(hex: 0x3E2C08),
+                // Warning stays separable from the accent: distinct orange
+                // under the amber slot (pre-theming behavior).
+                forge: Color(hex: 0xFF7A18)
+            ),
+            violet: ThemeAccentVariant(
+                displayName: "Violet · Flux",
+                base: Color(hex: 0xB18CFF),
+                bright: Color(hex: 0xE2D4FF),
+                deep: Color(hex: 0x3A2D6E),
+                coreHighlight: Color(hex: 0xF1E8FF),
+                coreShadow: Color(hex: 0x241A47),
+                forge: Color(hex: 0xFFC14D)
+            )
+        ),
+        glowScale: 1.0,
+        gridStyle: .lines,
+        gridLine: .accentTinted(0.05),
+        gridCell: 26,
+        isLight: false,
+        orbStyle: .arcReactor
+    )
 
     // MARK: Solar Forge — industrial forge: brass, ember, warm metal.
     // Hero slot is the forge amber; cyan/violet become exotic plasma hues.
