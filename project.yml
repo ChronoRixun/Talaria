@@ -98,6 +98,31 @@ targets:
           - JetBrainsMono-Regular.ttf
           - JetBrainsMono-Medium.ttf
           - JetBrainsMono-Bold.ttf
+        # Alternate home-screen app icons (issue #25). The primary icon stays in
+        # the asset catalog; alternates are loose flat PNGs in
+        # Talaria/Resources/AppIcons/ (Icon-<Name>@2x/@3x.png). Adding an icon =
+        # a new key here + its PNGs + an AppIconCatalog entry, then
+        # `xcodegen generate`. Keys are the names passed to setAlternateIconName.
+        CFBundleIcons:
+          CFBundlePrimaryIcon:
+            CFBundleIconName: AppIcon
+          CFBundleAlternateIcons:
+            DeepField:
+              CFBundleIconFiles:
+                - Icon-DeepField
+              UIPrerenderedIcon: false
+            SolarForge:
+              CFBundleIconFiles:
+                - Icon-SolarForge
+              UIPrerenderedIcon: false
+            Terminal:
+              CFBundleIconFiles:
+                - Icon-Terminal
+              UIPrerenderedIcon: false
+            PaperTape:
+              CFBundleIconFiles:
+                - Icon-PaperTape
+              UIPrerenderedIcon: false
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
         UIBackgroundModes:
