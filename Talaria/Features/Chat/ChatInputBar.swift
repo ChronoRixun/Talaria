@@ -101,7 +101,6 @@ struct ChatInputBar: View {
                         .background(.clear)
                         .frame(minHeight: 22, maxHeight: 120)
                         .fixedSize(horizontal: false, vertical: true)
-                        .writingToolsBehavior(.complete)
 
                     if text.isEmpty {
                         Text(speechService.isListening ? "Listening…" : "Message Hermes…")
