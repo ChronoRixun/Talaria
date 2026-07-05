@@ -23,7 +23,8 @@ struct AppIconCatalogTests {
     @Test func alternateNamesAreUniqueAndNonEmpty() {
         let names = AppIconCatalog.all.compactMap(\.alternateIconName)
         #expect(Set(names).count == names.count)
-        #expect(!names.contains(where: \.isEmpty))
+        let hasEmptyName = names.contains(where: \.isEmpty)
+        #expect(!hasEmptyName)
         // One name per non-primary entry.
         #expect(names.count == AppIconCatalog.all.count - 1)
     }
