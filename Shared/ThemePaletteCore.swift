@@ -281,7 +281,9 @@ struct ThemePalette: Equatable, Sendable {
             // Ported — handled by the catalog lookup above; compiler-required arm.
             self.init(definition: ThemePaletteCatalog.solarForge, accent: accent)
         case .terminal: self.init(terminal: effective)
-        case .paperTape: self.init(paperTape: effective)
+        case .paperTape:
+            // Ported — handled by the catalog lookup above; compiler-required arm.
+            self.init(definition: ThemePaletteCatalog.paperTape, accent: accent)
         }
     }
 
@@ -503,69 +505,6 @@ struct ThemePalette: Equatable, Sendable {
         orbStyle = .crtCrosshair
     }
 
-    // MARK: Paper Tape — vintage teleprinter: ink on warm paper. The one light
-    // environment; "bright" accent/danger variants run DARKER than base because
-    // emphasis on paper means more ink, not more light.
-
-    private init(paperTape accent: AccentSlot) {
-        let base: Color, bright: Color, deep: Color
-        let coreHighlight: Color, coreShadow: Color
-        let isAmberFamily: Bool
-        switch accent {
-        case .cyan:   // hero — Tracker Red
-            base = Color(hex: 0xB5382E); bright = Color(hex: 0x7E1F17); deep = Color(hex: 0xE5978F)
-            coreHighlight = Color(hex: 0xFAEDEA); coreShadow = Color(hex: 0x6E1B14)
-            isAmberFamily = false
-        case .amber:  // Cyan Ink
-            base = Color(hex: 0x1E7F8C); bright = Color(hex: 0x115560); deep = Color(hex: 0x9CCFD6)
-            coreHighlight = Color(hex: 0xEAF6F7); coreShadow = Color(hex: 0x0D3F47)
-            isAmberFamily = false
-        case .violet: // Amber Ink
-            base = Color(hex: 0xA96A12); bright = Color(hex: 0x74490C); deep = Color(hex: 0xD9B173)
-            coreHighlight = Color(hex: 0xF8EEDC); coreShadow = Color(hex: 0x543508)
-            isAmberFamily = true
-        }
-
-        background = Color(hex: 0xF2EFE9)
-        screenGradientStops = [
-            ThemeGradientStop(color: Color(hex: 0xF9F6F0), location: 0.0),
-            ThemeGradientStop(color: Color(hex: 0xF2EFE9), location: 0.52),
-            ThemeGradientStop(color: Color(hex: 0xE7E1D6), location: 1.0),
-        ]
-        drawerColors = [Color(hex: 0xEFEBE3), Color(hex: 0xE9E4DA), Color(hex: 0xE2DCD0)]
-        texture = .paperGrain
-
-        foreground = Color(hex: 0x2B2B2B)
-        foregroundBright = Color(hex: 0x151515)
-        secondaryForeground = Color(hex: 0x5C5C5C)
-        mutedForeground = Color(hex: 0x6E6A63)
-        dimForeground = Color(hex: 0x8A8A8A)
-        coolForeground = Color(hex: 0x3E3A34)
-
-        surface = Color(hex: 0xE8E4DC, opacity: 0.8)
-        chipSurface = Color(hex: 0x4A4438, opacity: 0.06)
-        divider = Color(hex: 0x2B2B2B, opacity: 0.12)
-        chipBorder = Color(hex: 0x2B2B2B, opacity: 0.18)
-        // Ink hairlines, not accent-tinted — borders shouldn't read as colored
-        // marks on paper.
-        hairline = Color(hex: 0x2B2B2B, opacity: 0.14)
-        strongBorder = Color(hex: 0x2B2B2B, opacity: 0.32)
-        scrim = Color(hex: 0x2B2B2B, opacity: 0.35)
-
-        self.base = base; self.bright = bright; self.deep = deep
-        self.coreHighlight = coreHighlight; self.coreShadow = coreShadow
-
-        forge = isAmberFamily ? Color(hex: 0xB4530F) : Color(hex: 0xA96A12)
-        danger = Color(hex: 0xB3261E)
-        dangerBright = Color(hex: 0x8C1D17)
-
-        glowScale = 0.15
-        gridStyle = .rules
-        gridLineColor = Color(hex: 0x2B2B2B, opacity: 0.10)
-        gridCell = 24
-        isLight = true
-        orbStyle = .paperReel
-    }
 }
 
 // MARK: - Palette catalog (#49)
@@ -581,6 +520,7 @@ enum ThemePaletteCatalog {
     /// legacy hand-written arms for themes not yet listed here.
     static let definitions: [ThemeID: ThemePaletteDefinition] = [
         .solarForge: solarForge,
+        .paperTape: paperTape,
     ]
 
     // MARK: Solar Forge — industrial forge: brass, ember, warm metal.
@@ -650,6 +590,81 @@ enum ThemePaletteCatalog {
         gridCell: 26,
         isLight: false,
         orbStyle: .forgeSun
+    )
+
+    // MARK: Paper Tape — vintage teleprinter: ink on warm paper. The one light
+    // environment; "bright" accent/danger variants run DARKER than base because
+    // emphasis on paper means more ink, not more light.
+
+    static let paperTape = ThemePaletteDefinition(
+        lockedAccentSlot: nil,
+        background: Color(hex: 0xF2EFE9),
+        screenGradientStops: [
+            ThemeGradientStop(color: Color(hex: 0xF9F6F0), location: 0.0),
+            ThemeGradientStop(color: Color(hex: 0xF2EFE9), location: 0.52),
+            ThemeGradientStop(color: Color(hex: 0xE7E1D6), location: 1.0),
+        ],
+        drawerColors: [Color(hex: 0xEFEBE3), Color(hex: 0xE9E4DA), Color(hex: 0xE2DCD0)],
+        texture: .paperGrain,
+        ramp: ThemeForegroundRamp(
+            foreground: Color(hex: 0x2B2B2B),
+            foregroundBright: Color(hex: 0x151515),
+            secondaryForeground: Color(hex: 0x5C5C5C),
+            mutedForeground: Color(hex: 0x6E6A63),
+            dimForeground: Color(hex: 0x8A8A8A),
+            coolForeground: Color(hex: 0x3E3A34)
+        ),
+        surface: Color(hex: 0xE8E4DC, opacity: 0.8),
+        chips: .fixed(
+            surface: Color(hex: 0x4A4438, opacity: 0.06),
+            divider: Color(hex: 0x2B2B2B, opacity: 0.12),
+            border: Color(hex: 0x2B2B2B, opacity: 0.18)
+        ),
+        // Ink hairlines, not accent-tinted — borders shouldn't read as colored
+        // marks on paper.
+        borders: .fixed(
+            hairline: Color(hex: 0x2B2B2B, opacity: 0.14),
+            strong: Color(hex: 0x2B2B2B, opacity: 0.32)
+        ),
+        scrim: Color(hex: 0x2B2B2B, opacity: 0.35),
+        danger: Color(hex: 0xB3261E),
+        dangerBright: Color(hex: 0x8C1D17),
+        accents: ThemeAccentVariants(
+            cyan: ThemeAccentVariant(   // hero — Tracker Red
+                displayName: "Red · Tracker",
+                base: Color(hex: 0xB5382E),
+                bright: Color(hex: 0x7E1F17),
+                deep: Color(hex: 0xE5978F),
+                coreHighlight: Color(hex: 0xFAEDEA),
+                coreShadow: Color(hex: 0x6E1B14),
+                forge: Color(hex: 0xA96A12)
+            ),
+            amber: ThemeAccentVariant(  // Cyan Ink
+                displayName: "Cyan · Ink",
+                base: Color(hex: 0x1E7F8C),
+                bright: Color(hex: 0x115560),
+                deep: Color(hex: 0x9CCFD6),
+                coreHighlight: Color(hex: 0xEAF6F7),
+                coreShadow: Color(hex: 0x0D3F47),
+                forge: Color(hex: 0xA96A12)
+            ),
+            violet: ThemeAccentVariant( // Amber Ink
+                displayName: "Amber · Ink",
+                base: Color(hex: 0xA96A12),
+                bright: Color(hex: 0x74490C),
+                deep: Color(hex: 0xD9B173),
+                coreHighlight: Color(hex: 0xF8EEDC),
+                coreShadow: Color(hex: 0x543508),
+                // Warning must stay separable from an amber-family accent.
+                forge: Color(hex: 0xB4530F)
+            )
+        ),
+        glowScale: 0.15,
+        gridStyle: .rules,
+        gridLine: .fixed(Color(hex: 0x2B2B2B, opacity: 0.10)),
+        gridCell: 24,
+        isLight: true,
+        orbStyle: .paperReel
     )
 }
 
