@@ -280,9 +280,10 @@ struct ThemePalette: Equatable, Sendable {
         case .solarForge:
             // Ported — handled by the catalog lookup above; compiler-required arm.
             self.init(definition: ThemePaletteCatalog.solarForge, accent: accent)
-        case .terminal: self.init(terminal: effective)
-        case .paperTape:
+        case .terminal:
             // Ported — handled by the catalog lookup above; compiler-required arm.
+            self.init(definition: ThemePaletteCatalog.terminal, accent: accent)
+        case .paperTape:
             self.init(definition: ThemePaletteCatalog.paperTape, accent: accent)
         }
     }
@@ -413,98 +414,6 @@ struct ThemePalette: Equatable, Sendable {
         orbStyle = .arcReactor
     }
 
-    // MARK: Terminal — CRT phosphor on true black. The whole foreground ramp
-    // follows the selected phosphor (green hero / amber / IBM cyan).
-
-    private init(terminal accent: AccentSlot) {
-        let base: Color, bright: Color, deep: Color
-        let coreHighlight: Color, coreShadow: Color
-        switch accent {
-        case .cyan:   // hero — Phosphor Green
-            base = Color(hex: 0x33FF00); bright = Color(hex: 0xB6FF9E); deep = Color(hex: 0x0E6B00)
-            coreHighlight = Color(hex: 0xE4FFDB); coreShadow = Color(hex: 0x0A4A00)
-
-            foreground = Color(hex: 0xD8FFD0)
-            foregroundBright = Color(hex: 0xEDFFE8)
-            secondaryForeground = Color(hex: 0x7BC96A)
-            mutedForeground = Color(hex: 0x55A046)
-            dimForeground = Color(hex: 0x3D7A32)
-            coolForeground = Color(hex: 0xC0EFB4)
-
-            screenGradientStops = [
-                ThemeGradientStop(color: Color(hex: 0x0A140A), location: 0.0),
-                ThemeGradientStop(color: Color(hex: 0x040A04), location: 0.52),
-                ThemeGradientStop(color: Color(hex: 0x000000), location: 1.0),
-            ]
-            drawerColors = [Color(hex: 0x0A120A), Color(hex: 0x050905), Color(hex: 0x020402)]
-            surface = Color(hex: 0x0A0F0A, opacity: 0.7)
-            forge = Color(hex: 0xFFB000)
-        case .amber:  // Amber Phosphor
-            base = Color(hex: 0xFFB000); bright = Color(hex: 0xFFDD8A); deep = Color(hex: 0x7A5400)
-            coreHighlight = Color(hex: 0xFFF0C8); coreShadow = Color(hex: 0x4A3300)
-
-            foreground = Color(hex: 0xFFE8C2)
-            foregroundBright = Color(hex: 0xFFF4DE)
-            secondaryForeground = Color(hex: 0xCC9A55)
-            mutedForeground = Color(hex: 0xA0793F)
-            dimForeground = Color(hex: 0x7A5C2E)
-            coolForeground = Color(hex: 0xF2D9A8)
-
-            screenGradientStops = [
-                ThemeGradientStop(color: Color(hex: 0x140F04), location: 0.0),
-                ThemeGradientStop(color: Color(hex: 0x0A0703), location: 0.52),
-                ThemeGradientStop(color: Color(hex: 0x000000), location: 1.0),
-            ]
-            drawerColors = [Color(hex: 0x120D05), Color(hex: 0x090603), Color(hex: 0x030201)]
-            surface = Color(hex: 0x100C05, opacity: 0.7)
-            // Warning must stay separable from an amber phosphor accent.
-            forge = Color(hex: 0xFF6A00)
-        case .violet: // IBM Cyan
-            base = Color(hex: 0x3BD6E0); bright = Color(hex: 0xBEF2F7); deep = Color(hex: 0x0F5B63)
-            coreHighlight = Color(hex: 0xE0FBFD); coreShadow = Color(hex: 0x0A434A)
-
-            foreground = Color(hex: 0xD2F4F7)
-            foregroundBright = Color(hex: 0xE8FBFC)
-            secondaryForeground = Color(hex: 0x6FB8BF)
-            mutedForeground = Color(hex: 0x4E8F96)
-            dimForeground = Color(hex: 0x386B71)
-            coolForeground = Color(hex: 0xBEEAEE)
-
-            screenGradientStops = [
-                ThemeGradientStop(color: Color(hex: 0x041214), location: 0.0),
-                ThemeGradientStop(color: Color(hex: 0x030A0C), location: 0.52),
-                ThemeGradientStop(color: Color(hex: 0x000000), location: 1.0),
-            ]
-            drawerColors = [Color(hex: 0x061013), Color(hex: 0x040A0C), Color(hex: 0x020405)]
-            surface = Color(hex: 0x061012, opacity: 0.7)
-            forge = Color(hex: 0xFFB000)
-        }
-
-        background = Color(hex: 0x000000)
-        texture = .scanlines
-
-        chipSurface = secondaryForeground.opacity(0.08)
-        divider = secondaryForeground.opacity(0.16)
-        chipBorder = secondaryForeground.opacity(0.22)
-        // Stronger hairlines for the CRT feel.
-        hairline = base.opacity(0.25)
-        strongBorder = base.opacity(0.45)
-        scrim = Color(hex: 0x000000, opacity: 0.88)
-
-        self.base = base; self.bright = bright; self.deep = deep
-        self.coreHighlight = coreHighlight; self.coreShadow = coreShadow
-
-        danger = Color(hex: 0xFF4D42)
-        dangerBright = Color(hex: 0xFF8A80)
-
-        glowScale = 1.2
-        gridStyle = .dots
-        gridLineColor = base.opacity(0.10)
-        gridCell = 14
-        isLight = false
-        orbStyle = .crtCrosshair
-    }
-
 }
 
 // MARK: - Palette catalog (#49)
@@ -520,6 +429,7 @@ enum ThemePaletteCatalog {
     /// legacy hand-written arms for themes not yet listed here.
     static let definitions: [ThemeID: ThemePaletteDefinition] = [
         .solarForge: solarForge,
+        .terminal: terminal,
         .paperTape: paperTape,
     ]
 
@@ -590,6 +500,107 @@ enum ThemePaletteCatalog {
         gridCell: 26,
         isLight: false,
         orbStyle: .forgeSun
+    )
+
+    // MARK: Terminal — CRT phosphor on true black. The whole environment
+    // (foreground ramp, gradients, drawers, surface) follows the selected
+    // phosphor, so the non-hero variants override it wholesale. The theme's
+    // identity IS the phosphor green: `lockedAccentSlot` pins resolution to
+    // the hero (#12), so the amber / IBM-cyan variants are curated but
+    // unreachable until the lock is ever lifted.
+
+    static let terminal = ThemePaletteDefinition(
+        lockedAccentSlot: .cyan,
+        background: Color(hex: 0x000000),
+        screenGradientStops: [
+            ThemeGradientStop(color: Color(hex: 0x0A140A), location: 0.0),
+            ThemeGradientStop(color: Color(hex: 0x040A04), location: 0.52),
+            ThemeGradientStop(color: Color(hex: 0x000000), location: 1.0),
+        ],
+        drawerColors: [Color(hex: 0x0A120A), Color(hex: 0x050905), Color(hex: 0x020402)],
+        texture: .scanlines,
+        ramp: ThemeForegroundRamp(
+            foreground: Color(hex: 0xD8FFD0),
+            foregroundBright: Color(hex: 0xEDFFE8),
+            secondaryForeground: Color(hex: 0x7BC96A),
+            mutedForeground: Color(hex: 0x55A046),
+            dimForeground: Color(hex: 0x3D7A32),
+            coolForeground: Color(hex: 0xC0EFB4)
+        ),
+        surface: Color(hex: 0x0A0F0A, opacity: 0.7),
+        // Even the neutral chrome follows the phosphor.
+        chips: .foregroundTinted(surface: 0.08, divider: 0.16, border: 0.22),
+        // Stronger hairlines for the CRT feel.
+        borders: .accentTinted(hairline: 0.25, strong: 0.45),
+        scrim: Color(hex: 0x000000, opacity: 0.88),
+        danger: Color(hex: 0xFF4D42),
+        dangerBright: Color(hex: 0xFF8A80),
+        accents: ThemeAccentVariants(
+            cyan: ThemeAccentVariant(   // hero — Phosphor Green (theme-level env IS this variant's)
+                displayName: "Green · Phosphor",
+                base: Color(hex: 0x33FF00),
+                bright: Color(hex: 0xB6FF9E),
+                deep: Color(hex: 0x0E6B00),
+                coreHighlight: Color(hex: 0xE4FFDB),
+                coreShadow: Color(hex: 0x0A4A00),
+                forge: Color(hex: 0xFFB000)
+            ),
+            amber: ThemeAccentVariant(  // Amber Phosphor
+                displayName: "Amber · Phosphor",
+                base: Color(hex: 0xFFB000),
+                bright: Color(hex: 0xFFDD8A),
+                deep: Color(hex: 0x7A5400),
+                coreHighlight: Color(hex: 0xFFF0C8),
+                coreShadow: Color(hex: 0x4A3300),
+                // Warning must stay separable from an amber phosphor accent.
+                forge: Color(hex: 0xFF6A00),
+                ramp: ThemeForegroundRamp(
+                    foreground: Color(hex: 0xFFE8C2),
+                    foregroundBright: Color(hex: 0xFFF4DE),
+                    secondaryForeground: Color(hex: 0xCC9A55),
+                    mutedForeground: Color(hex: 0xA0793F),
+                    dimForeground: Color(hex: 0x7A5C2E),
+                    coolForeground: Color(hex: 0xF2D9A8)
+                ),
+                screenGradientStops: [
+                    ThemeGradientStop(color: Color(hex: 0x140F04), location: 0.0),
+                    ThemeGradientStop(color: Color(hex: 0x0A0703), location: 0.52),
+                    ThemeGradientStop(color: Color(hex: 0x000000), location: 1.0),
+                ],
+                drawerColors: [Color(hex: 0x120D05), Color(hex: 0x090603), Color(hex: 0x030201)],
+                surface: Color(hex: 0x100C05, opacity: 0.7)
+            ),
+            violet: ThemeAccentVariant( // IBM Cyan
+                displayName: "Cyan · IBM",
+                base: Color(hex: 0x3BD6E0),
+                bright: Color(hex: 0xBEF2F7),
+                deep: Color(hex: 0x0F5B63),
+                coreHighlight: Color(hex: 0xE0FBFD),
+                coreShadow: Color(hex: 0x0A434A),
+                forge: Color(hex: 0xFFB000),
+                ramp: ThemeForegroundRamp(
+                    foreground: Color(hex: 0xD2F4F7),
+                    foregroundBright: Color(hex: 0xE8FBFC),
+                    secondaryForeground: Color(hex: 0x6FB8BF),
+                    mutedForeground: Color(hex: 0x4E8F96),
+                    dimForeground: Color(hex: 0x386B71),
+                    coolForeground: Color(hex: 0xBEEAEE)
+                ),
+                screenGradientStops: [
+                    ThemeGradientStop(color: Color(hex: 0x041214), location: 0.0),
+                    ThemeGradientStop(color: Color(hex: 0x030A0C), location: 0.52),
+                    ThemeGradientStop(color: Color(hex: 0x000000), location: 1.0),
+                ],
+                drawerColors: [Color(hex: 0x061013), Color(hex: 0x040A0C), Color(hex: 0x020405)],
+                surface: Color(hex: 0x061012, opacity: 0.7)
+            )
+        ),
+        glowScale: 1.2,
+        gridStyle: .dots,
+        gridLine: .accentTinted(0.10),
+        gridCell: 14,
+        isLight: false,
+        orbStyle: .crtCrosshair
     )
 
     // MARK: Paper Tape — vintage teleprinter: ink on warm paper. The one light
