@@ -611,7 +611,9 @@ never used the mini shim.
 
 ---
 
-## 23. 📝 Add a "revoke permissions" affordance
+## 23. ✅ Add a "revoke permissions" affordance
+
+**Verified on device 2026-07-05:** revoke affordances present and toggleable (GitHub #6, PR #19). Closed.
 
 The app can request permissions (HealthKit, Location, Notifications, etc.) via the
 Permissions/Onboarding screens, but there is **no in-app way to revoke** them. Users must
@@ -797,6 +799,14 @@ backed up; confirmed no bookstack error in the post-fix startup.
 ---
 
 ## 25. 🔧 CTX meter — 0% fixed (usage parsed); denominator reads ~1.4x high
+
+**Device verification 2026-07-05: FAILED** (GitHub #4, PR #21 insufficient). New symptom set:
+CTX shows **0 on some sessions**, **absent entirely on older sessions**, and occasionally
+**flashes in** before reading wrong. Working theory: the meter only populates from a fresh
+`run.completed` usage payload in the live session -- nothing seeds it when resuming/loading
+history, and the denominator source remains unvalidated. **Next:** ground-truth against
+Hermes's built-in context check (Owen investigating which surface exposes it), then capture
+one live session with Verbose Logging + `run.completed` payloads to pin numerator vs denominator.
 
 **Update 2026-06-28 (Owen):** the meter now shows a live, non-zero reading — the 0% bug is
 resolved. The denominator still reads ~1.4x high; **left open pending further testing**
@@ -1141,6 +1151,12 @@ Logged 2026-06-27.
 
 ## 38. 📌 Remote push (APNs) for instant background-run completion notify — deferred
 
+**Observed 2026-07-05:** notifications permission prompt now appears (the #44 plumbing) and,
+once granted, backgrounding the app during a run yields **no completion notification** --
+expected, since this item is deferred, but worth noting: a **local**-notification variant
+(schedule/fire while the app still holds background runtime; no APNs, no server work) could
+ship independently and cover the common short-run case before remote push exists.
+
 **Context:** The agent-run background-completion fix (detach + reconcile + local
 notification, on `feat/agent-files-tier2`) handles the common case — an interrupted
 run no longer errors; it reconciles on resume via `GET /api/sessions/{id}/messages`,
@@ -1307,7 +1323,12 @@ Working CarPlay voice scaffold exists in `Talaria/CarPlay/` (`CarPlaySceneDelega
 
 ---
 
-## 46. 🐛 Reinstall resurrects a stale Keychain identity (post-#41)
+## 46. ✅ Reinstall resurrects a stale Keychain identity (post-#41)
+
+**Verified on device 2026-07-05 (happy path):** delete + reinstall -> signed in without
+re-pairing, persisted identity valid and functional (GitHub #3, PR #22). The *stale*-identity
+branch is only exercisable by invalidating the identity server-side; if it ever recurs,
+reopen with the relay-side state at time of failure.
 
 Discovered 07-02, bit us immediately. After delete+reinstall the app came back authenticated as a **revoked** relay user (`15deb25d…`) instead of the live user (`707547ee…`) — #41's Keychain persistence preserved a dead identity. Consequence: sensors 202-forever + 'Connect a Hermes host' on VOICE, while chat (direct :8642) worked — a half-broken app with no obvious cause. **Needs (app-side):** on `pair()`, overwrite/clear ALL prior credentials in the Keychain (no stale survivors); store relay `user_id` with the pairing and validate on session restore (surface 're-pair' if the relay reports no active host for that user); Diagnostics (#15) should show the authenticated relay `user_id`. **Workaround:** unpair (clears both stores) → `hermes-mobile.exe pair-phone` on OJAMD → re-pair. Test-gap note: the dropped test suite covered a clear-on-disconnect guard for exactly this — see `handoffs/RECONCILE_TEST_GAP.md`.
 
