@@ -235,6 +235,10 @@ enum AppearanceTheme: String, Codable, CaseIterable, Hashable, Sendable {
     case solarForge
     case terminal
     case paperTape
+    case winterFrost
+    case summerSolar
+    case springSprout
+    case autumnHarvest
 
     /// Display name — single source of truth is the catalog definition (#49).
     var displayLabel: String {
