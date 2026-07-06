@@ -27,6 +27,12 @@ struct ThemeGlowPool: Equatable, Sendable {
     var center: UnitPoint { UnitPoint(x: centerX, y: centerY) }
 }
 
+/// Per-layer drift vector (points per second, 24 s loop ≈ 90/120/150/110 px).
+struct ThemeStarfieldDrift: Equatable, Sendable {
+    var dx: Double
+    var dy: Double
+}
+
 /// Speck field for the `.starfield` background texture. The texture has no
 /// theme-neutral look — a starfield theme must curate its own hues.
 struct ThemeStarfield: Equatable, Sendable {
@@ -36,6 +42,20 @@ struct ThemeStarfield: Equatable, Sendable {
     var count: Int = 56
     /// Multiplier on the per-layer drift speed (1.0 ≈ the handoff's 24s pan).
     var driftScale: Double = 1.0
+    /// Per-layer parallax pan vectors. Must match `colors.count` when provided;
+    /// `nil` falls back to the handoff's four diagonals.
+    var layerDrifts: [ThemeStarfieldDrift]? = nil
+    /// Field opacity. Handoff target is 0.45.
+    var opacity: Double = 0.45
+    /// Preset selector — shipped so Owen can compare on-device without rebuilds.
+    var preset: StarfieldPreset = .handoff
+}
+
+/// Named tuning presets for the Event Horizon starfield.
+enum StarfieldPreset: String, CaseIterable, Sendable {
+    case subtle
+    case handoff
+    case bold
 }
 
 /// Halo treatment around HUD panels — an offset rim ring plus an outer glow
@@ -100,12 +120,21 @@ enum ThemeArtDirectionCatalog {
             ThemeGlowPool(color: Color(hex: 0xFF2AA8, opacity: 0.05),
                           centerX: 0.88, centerY: 0.16, radiusFraction: 0.50),
         ],
-        starfield: ThemeStarfield(colors: [
-            Color(hex: 0x8A5CFF),   // Accretion Violet
-            Color(hex: 0x00F0FF),   // Hawking Cyan
-            Color(hex: 0xFFDC50),   // Supernova Gold
-            Color(hex: 0xFF2AA8),   // Singularity Magenta
-        ]),
+        starfield: ThemeStarfield(
+            colors: [
+                Color(hex: 0x8A5CFF),   // Accretion Violet
+                Color(hex: 0x00F0FF),   // Hawking Cyan
+                Color(hex: 0xFFDC50),   // Supernova Gold
+                Color(hex: 0xFF2AA8),   // Singularity Magenta
+            ],
+            layerDrifts: [
+                ThemeStarfieldDrift(dx: 3.75, dy: 3.75),    // (90,90) / 24s
+                ThemeStarfieldDrift(dx: -5.0, dy: 5.0),     // (-120,120) / 24s
+                ThemeStarfieldDrift(dx: 6.25, dy: -6.25),   // (150,-150) / 24s
+                ThemeStarfieldDrift(dx: -4.6, dy: 4.6),     // (-110,110) / 24s
+            ],
+            opacity: 0.45
+        ),
         panelHalo: ThemePanelHalo(
             ringColor: Color(hex: 0x8A5CFF, opacity: 0.18),
             glowColor: Color(hex: 0x8A5CFF)

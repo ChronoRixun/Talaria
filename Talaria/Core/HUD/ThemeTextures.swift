@@ -151,24 +151,42 @@ struct ScanlineTexture: View {
 
 /// Multi-hue star specks drifting in slow diagonals — the handoff's four
 /// `.page-bg` layers panning over 24s. Seeded/deterministic like the other
-/// textures; static under Reduce Motion.
+/// textures; static under Reduce Motion. Presets expose tunable values so
+/// Owen can compare on-device with a single constant change.
 struct StarfieldTexture: View {
     let field: ThemeStarfield
 
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     private var reduceMotion: Bool { systemReduceMotion || ThemeRuntime.shared.appReduceMotion }
 
-    /// Per-layer drift vectors (pt/s) — four diagonals mirroring the
-    /// handoff's `starfieldDrift` background-position pans.
-    private static let drifts: [(dx: Double, dy: Double)] = [
-        (3.75, 3.75), (-5.0, 5.0), (6.25, -6.25), (-4.6, 4.6),
-    ]
+    /// Presets. Same per-layer vectors (handoff parallax), but count, speed,
+    /// and opacity scale. Switch `field.preset` to compare on-device.
+    private func presetValues() -> (count: Int, driftScale: Double, opacity: Double, radiusMin: Double, radiusMax: Double) {
+        switch field.preset {
+        case .subtle:
+            return (count: Int(Double(field.count) * 0.6),
+                    driftScale: field.driftScale * 0.6,
+                    opacity: field.opacity * 0.65,
+                    radiusMin: 0.5, radiusMax: 1.0)
+        case .handoff:
+            return (count: field.count,
+                    driftScale: field.driftScale,
+                    opacity: field.opacity,
+                    radiusMin: 0.7, radiusMax: 1.8)
+        case .bold:
+            return (count: Int(Double(field.count) * 1.4),
+                    driftScale: field.driftScale * 1.25,
+                    opacity: min(1.0, field.opacity * 1.25),
+                    radiusMin: 0.8, radiusMax: 2.2)
+        }
+    }
 
     var body: some View {
+        let values = presetValues()
         Group {
             if reduceMotion {
                 Canvas { context, size in
-                    Self.draw(context: context, size: size, time: 0, field: field)
+                    Self.draw(context: context, size: size, time: 0, field: field, values: values)
                 }
             } else {
                 TimelineView(.animation(minimumInterval: 1.0 / 15.0)) { timeline in
@@ -177,38 +195,56 @@ struct StarfieldTexture: View {
                             context: context,
                             size: size,
                             time: timeline.date.timeIntervalSinceReferenceDate,
-                            field: field
+                            field: field,
+                            values: values
                         )
                     }
                 }
             }
         }
+        .opacity(values.opacity)
         .allowsHitTesting(false)
     }
 
-    private static func draw(context: GraphicsContext, size: CGSize, time: Double, field: ThemeStarfield) {
+    private static func draw(
+        context: GraphicsContext,
+        size: CGSize,
+        time: Double,
+        field: ThemeStarfield,
+        values: (count: Int, driftScale: Double, opacity: Double, radiusMin: Double, radiusMax: Double)
+    ) {
         guard size.width > 0, size.height > 0, !field.colors.isEmpty else { return }
+
+        // Handoff vectors (px per 24 s loop) divided by 24 to get pt/s.
+        let defaultDrifts: [ThemeStarfieldDrift] = [
+            ThemeStarfieldDrift(dx: 3.75, dy: 3.75),    // (90,90)
+            ThemeStarfieldDrift(dx: -5.0, dy: 5.0),     // (-120,120)
+            ThemeStarfieldDrift(dx: 6.25, dy: -6.25),   // (150,-150)
+            ThemeStarfieldDrift(dx: -4.6, dy: 4.6),     // (-110,110)
+        ]
+        let layerDrifts = field.layerDrifts ?? defaultDrifts
+
         // Specks wrap across a margin-padded span so drift never pops at edges.
-        let margin: Double = 20
+        let margin: Double = 40
         let spanW = size.width + margin * 2
         let spanH = size.height + margin * 2
 
-        for i in 0..<field.count {
-            let drift = drifts[i % drifts.count]
+        for i in 0..<values.count {
+            let drift = layerDrifts[i % layerDrifts.count]
             let color = field.colors[i % field.colors.count]
 
             let baseX = seededUnit(i, 31) * spanW
             let baseY = seededUnit(i, 32) * spanH
-            let rawX = (baseX + time * drift.dx * field.driftScale).truncatingRemainder(dividingBy: spanW)
-            let rawY = (baseY + time * drift.dy * field.driftScale).truncatingRemainder(dividingBy: spanH)
+            let rawX = (baseX + time * drift.dx * values.driftScale).truncatingRemainder(dividingBy: spanW)
+            let rawY = (baseY + time * drift.dy * values.driftScale).truncatingRemainder(dividingBy: spanH)
             let x = (rawX + spanW).truncatingRemainder(dividingBy: spanW) - margin
             let y = (rawY + spanH).truncatingRemainder(dividingBy: spanH) - margin
 
-            let radius = 0.7 + seededUnit(i, 33) * 1.1
-            let opacity = 0.10 + seededUnit(i, 34) * 0.18
+            let radius = values.radiusMin + seededUnit(i, 33) * (values.radiusMax - values.radiusMin)
+            let speckOpacity = 0.10 + seededUnit(i, 34) * 0.18
 
             let rect = CGRect(x: x - radius, y: y - radius, width: radius * 2, height: radius * 2)
-            context.fill(Path(ellipseIn: rect), with: .color(color.opacity(opacity)))
+            context.fill(Path(ellipseIn: rect), with: .color(color.opacity(speckOpacity)))
         }
     }
 }

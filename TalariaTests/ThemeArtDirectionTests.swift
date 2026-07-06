@@ -50,6 +50,31 @@ struct ThemeArtDirectionTests {
         }
     }
 
+    @Test func eventHorizonStarfieldCarriesPerLayerDrifts() throws {
+        let art = ThemeArtDirectionCatalog.artDirection(for: .eventHorizon)
+        let field = try #require(art.starfield)
+        #expect(field.opacity == 0.45)
+        let drifts = try #require(field.layerDrifts)
+        #expect(drifts.count == 4)
+        #expect(drifts[0].dx == 3.75)
+        #expect(drifts[0].dy == 3.75)
+        #expect(drifts[1].dx == -5.0)
+        #expect(drifts[1].dy == 5.0)
+        #expect(drifts[2].dx == 6.25)
+        #expect(drifts[2].dy == -6.25)
+        #expect(drifts[3].dx == -4.6)
+        #expect(drifts[3].dy == 4.6)
+    }
+
+    @Test func starfieldPresetsAreAllDistinct() {
+        let subtle = ThemeStarfield(colors: [.white], preset: .subtle)
+        let handoff = ThemeStarfield(colors: [.white], preset: .handoff)
+        let bold = ThemeStarfield(colors: [.white], preset: .bold)
+        #expect(subtle != handoff)
+        #expect(handoff != bold)
+        #expect(subtle != bold)
+    }
+
     @Test func glowPoolGeometryIsRenderable() {
         for art in ThemeArtDirectionCatalog.overrides.values {
             for pool in art.glowPools {
