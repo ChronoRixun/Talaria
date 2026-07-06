@@ -516,6 +516,7 @@ final class SensorUploadService {
                 healthBusyRetries = 0
                 outboxState.pendingHealthSamples.removeFirst(chunk.count)
                 persistOutboxState()
+                continue
             case .retry:
                 // Connector busy — back off, then re-send the same chunk.
                 guard healthBusyRetries < Self.maxHealthBusyRetries else { break }
@@ -536,7 +537,6 @@ final class SensorUploadService {
             case .failed:
                 break
             }
-            break
         }
         sensorLog.notice("drain: finished. Outbox remaining: loc=\(self.outboxState.pendingLocation != nil), health=\(self.outboxState.pendingHealthSamples.count)")
         recordDrain(outboxState.isEmpty ? "Delivered · outbox clear" : "Partial · loc=\(outboxState.pendingLocation != nil ? 1 : 0), health=\(outboxState.pendingHealthSamples.count)")
