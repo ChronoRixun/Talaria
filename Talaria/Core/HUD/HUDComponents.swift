@@ -19,6 +19,7 @@ struct HUDScreenBackground: View {
             Design.Colors.background
             Design.Colors.screenGradient
             GlowPoolField()
+            SpokeFieldView()
             ThemeTextureView()
             GridOverlay()
                 .opacity(gridIntensity ?? ThemeRuntime.shared.gridDensity.gridIntensity)

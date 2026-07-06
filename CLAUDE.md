@@ -137,6 +137,14 @@ is a thin id (names from `ThemeCatalog.displayName`, `isLight`/orb/texture from 
 data), and a new theme = one `ThemeID` case + one palette definition + one
 `ThemeDefinition` (+ a `WidgetTheme` case for the widget edit sheet) — no switch-arm
 edits. Xcode build + `DesignThemeTests` run still owed on the Mac (see the handoff doc).
+**Art-direction layer since #56 (2026-07-06, `design/THEME_ART_DIRECTION_PLAN.md`):**
+the palette stays the flat widget-safe color table; richer art direction (nebula
+`glowPools`, `.starfield` texture + `emberTint`, `panelHalo`, multi-hue `orbHues` for the
+`.singularity` orb, `userBubble` gradients, `titleGlow`, lensing `spokes`) lives in
+`Talaria/Core/ThemeArtDirection.swift` (app target only), keyed by `ThemeID` with an
+inert `.standard` default — un-listed themes render byte-identically (guarded by
+`ThemeArtDirectionTests`). Port a handoff with the checklist in the plan doc — the #54
+gallery port only harvested the palette table, which is why Event Horizon looked wrong.
 
 Tokens in `Talaria/Core/Design.swift` — note the **two** namespaces:
 - `Design.Brand.*` — `accent`/`accentBright`/`accentDeep` (theme-resolved; Deep Field
@@ -166,8 +174,15 @@ lockstep across BOTH `HermesWidgetData.swift` copies).
 - Issues tracked in `OPEN_ITEMS.md` (dated update notes); session continuity in
   the local `handoffs/` notes (gitignored) + `CLEAN_CHAT_PATH.md`.
 
-## Current state (2026-07-03)
+## Current state (2026-07-06)
 
+- **Theme art-direction layer on `claude/theme-art-direction-tokens-5ygv01`** (#56):
+  phases A–D — atmosphere (glow pools / starfield / ember tint / panel halo), the
+  multi-hue `.singularity` orb, chrome (bubble gradients + title glow), lensing spokes —
+  plus Event Horizon fully re-ported to its handoff (including native slot names).
+  **Written in a cloud session — not yet compiled**; Mac session owes `xcodegen
+  generate` (2 new files), CLI build, the three theme test suites, and a device pass
+  (checklist in OPEN_ITEMS #56).
 - **Theme system built on `claude/theming-options-plan-c4356l`** (#49): four themes ×
   three accent slots, palette core in `Shared/`, textures, per-theme orbs, theme picker,
   themed widgets with per-instance selection. **Not yet compiled or device-verified** —

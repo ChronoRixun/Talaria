@@ -1,6 +1,8 @@
 # Talaria Theme Art Direction — Presentation Layer over the Palette Catalog
 
-**Status:** Phases A–C landed 2026-07-06 (branch `claude/theme-art-direction-tokens-5ygv01`).
+**Status:** Phases A–D (spokes) landed 2026-07-06 (branch
+`claude/theme-art-direction-tokens-5ygv01`); Metal/mesh materials remain future work.
+Tracked as OPEN_ITEMS **#56**.
 **Extends:** `THEME_SYSTEM_PLAN.md` (4-theme system) and `THEME_FRAMEWORK_PLAN.md` (#49
 data-driven catalog).
 **Written in a cloud session — needs the Mac ritual:** `xcodegen generate` (two new files:
@@ -64,9 +66,12 @@ and voice-transcript bubbles); `titleGlow` consumed via `.hudTitleGlow()` by
 Custom display *font families* (Orbitron etc.) are **out of scope** — bundling font files
 is a Mac-session task; Chakra Petch already covers the sci-fi display role.
 
-### Phase D — motion/materials (planned, on-device only)
-Slow conic "lensing" spoke layer; MeshGradient / Metal `colorEffect` materials. Highest
-fidelity, needs per-iteration device eyes — do not write blind in cloud sessions.
+### Phase D — motion (spokes landed; materials still future)
+`spokes: ThemeSpokeField` (color/count/rotationPeriod) → `SpokeFieldView` in the screen
+stack: the handoff's `repeating-conic-gradient` lensing shimmer, drawn once into a static
+Canvas and rotated as a layer (`continuousRotation` already freezes under Reduce Motion).
+**Still future:** MeshGradient / Metal `colorEffect` materials — highest fidelity, needs
+per-iteration device eyes; do not write blind in cloud sessions.
 
 ## 4. Porting checklist (handoff HTML → theme)
 

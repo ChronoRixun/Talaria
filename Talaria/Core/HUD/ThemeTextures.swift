@@ -147,6 +147,49 @@ struct ScanlineTexture: View {
     }
 }
 
+// MARK: Lensing spokes (art-direction rotation layer)
+
+/// Slow-rotating radial spoke fan (`ThemeArtDirection.spokes`) — the
+/// handoffs' `repeating-conic-gradient` lensing shimmer. The fan is drawn
+/// once into a static Canvas and rotated as a layer via
+/// `continuousRotation`, which already degrades to a static frame under
+/// Reduce Motion. Renders nothing for themes without a spoke field.
+struct SpokeFieldView: View {
+    var body: some View {
+        if let field = ThemeRuntime.shared.artDirection.spokes {
+            GeometryReader { proxy in
+                // Oversized square so the rotating fan always covers the
+                // screen corners.
+                let side = max(proxy.size.width, proxy.size.height) * 1.5
+                Canvas { context, size in
+                    let center = CGPoint(x: size.width / 2, y: size.height / 2)
+                    let radius = size.width / 2
+                    let step = 360.0 / Double(max(1, field.count))
+                    var spokes = Path()
+                    for i in 0..<field.count {
+                        let start = Double(i) * step
+                        spokes.move(to: center)
+                        spokes.addArc(
+                            center: center,
+                            radius: radius,
+                            startAngle: .degrees(start),
+                            endAngle: .degrees(start + step * 0.5),
+                            clockwise: false
+                        )
+                        spokes.closeSubpath()
+                    }
+                    context.fill(spokes, with: .color(field.color))
+                }
+                .frame(width: side, height: side)
+                .continuousRotation(field.rotationPeriod)
+                .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
+            }
+            .clipped()
+            .allowsHitTesting(false)
+        }
+    }
+}
+
 // MARK: Starfield (Event Horizon)
 
 /// Multi-hue star specks drifting in slow diagonals — the handoff's four

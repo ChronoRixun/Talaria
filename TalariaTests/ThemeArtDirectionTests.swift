@@ -16,6 +16,7 @@ struct ThemeArtDirectionTests {
         #expect(standard.orbHues == nil)
         #expect(standard.userBubble == nil)
         #expect(standard.titleGlow == nil)
+        #expect(standard.spokes == nil)
     }
 
     @Test func onlyEventHorizonOverridesArtDirection() {
@@ -61,6 +62,10 @@ struct ThemeArtDirectionTests {
             if let starfield = art.starfield {
                 #expect(starfield.count > 0)
                 #expect(starfield.driftScale >= 0)
+            }
+            if let spokes = art.spokes {
+                #expect(spokes.count > 0)
+                #expect(spokes.rotationPeriod > 0)
             }
         }
     }

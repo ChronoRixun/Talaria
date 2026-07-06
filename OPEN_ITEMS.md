@@ -1497,3 +1497,52 @@ add capabilities back only on proven need. Keep the shim service; keep the relay
 dated `.bak` copies.
 
 Logged 2026-07-04.
+
+---
+
+## 56. 🔧 Theme art-direction layer — gallery themes carry atmosphere/orb/chrome tokens; Mac build + device verify owed
+
+**Problem:** #49 made themes cheap, not expressive. The catalog's vocabulary was colors +
+a closed menu (4 textures / 3 grids / 4 orbs), so art-directed handoffs degraded to
+recolors: Event Horizon shipped as "Deep Field in purple" with **amber forge embers**
+(EmberTexture hardcoded `Design.Brand.forge`) drifting up a black-hole void, the borrowed
+arcReactor orb, and generic slot names.
+
+**Landed (branch `claude/theme-art-direction-tokens-5ygv01`, phases A–D, 2026-07-06):**
+- **`ThemeArtDirection`** (`Talaria/Core/ThemeArtDirection.swift`, app target only) +
+  catalog keyed by `ThemeID`. Every field optional-with-inert-default; themes without an
+  entry resolve to `.standard` and render byte-identically (guarded by
+  `ThemeArtDirectionTests` + the existing `DesignThemeTests` pixel guard). The shared
+  `ThemePaletteDefinition` stays flat and widget-safe — widgets untouched.
+- **Phase A (atmosphere):** `glowPools` nebula washes in `HUDScreenBackground`;
+  `.starfield` texture (4-hue drifting specks, reduce-motion aware); `emberTint`
+  override (fixes the hardcoded forge tint); `panelHalo` rim ring + outer glow on
+  `HUDPanel`/`.hudPanel`.
+- **Phase B (orb):** `ThemeOrbStyle.singularity` — hand-written composition, ring/core
+  hues from `orbHues` (multi-hue rings the single-accent orbs can't express). Orb DSL
+  considered + rejected: data supplies hues, geometry stays Swift.
+- **Phase C (chrome):** `userBubble` gradient + border in `MessageBubble`; `titleGlow`
+  via `.hudTitleGlow()` on the HERMES wordmark + Settings titles.
+- **Phase D (motion):** `spokes` — slow-rotating conic lensing fan (`SpokeFieldView`,
+  static Canvas rotated via `continuousRotation`, so Reduce Motion freezes it).
+- **Event Horizon** fully re-ported per the handoff: starfield, nebula pools, violet
+  panel halo, singularity orb, violet→magenta bubbles, wordmark glow, gold spokes, and
+  handoff-native slot names (Accretion Violet / Hawking Cyan / Supernova Gold).
+  Singularity Magenta enters via art direction — the 3-slot palette is untouched.
+- Docs: `design/THEME_ART_DIRECTION_PLAN.md` — token vocabulary + the **handoff porting
+  checklist** (the #54 port only harvested the palette table; the checklist prevents a
+  repeat).
+
+**Owed (Mac session):**
+- [ ] `xcodegen generate` (new files: `Talaria/Core/ThemeArtDirection.swift`,
+      `TalariaTests/ThemeArtDirectionTests.swift`), CLI build, fix stragglers.
+- [ ] Run `DesignThemeTests` + `ThemeCatalogTests` + `ThemeArtDirectionTests`.
+- [ ] Device pass: Deep Field pixel-identical; Solar Forge embers unchanged; Event
+      Horizon vs the handoff; Reduce Motion freezes starfield + spokes; Paper Tape
+      panels halo-free. Tune pool/spoke/halo alphas to taste on device.
+- [ ] Decide whether Cereal Box / Bubblegum Mecha / Retro Sci-Fi get art-direction
+      entries (their handoffs need the same checklist pass; embers tint at minimum).
+- [ ] Out of scope, noted: bundling a display font (Orbitron-class) if any theme wants
+      typography beyond Chakra Petch.
+
+Logged 2026-07-06.

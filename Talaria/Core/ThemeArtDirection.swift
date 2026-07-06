@@ -69,6 +69,18 @@ struct ThemeOrbHues: Equatable, Sendable {
     let glow: Color
 }
 
+/// A slow-rotating radial spoke fan behind the content — the handoffs'
+/// `repeating-conic-gradient` lensing shimmer. Deliberately near-invisible
+/// (the reference runs the spokes at 3% alpha); static under Reduce Motion.
+struct ThemeSpokeField: Equatable, Sendable {
+    /// Spoke color, carrying its own (very low) alpha.
+    let color: Color
+    /// Number of spokes around the circle (90 ≈ the reference's 2°-on/2°-off).
+    var count: Int = 90
+    /// Seconds per full revolution.
+    var rotationPeriod: Double = 30
+}
+
 /// User-bubble treatment (`MessageBubble`): a diagonal gradient fill plus an
 /// explicit border, replacing the default flat accent tint (the handoffs'
 /// `linear-gradient(135deg, …)` message styling).
@@ -100,6 +112,8 @@ struct ThemeArtDirection: Equatable, Sendable {
     /// Neon glow behind title text — the chat wordmark and Settings screen
     /// titles (`nil` = no glow, the default everywhere today).
     var titleGlow: Color? = nil
+    /// Rotating lensing spokes behind the content (`nil` = none).
+    var spokes: ThemeSpokeField? = nil
 
     /// The identity treatment: no pools, no tints, no halo.
     static let standard = ThemeArtDirection()
@@ -165,7 +179,9 @@ enum ThemeArtDirectionCatalog {
             ],
             borderColor: Color(hex: 0x8A5CFF, opacity: 0.32)
         ),
-        titleGlow: Color(hex: 0x8A5CFF)
+        titleGlow: Color(hex: 0x8A5CFF),
+        // .spin-ring: repeating-conic supernova-gold spokes at 3% alpha, 30s.
+        spokes: ThemeSpokeField(color: Color(hex: 0xFFDC50, opacity: 0.03))
     )
 }
 
