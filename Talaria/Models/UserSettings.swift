@@ -239,6 +239,10 @@ enum AppearanceTheme: String, Codable, CaseIterable, Hashable, Sendable {
     case summerSolar
     case springSprout
     case autumnHarvest
+    case cerealBox
+    case bubblegumMecha
+    case retroSciFi
+    case eventHorizon
 
     /// Display name — single source of truth is the catalog definition (#49).
     var displayLabel: String {

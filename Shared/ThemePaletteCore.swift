@@ -25,6 +25,10 @@ enum ThemeID: String, CaseIterable, Codable, Hashable, Sendable {
     case summerSolar
     case springSprout
     case autumnHarvest
+    case cerealBox
+    case bubblegumMecha
+    case retroSciFi
+    case eventHorizon
 }
 
 /// Accent slot identity, decoupled from the app's `AppearanceAccent`
@@ -361,6 +365,10 @@ enum ThemePaletteCatalog {
         .summerSolar: summerSolar,
         .springSprout: springSprout,
         .autumnHarvest: autumnHarvest,
+        .cerealBox: cerealBox,
+        .bubblegumMecha: bubblegumMecha,
+        .retroSciFi: retroSciFi,
+        .eventHorizon: eventHorizon,
     ]
 
     /// Total lookup over the shipped themes (coverage guarded by
@@ -954,6 +962,277 @@ enum ThemePaletteCatalog {
                 coreHighlight: Color(hex: 0xD6CB9F),
                 coreShadow: Color(hex: 0x63582C),
                 forge: Color(hex: 0xD49020)
+            )
+        ),
+        glowScale: 1.1,
+        gridStyle: .lines,
+        gridLine: .accentTinted(0.08),
+        gridCell: 26,
+        isLight: false,
+        orbStyle: .arcReactor
+    )
+
+    // MARK: Cereal — Cereal Box
+
+    static let cerealBox = ThemePaletteDefinition(
+        lockedAccentSlot: nil,
+        background: Color(hex: 0x0A0610),
+        screenGradientStops: [
+            ThemeGradientStop(color: Color(hex: 0x140A20), location: 0.0),
+            ThemeGradientStop(color: Color(hex: 0x0A0610), location: 0.52),
+            ThemeGradientStop(color: Color(hex: 0x050308), location: 1.0),
+        ],
+        drawerColors: [Color(hex: 0x140A20), Color(hex: 0x0A0610), Color(hex: 0x050308)],
+        texture: .embers,
+        ramp: ThemeForegroundRamp(
+            foreground: Color(hex: 0xFFF8FF),
+            foregroundBright: Color(hex: 0xFFF8FF),
+            secondaryForeground: Color(hex: 0xC8B8D8),
+            mutedForeground: Color(hex: 0xC8B8D8),
+            dimForeground: Color(hex: 0x887098),
+            coolForeground: Color(hex: 0xC8B8D8)
+        ),
+        surface: Color(hex: 0xFF5078, opacity: 0.08),
+        chips: .fixed(
+            surface: Color(hex: 0xFF5078, opacity: 0.08),
+            divider: Color(hex: 0x00C8FF, opacity: 0.08),
+            border: Color(hex: 0xFFDC00, opacity: 0.06)
+        ),
+        borders: .accentTinted(hairline: 0.14, strong: 0.30),
+        scrim: Color(hex: 0x000000, opacity: 0.85),
+        danger: Color(hex: 0xFF4A2B),
+        dangerBright: Color(hex: 0xFF654A),
+        accents: ThemeAccentVariants(
+            cyan: ThemeAccentVariant(
+                displayName: "Berry · Cereal",
+                base: Color(hex: 0xFF5078),
+                bright: Color(hex: 0xFF7B99),
+                deep: Color(hex: 0xB23854),
+                coreHighlight: Color(hex: 0xFF9EB4),
+                coreShadow: Color(hex: 0x8C2C42),
+                forge: Color(hex: 0xFF9D00)
+            ),
+            amber: ThemeAccentVariant(
+                displayName: "Milk · Cereal",
+                base: Color(hex: 0x00C8FF),
+                bright: Color(hex: 0x3FD5FF),
+                deep: Color(hex: 0x008CB2),
+                coreHighlight: Color(hex: 0x72E0FF),
+                coreShadow: Color(hex: 0x006E8C),
+                forge: Color(hex: 0xFF9D00)
+            ),
+            violet: ThemeAccentVariant(
+                displayName: "Honey · Cereal",
+                base: Color(hex: 0xFFDC00),
+                bright: Color(hex: 0xFFE43F),
+                deep: Color(hex: 0xB29A00),
+                coreHighlight: Color(hex: 0xFFEB72),
+                coreShadow: Color(hex: 0x8C7900),
+                forge: Color(hex: 0xFF9D00)
+            )
+        ),
+        glowScale: 1.1,
+        gridStyle: .lines,
+        gridLine: .accentTinted(0.08),
+        gridCell: 26,
+        isLight: false,
+        orbStyle: .arcReactor
+    )
+
+    // MARK: Bubblegum — Bubblegum Mecha
+
+    static let bubblegumMecha = ThemePaletteDefinition(
+        lockedAccentSlot: nil,
+        background: Color(hex: 0x0A050A),
+        screenGradientStops: [
+            ThemeGradientStop(color: Color(hex: 0x1A0F1A), location: 0.0),
+            ThemeGradientStop(color: Color(hex: 0x0A050A), location: 0.52),
+            ThemeGradientStop(color: Color(hex: 0x050205), location: 1.0),
+        ],
+        drawerColors: [Color(hex: 0x1A0F1A), Color(hex: 0x0A050A), Color(hex: 0x050205)],
+        texture: .embers,
+        ramp: ThemeForegroundRamp(
+            foreground: Color(hex: 0xFFF5F8),
+            foregroundBright: Color(hex: 0xFFF5F8),
+            secondaryForeground: Color(hex: 0xD8B8C8),
+            mutedForeground: Color(hex: 0xD8B8C8),
+            dimForeground: Color(hex: 0x906080),
+            coolForeground: Color(hex: 0xD8B8C8)
+        ),
+        surface: Color(hex: 0xFF6EC7, opacity: 0.08),
+        chips: .fixed(
+            surface: Color(hex: 0xFF6EC7, opacity: 0.08),
+            divider: Color(hex: 0x00F0FF, opacity: 0.08),
+            border: Color(hex: 0xFFE600, opacity: 0.06)
+        ),
+        borders: .accentTinted(hairline: 0.14, strong: 0.30),
+        scrim: Color(hex: 0x000000, opacity: 0.85),
+        danger: Color(hex: 0xFF3366),
+        dangerBright: Color(hex: 0xFF517C),
+        accents: ThemeAccentVariants(
+            cyan: ThemeAccentVariant(
+                displayName: "Candy · Mecha",
+                base: Color(hex: 0xFF6EC7),
+                bright: Color(hex: 0xFF92D5),
+                deep: Color(hex: 0xB24D8B),
+                coreHighlight: Color(hex: 0xFFAFE0),
+                coreShadow: Color(hex: 0x8C3C6D),
+                forge: Color(hex: 0xFF9A00)
+            ),
+            amber: ThemeAccentVariant(
+                displayName: "Cyan · Mecha",
+                base: Color(hex: 0x00F0FF),
+                bright: Color(hex: 0x3FF3FF),
+                deep: Color(hex: 0x00A8B2),
+                coreHighlight: Color(hex: 0x72F6FF),
+                coreShadow: Color(hex: 0x00848C),
+                forge: Color(hex: 0xFF9A00)
+            ),
+            violet: ThemeAccentVariant(
+                displayName: "Voltage · Mecha",
+                base: Color(hex: 0xFFE600),
+                bright: Color(hex: 0xFFEC3F),
+                deep: Color(hex: 0xB2A100),
+                coreHighlight: Color(hex: 0xFFF172),
+                coreShadow: Color(hex: 0x8C7E00),
+                forge: Color(hex: 0xFF9A00)
+            )
+        ),
+        glowScale: 1.1,
+        gridStyle: .lines,
+        gridLine: .accentTinted(0.08),
+        gridCell: 26,
+        isLight: false,
+        orbStyle: .arcReactor
+    )
+
+    // MARK: Retro — Retro Sci-Fi
+
+    static let retroSciFi = ThemePaletteDefinition(
+        lockedAccentSlot: nil,
+        background: Color(hex: 0xF5F0E8),
+        screenGradientStops: [
+            ThemeGradientStop(color: Color(hex: 0xE8E2D8), location: 0.0),
+            ThemeGradientStop(color: Color(hex: 0xF5F0E8), location: 0.52),
+            ThemeGradientStop(color: Color(hex: 0xFFFDF8), location: 1.0),
+        ],
+        drawerColors: [Color(hex: 0xE8E2D8), Color(hex: 0xF5F0E8), Color(hex: 0xFFFDF8)],
+        texture: .none,
+        ramp: ThemeForegroundRamp(
+            foreground: Color(hex: 0x1A1210),
+            foregroundBright: Color(hex: 0x160F0D),
+            secondaryForeground: Color(hex: 0x5C5048),
+            mutedForeground: Color(hex: 0x5C5048),
+            dimForeground: Color(hex: 0x8A7E74),
+            coolForeground: Color(hex: 0x5C5048)
+        ),
+        surface: Color(hex: 0xFF2D2D, opacity: 0.08),
+        chips: .fixed(
+            surface: Color(hex: 0xFF2D2D, opacity: 0.08),
+            divider: Color(hex: 0x007BFF, opacity: 0.08),
+            border: Color(hex: 0xFFD600, opacity: 0.08)
+        ),
+        borders: .fixed(
+            hairline: Color(hex: 0x1A1210, opacity: 0.1),
+            strong: Color(hex: 0x1A1210, opacity: 0.22)
+        ),
+        scrim: Color(hex: 0x1A1210, opacity: 0.35),
+        danger: Color(hex: 0xD00000),
+        dangerBright: Color(hex: 0xB00000),
+        accents: ThemeAccentVariants(
+            cyan: ThemeAccentVariant(
+                displayName: "Red · Retro",
+                base: Color(hex: 0xFF2D2D),
+                bright: Color(hex: 0xFF6161),
+                deep: Color(hex: 0xB21F1F),
+                coreHighlight: Color(hex: 0xFF8B8B),
+                coreShadow: Color(hex: 0x8C1818),
+                forge: Color(hex: 0xE67E00)
+            ),
+            amber: ThemeAccentVariant(
+                displayName: "Blue · Retro",
+                base: Color(hex: 0x007BFF),
+                bright: Color(hex: 0x3F9CFF),
+                deep: Color(hex: 0x0056B2),
+                coreHighlight: Color(hex: 0x72B6FF),
+                coreShadow: Color(hex: 0x00438C),
+                forge: Color(hex: 0xE67E00)
+            ),
+            violet: ThemeAccentVariant(
+                displayName: "Yellow · Retro",
+                base: Color(hex: 0xFFD600),
+                bright: Color(hex: 0xFFE03F),
+                deep: Color(hex: 0xB29500),
+                coreHighlight: Color(hex: 0xFFE872),
+                coreShadow: Color(hex: 0x8C7500),
+                forge: Color(hex: 0xE67E00)
+            )
+        ),
+        glowScale: 0.15,
+        gridStyle: .rules,
+        gridLine: .fixed(Color(hex: 0x1A1210, opacity: 0.1)),
+        gridCell: 26,
+        isLight: true,
+        orbStyle: .arcReactor
+    )
+
+    // MARK: Event — Event Horizon
+
+    static let eventHorizon = ThemePaletteDefinition(
+        lockedAccentSlot: nil,
+        background: Color(hex: 0x08050F),
+        screenGradientStops: [
+            ThemeGradientStop(color: Color(hex: 0x100A1A), location: 0.0),
+            ThemeGradientStop(color: Color(hex: 0x08050F), location: 0.52),
+            ThemeGradientStop(color: Color(hex: 0x040208), location: 1.0),
+        ],
+        drawerColors: [Color(hex: 0x100A1A), Color(hex: 0x08050F), Color(hex: 0x040208)],
+        texture: .embers,
+        ramp: ThemeForegroundRamp(
+            foreground: Color(hex: 0xF7F4FF),
+            foregroundBright: Color(hex: 0xF7F4FF),
+            secondaryForeground: Color(hex: 0xC4B8D8),
+            mutedForeground: Color(hex: 0xC4B8D8),
+            dimForeground: Color(hex: 0x7A7090),
+            coolForeground: Color(hex: 0xC4B8D8)
+        ),
+        surface: Color(hex: 0x8A5CFF, opacity: 0.08),
+        chips: .fixed(
+            surface: Color(hex: 0x8A5CFF, opacity: 0.08),
+            divider: Color(hex: 0x00F0FF, opacity: 0.08),
+            border: Color(hex: 0xFFDC50, opacity: 0.06)
+        ),
+        borders: .accentTinted(hairline: 0.14, strong: 0.30),
+        scrim: Color(hex: 0x000000, opacity: 0.85),
+        danger: Color(hex: 0xFF3B3B),
+        dangerBright: Color(hex: 0xFF5858),
+        accents: ThemeAccentVariants(
+            cyan: ThemeAccentVariant(
+                displayName: "Violet · Horizon",
+                base: Color(hex: 0x8A5CFF),
+                bright: Color(hex: 0xA784FF),
+                deep: Color(hex: 0x6040B2),
+                coreHighlight: Color(hex: 0xBEA5FF),
+                coreShadow: Color(hex: 0x4B328C),
+                forge: Color(hex: 0xFF9E00)
+            ),
+            amber: ThemeAccentVariant(
+                displayName: "Cyan · Horizon",
+                base: Color(hex: 0x00F0FF),
+                bright: Color(hex: 0x3FF3FF),
+                deep: Color(hex: 0x00A8B2),
+                coreHighlight: Color(hex: 0x72F6FF),
+                coreShadow: Color(hex: 0x00848C),
+                forge: Color(hex: 0xFF9E00)
+            ),
+            violet: ThemeAccentVariant(
+                displayName: "Gold · Horizon",
+                base: Color(hex: 0xFFDC50),
+                bright: Color(hex: 0xFFE47B),
+                deep: Color(hex: 0xB29A38),
+                coreHighlight: Color(hex: 0xFFEB9E),
+                coreShadow: Color(hex: 0x8C792C),
+                forge: Color(hex: 0xFF9E00)
             )
         ),
         glowScale: 1.1,

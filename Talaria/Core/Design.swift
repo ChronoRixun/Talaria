@@ -397,6 +397,10 @@ extension AppearanceTheme {
         case .summerSolar: .summerSolar
         case .springSprout: .springSprout
         case .autumnHarvest: .autumnHarvest
+        case .cerealBox: .cerealBox
+        case .bubblegumMecha: .bubblegumMecha
+        case .retroSciFi: .retroSciFi
+        case .eventHorizon: .eventHorizon
         }
     }
 }
