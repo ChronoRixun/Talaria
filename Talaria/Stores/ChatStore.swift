@@ -409,15 +409,12 @@ final class ChatStore {
                 transcriptItems: finalizedItems,
                 duration: duration
             )
-            do {
-                _ = await hermesClient.send(
-                    message: transcriptText,
-                    attachments: [],
-                    clientMessageID: UUID()
-                )
-            } catch {
-                // Non-fatal: local transcript persists even if sync fails
-            }
+            // Non-fatal: local transcript persists even if the sync send fails.
+            _ = await hermesClient.send(
+                message: transcriptText,
+                attachments: [],
+                clientMessageID: UUID()
+            )
         }
     }
 
