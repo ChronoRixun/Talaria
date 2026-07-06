@@ -96,4 +96,9 @@ struct ThemeArtDirectionTests {
     @Test func eventHorizonSelectsTheStarfieldTexture() {
         #expect(ThemePalette(theme: .eventHorizon, accent: .cyan).texture == .starfield)
     }
+
+    @Test func eventHorizonOrbIsSingularity() {
+        let palette = ThemePalette(theme: .eventHorizon, accent: .cyan)
+        #expect(palette.orbStyle == .singularity)
+    }
 }

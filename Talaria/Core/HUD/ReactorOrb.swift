@@ -39,6 +39,7 @@ struct ReactorOrb: View {
             case .forgeSun: forgeSunLayers
             case .crtCrosshair: crtCrosshairLayers
             case .paperReel: paperReelLayers
+            case .singularity: singularityLayers
             }
         }
         .frame(width: size, height: size)
@@ -185,6 +186,35 @@ struct ReactorOrb: View {
         }
     }
 
+    // MARK: - Singularity (Event Horizon black-hole orb)
+
+    @ViewBuilder private var singularityLayers: some View {
+        switch style {
+        case .minimal:
+            SingularityRing(diameter: size, color: Color(hex: 0x8A5CFF), opacity: 0.35, delay: 0)
+            SingularityCore(diameter: size * 0.54, glowRadius: size * 0.35, glow: glowIntensity)
+
+        case .standard:
+            SingularityRing(diameter: size, color: Color(hex: 0x8A5CFF), opacity: 0.35, delay: 0)
+            SingularityRing(diameter: size * 0.74, color: Color(hex: 0x00F0FF), opacity: 0.55, dashed: true, delay: 0.3)
+            SingularityRing(diameter: size * 0.48, color: Color(hex: 0xFFDC50), opacity: 0.75, delay: 0.6)
+            SingularityCore(diameter: size * 0.30, glowRadius: size * 0.30, glow: glowIntensity)
+
+        case .onboarding:
+            SingularityRing(diameter: size, color: Color(hex: 0x8A5CFF), opacity: 0.30, delay: 0)
+            SingularityRing(diameter: size * 0.74, color: Color(hex: 0x00F0FF), opacity: 0.50, dashed: true, delay: 0.3)
+            SingularityRing(diameter: size * 0.48, color: Color(hex: 0xFFDC50), opacity: 0.70, delay: 0.6)
+            SingularityCore(diameter: size * 0.34, glowRadius: size * 0.34, glow: glowIntensity)
+
+        case .voice:
+            PingHalo(diameter: size)
+            SingularityRing(diameter: size, color: Color(hex: 0x8A5CFF), opacity: 0.35, delay: 0)
+            SingularityRing(diameter: size * 0.74, color: Color(hex: 0x00F0FF), opacity: 0.55, dashed: true, delay: 0.3)
+            SingularityRing(diameter: size * 0.48, color: Color(hex: 0xFFDC50), opacity: 0.75, delay: 0.6)
+            SingularityCore(diameter: size * 0.30, glowRadius: size * 0.26, glow: glowIntensity)
+        }
+    }
+
     // MARK: - Shared pieces
 
     private func lw(_ fraction: CGFloat) -> CGFloat { max(1, size * fraction) }
@@ -328,6 +358,80 @@ private struct PaperHub: View {
                 .frame(width: diameter * 0.3, height: diameter * 0.3)
         }
         .frame(width: diameter, height: diameter)
+    }
+}
+
+private struct SingularityRing: View {
+    let diameter: CGFloat
+    let color: Color
+    let opacity: Double
+    var dashed: Bool = false
+    var delay: Double = 0
+
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    private var reduceMotion: Bool { systemReduceMotion || ThemeRuntime.shared.appReduceMotion }
+    @State private var pulse = false
+
+    var body: some View {
+        let lineWidth: CGFloat = max(1, diameter * 0.016)
+        Circle()
+            .strokeBorder(
+                color.opacity(opacity),
+                style: StrokeStyle(lineWidth: lineWidth, dash: dashed ? [lineWidth * 2, lineWidth * 2] : [])
+            )
+            .frame(width: diameter, height: diameter)
+            .scaleEffect(pulse ? 1.05 : 1.0)
+            .opacity(pulse ? min(1.0, opacity + 0.2) : opacity)
+            .onAppear {
+                guard !reduceMotion else { return }
+                withAnimation(
+                    .easeInOut(duration: 3.5)
+                        .delay(delay)
+                        .repeatForever(autoreverses: true)
+                ) { pulse = true }
+            }
+    }
+}
+
+private struct SingularityCore: View {
+    let diameter: CGFloat
+    let glowRadius: CGFloat
+    let glow: Double
+
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    private var reduceMotion: Bool { systemReduceMotion || ThemeRuntime.shared.appReduceMotion }
+    @State private var pulse = false
+
+    var body: some View {
+        let magenta = Color(hex: 0xFF2AA8)
+        let violet = Color(hex: 0x8A5CFF)
+        Circle()
+            .fill(
+                RadialGradient(
+                    colors: [Color(hex: 0xFFDC50), magenta],
+                    center: UnitPoint(x: 0.3, y: 0.3),
+                    startRadius: 0,
+                    endRadius: diameter * 0.5
+                )
+            )
+            .frame(width: diameter, height: diameter)
+            .overlay(
+                Circle()
+                    .strokeBorder(Color(hex: 0x00F0FF).opacity(pulse ? 0.7 : 0.5), lineWidth: max(1, diameter * 0.055))
+                    .frame(width: diameter * 1.45, height: diameter * 1.45)
+                    .scaleEffect(pulse ? 1.0 : 1.05)
+            )
+            .scaleEffect(pulse ? 1.1 : 1.0)
+            .brightness(pulse ? 0.25 : 0.0)
+            .shadow(color: magenta.opacity(0.9 * glow), radius: diameter * 0.83)
+            .shadow(color: violet.opacity(0.4 * glow), radius: diameter * 1.67)
+            .onAppear {
+                guard !reduceMotion else { return }
+                withAnimation(
+                    .easeInOut(duration: 4.0)
+                        .repeatForever(autoreverses: true)
+                ) { pulse = true }
+            }
     }
 }
 

@@ -89,6 +89,9 @@ enum ThemeOrbStyle: Hashable, Sendable {
     case crtCrosshair
     /// Mechanical reel: sprocket holes + tick ring + inked hub (Paper Tape).
     case paperReel
+    /// Black-hole singularity: concentric lensing rings + infalling-core bloom
+    /// (Event Horizon). Uses theme-curated accent hues, not just the active slot.
+    case singularity
 }
 
 /// One stop of the screen's radial background gradient.
@@ -1245,7 +1248,7 @@ enum ThemePaletteCatalog {
         gridLine: .accentTinted(0.08),
         gridCell: 26,
         isLight: false,
-        orbStyle: .arcReactor
+        orbStyle: .singularity
     )
 }
 
