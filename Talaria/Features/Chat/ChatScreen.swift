@@ -94,7 +94,11 @@ struct ChatScreen: View {
 
     private var framedContent: some View {
         mainStack
-            .overlay { sessionsOverlay }
+            .overlay {
+                if sessionsOpen {
+                    sessionsOverlay
+                }
+            }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbarContent }
             .toolbarBackground(.hidden, for: .navigationBar)
