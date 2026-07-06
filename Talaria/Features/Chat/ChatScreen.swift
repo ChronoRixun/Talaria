@@ -327,6 +327,7 @@ struct ChatScreen: View {
                         .font(Design.Typography.display(16, weight: .semibold, relativeTo: .headline))
                         .tracking(Design.Tracking.button)
                         .foregroundStyle(Design.Colors.foregroundBright)
+                        .hudTitleGlow()
                     StatusPip(color: connectionIndicatorColor, diameter: 6,
                               blinks: effectiveConnectionState != .online)
                     MonoLabel(connectionTelemetry, size: 9, tracking: Design.Tracking.mono)

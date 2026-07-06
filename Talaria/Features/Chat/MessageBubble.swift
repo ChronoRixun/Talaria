@@ -57,15 +57,36 @@ struct MessageBubble: View {
         )
     }
 
+    /// Bubble fill/border resolve through the theme's art direction where one
+    /// is curated (`ThemeArtDirection.userBubble`); the fallbacks are the
+    /// pre-art-direction flat accent tints.
+    private var userBubbleFill: AnyShapeStyle {
+        if let bubble = ThemeRuntime.shared.artDirection.userBubble {
+            return AnyShapeStyle(
+                LinearGradient(
+                    colors: bubble.fillColors,
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+        }
+        return AnyShapeStyle(Design.Colors.accentTint(0.1))
+    }
+
+    private var userBubbleBorderColor: Color {
+        ThemeRuntime.shared.artDirection.userBubble?.borderColor
+            ?? Design.Colors.accentTint(0.28)
+    }
+
     private var userBubble: some View {
         VStack(alignment: .trailing, spacing: Design.Spacing.xxs) {
             if message.isVoiceTranscript {
                 voiceTranscriptText(message.content)
                     .padding(.horizontal, Design.Spacing.md)
                     .padding(.vertical, Design.Spacing.sm)
-                    .background(Design.Colors.accentTint(0.1), in: userBubbleShape)
+                    .background(userBubbleFill, in: userBubbleShape)
                     .overlay {
-                        userBubbleShape.strokeBorder(Design.Colors.accentTint(0.28), lineWidth: 1)
+                        userBubbleShape.strokeBorder(userBubbleBorderColor, lineWidth: 1)
                     }
 
                 voiceModeLabel
@@ -84,9 +105,9 @@ struct MessageBubble: View {
                             .foregroundStyle(Design.Colors.foregroundBright)
                             .padding(.horizontal, Design.Spacing.md)
                             .padding(.vertical, Design.Spacing.sm)
-                            .background(Design.Colors.accentTint(0.1), in: userBubbleShape)
+                            .background(userBubbleFill, in: userBubbleShape)
                             .overlay {
-                                userBubbleShape.strokeBorder(Design.Colors.accentTint(0.28), lineWidth: 1)
+                                userBubbleShape.strokeBorder(userBubbleBorderColor, lineWidth: 1)
                             }
                     }
                 }

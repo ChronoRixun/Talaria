@@ -23,6 +23,7 @@ struct SettingsScreenHeader: View {
                     .font(Design.Typography.screenTitle2)
                     .tracking(Design.Tracking.display)
                     .foregroundStyle(Design.Colors.foregroundBright)
+                    .hudTitleGlow()
 
                 MonoLabel(
                     subtitle,

@@ -22,6 +22,16 @@ extension View {
             radius: radius
         )
     }
+
+    /// Art-direction neon title glow (`ThemeArtDirection.titleGlow`) — the
+    /// handoffs' wordmark `text-shadow`. Inert (zero-strength shadow) for
+    /// every theme without a curated glow color, i.e. all of them today
+    /// except Event Horizon.
+    @MainActor
+    func hudTitleGlow(radius: CGFloat = 12) -> some View {
+        let glow = ThemeRuntime.shared.artDirection.titleGlow
+        return hudGlow(glow ?? .clear, radius: radius, strength: glow == nil ? 0 : 0.7)
+    }
 }
 
 // MARK: - Continuous rotation

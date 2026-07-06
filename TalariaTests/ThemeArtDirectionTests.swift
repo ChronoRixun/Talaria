@@ -14,6 +14,8 @@ struct ThemeArtDirectionTests {
         #expect(standard.starfield == nil)
         #expect(standard.panelHalo == nil)
         #expect(standard.orbHues == nil)
+        #expect(standard.userBubble == nil)
+        #expect(standard.titleGlow == nil)
     }
 
     @Test func onlyEventHorizonOverridesArtDirection() {
@@ -71,6 +73,14 @@ struct ThemeArtDirectionTests {
 
     @Test func eventHorizonSelectsTheStarfieldTexture() {
         #expect(ThemePalette(theme: .eventHorizon, accent: .cyan).texture == .starfield)
+    }
+
+    @Test func eventHorizonCurvesTheChrome() {
+        // Phase C: gradient user bubble + neon wordmark glow from the handoff.
+        let art = ThemeArtDirectionCatalog.artDirection(for: .eventHorizon)
+        #expect(art.userBubble?.fillColors.count == 2)
+        #expect(art.userBubble?.borderColor != nil)
+        #expect(art.titleGlow != nil)
     }
 
     @Test func eventHorizonRendersTheSingularityOrb() {

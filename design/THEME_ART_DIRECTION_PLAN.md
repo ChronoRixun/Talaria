@@ -1,6 +1,6 @@
 # Talaria Theme Art Direction — Presentation Layer over the Palette Catalog
 
-**Status:** Phase A landed 2026-07-06 (branch `claude/theme-art-direction-tokens-5ygv01`).
+**Status:** Phases A–C landed 2026-07-06 (branch `claude/theme-art-direction-tokens-5ygv01`).
 **Extends:** `THEME_SYSTEM_PLAN.md` (4-theme system) and `THEME_FRAMEWORK_PLAN.md` (#49
 data-driven catalog).
 **Written in a cloud session — needs the Mac ritual:** `xcodegen generate` (two new files:
@@ -46,18 +46,23 @@ existing `DesignThemeTests` pixel guard.
 | `starfield: ThemeStarfield` (colors, count, driftScale) | new `.starfield` texture → `StarfieldTexture`, 4 drift layers, 15fps TimelineView, static under Reduce Motion | `.page-bg` four-layer `background-position` pan (`starfieldDrift`) |
 | `panelHalo: ThemePanelHalo` (ringColor, glowColor, glowRadius) | `.panelHalo()` inside `HUDPanel` + `.hudPanel` — offset rim ring + outer shadow scaled by glow pref × `glowScale` | `box-shadow: 0 0 0 8px rgba(...), 0 0 50px rgba(...)` framing |
 
-### Phase B — orb (planned)
-`orbHues` (outer/mid/inner ring hues, core highlight/shadow pair, halo, glow) + a new
-`ThemeOrbStyle.singularity` composition in `ReactorOrb`. Compositions stay **hand-written
-Swift** — a parameterized orb DSL was considered and rejected: Claude writes all code
-anyway, and hand-tuned layers beat generic parameter soup. The data only supplies *hues*,
-letting one composition serve future multi-hue themes.
+### Phase B — orb (landed)
+`orbHues` (outer/mid/inner ring hues, core highlight/shadow pair, halo, glow) + the new
+`ThemeOrbStyle.singularity` composition in `ReactorOrb` (rings at the handoff's
+100/74/48% stations, rotating dashed mid ring, breathing gold→magenta core with photon-
+ring halo; all four Style presets). Compositions stay **hand-written Swift** — a
+parameterized orb DSL was considered and rejected: Claude writes all code anyway, and
+hand-tuned layers beat generic parameter soup. The data only supplies *hues*, letting one
+composition serve future multi-hue themes. Fallback: accent-family hues if a palette
+selects `.singularity` without an art-direction entry (guarded by tests both ways).
 
-### Phase C — chrome (planned)
-`userBubble` (fill gradient stops + border) consumed by `MessageBubble`; `titleGlow`
-consumed by `SettingsScreenHeader` (the handoffs' neon `text-shadow` headings). Custom
-display *font families* (Orbitron etc.) are **out of scope** — bundling font files is a
-Mac-session task; Chakra Petch already covers the sci-fi display role.
+### Phase C — chrome (landed)
+`userBubble` (fill gradient stops + border) consumed by `MessageBubble` (both the text
+and voice-transcript bubbles); `titleGlow` consumed via `.hudTitleGlow()` by
+`SettingsScreenHeader` and the ChatScreen HERMES wordmark (the handoffs' neon
+`text-shadow` headings — scales with the glow pref × `glowScale` like every hudGlow).
+Custom display *font families* (Orbitron etc.) are **out of scope** — bundling font files
+is a Mac-session task; Chakra Petch already covers the sci-fi display role.
 
 ### Phase D — motion/materials (planned, on-device only)
 Slow conic "lensing" spoke layer; MeshGradient / Metal `colorEffect` materials. Highest

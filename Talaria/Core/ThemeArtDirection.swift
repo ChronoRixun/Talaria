@@ -69,6 +69,16 @@ struct ThemeOrbHues: Equatable, Sendable {
     let glow: Color
 }
 
+/// User-bubble treatment (`MessageBubble`): a diagonal gradient fill plus an
+/// explicit border, replacing the default flat accent tint (the handoffs'
+/// `linear-gradient(135deg, …)` message styling).
+struct ThemeBubbleStyle: Equatable, Sendable {
+    /// Gradient stops, top-leading → bottom-trailing (carry their own alpha).
+    let fillColors: [Color]
+    /// Bubble border (carries its own alpha).
+    let borderColor: Color
+}
+
 /// The art-direction payload for one theme. All fields default to "off";
 /// `.standard` is the identity treatment every un-listed theme resolves to.
 struct ThemeArtDirection: Equatable, Sendable {
@@ -85,6 +95,11 @@ struct ThemeArtDirection: Equatable, Sendable {
     /// Multi-hue orb colors (required when the palette selects
     /// `ThemeOrbStyle.singularity`; single-accent compositions ignore it).
     var orbHues: ThemeOrbHues? = nil
+    /// User chat-bubble gradient + border (`nil` = flat accent tint).
+    var userBubble: ThemeBubbleStyle? = nil
+    /// Neon glow behind title text — the chat wordmark and Settings screen
+    /// titles (`nil` = no glow, the default everywhere today).
+    var titleGlow: Color? = nil
 
     /// The identity treatment: no pools, no tints, no halo.
     static let standard = ThemeArtDirection()
@@ -140,7 +155,17 @@ enum ThemeArtDirectionCatalog {
             coreShadow: Color(hex: 0xFF2AA8),     //       → singularity magenta
             coreHalo: Color(hex: 0x00F0FF),
             glow: Color(hex: 0xFF2AA8)
-        )
+        ),
+        // .message.user: linear-gradient(135deg, violet .18, magenta .10),
+        // border rgba(138,92,255,.32).
+        userBubble: ThemeBubbleStyle(
+            fillColors: [
+                Color(hex: 0x8A5CFF, opacity: 0.18),
+                Color(hex: 0xFF2AA8, opacity: 0.10),
+            ],
+            borderColor: Color(hex: 0x8A5CFF, opacity: 0.32)
+        ),
+        titleGlow: Color(hex: 0x8A5CFF)
     )
 }
 
