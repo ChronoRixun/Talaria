@@ -722,6 +722,17 @@ hard-abort that turned this into a permanent splash hang is fixed (soft fall-thr
 device registry to disk so restarts don't brick paired devices. Until fixed, every Hermes
 restart forces a re-pair.
 
+**Update 2026-07-06 — mostly stale; one config check left.** The description above matches
+the pre-rewrite relay. The relay that's been live on OJAMD since the #37 deploy is this
+repo's DB-backed one: auth is opaque tokens hashed into the `auth_sessions` table, and
+devices/push registrations are SQLAlchemy rows — there is no JWT signing secret and no
+in-memory registry to lose. What remains is deployment hygiene: `DATABASE_URL` defaults to
+`sqlite:///./relay.db` **relative to the service's working directory**, so pin it to an
+absolute path in the live `.env` (see `relay/docs/APNS_OJAMD.md`, which folds this into the
+#38 deploy — use the CURRENT live relay.db location; repointing it orphans pairings). After
+one restart-survives-pairing test on OJAMD, close this. (#38's push watches are
+intentionally in-memory — the app re-posts them — and don't reopen this item.)
+
 ### 24g. ✅ Shim API-key fallback on Windows — RESOLVED (2026-06-26)
 
 The shim accepts *either* its dedicated token *or* the Hermes `API_SERVER_KEY` (the app's
@@ -1149,7 +1160,34 @@ Logged 2026-06-27.
 
 ---
 
-## 38. 📌 Remote push (APNs) for instant background-run completion notify — deferred
+## 38. 🔧 Remote push (APNs) for instant background-run completion notify — BUILT, needs OJAMD config + device verify
+
+**Update 2026-07-06 (cloud session, branch `claude/notifications-implementation-t7ame7`):**
+full pipeline implemented — nothing was deployed or device-verified (no Xcode/OJAMD from
+the cloud). What shipped:
+- **Relay (the never-existed piece):** `POST /v1/push/watch {sessionId}` + `/v1/push/watch/cancel`
+  (device bearer auth). Chat never transits the relay, so the app names the session it
+  detached from and the relay polls the gateway (`GET /api/sessions/{id}/messages`, new
+  `relay/app/gateway.py`, env `GATEWAY_BASE_URL`/`GATEWAY_API_KEY`) until a non-empty
+  assistant message follows the transcript's last user message — positional watermark,
+  all server-clock, mirrors the app's reconcile predicate. On completion → APNs alert
+  (existing `apns.py` client, extended with `payload_extra` → `session_id` rides the
+  payload root; sandbox host updated to `api.sandbox.push.apple.com`), presence-gated,
+  410 auto-deactivates. Watch requests flip the device to `background` so presence can't
+  race the separate app-state report. Poll 3s → 10s after 2 min, TTL 30 min, in-memory
+  registry (app re-posts after relay restart). 72/72 relay tests green (9 new in
+  `test_push_watch.py`).
+- **App (archive scaffolding ported onto current main + new watch calls):**
+  `UNUserNotificationCenterDelegate` (foreground banner + tap → new
+  `AppContainer.handleNotificationTap(sessionID:)` — routes to chat, `openSession(sid)`
+  when the payload names one, reconciles); silent-wake now reconciles chat;
+  `ChatStore.onRunDetached/onRunResolved` + `pendingRunSessionId` drive
+  `postPushWatch`/`cancelPushWatch` (gated on notifications toggle + registered token);
+  background scenePhase also posts the watch; Diagnostics Push Token row tap-copies the
+  token (312960b port). No new Swift files — no xcodegen regen needed.
+- **Remaining:** OJAMD `.env` config (the stored `.p8` + Key ID + Team ID + `GATEWAY_API_KEY`)
+  + relay redeploy + the verification ladder — full runbook in `relay/docs/APNS_OJAMD.md`.
+  Production APNs for TestFlight → #8.
 
 **Observed 2026-07-05:** notifications permission prompt now appears (the #44 plumbing) and,
 once granted, backgrounding the app during a run yields **no completion notification** --

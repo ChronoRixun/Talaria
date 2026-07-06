@@ -60,6 +60,16 @@ class Settings:
     apns_team_id: str | None = None
     apns_bundle_id: str = "io.hermesmobile.HermesMobile"
     apns_environment: str = "development"
+    # Push watch (#38): the gateway the relay polls to detect run completion
+    # for detached runs. Chat never transits the relay, so this is its only
+    # window into the Sessions API. gateway_api_key is the Hermes
+    # API_SERVER_KEY; polling is disabled when it's unset.
+    gateway_base_url: str = "http://127.0.0.1:8642"
+    gateway_api_key: str | None = None
+    push_watch_poll_seconds: float = 3.0
+    push_watch_slow_poll_seconds: float = 10.0
+    push_watch_fast_window_seconds: float = 120.0
+    push_watch_ttl_seconds: float = 1800.0
     app_presence_stale_seconds: int = 120
     # #21 Tier 2: directory the relay is allowed to serve agent-written files from.
     # Files are returned only if they resolve to a real file *inside* this dir.
@@ -105,6 +115,12 @@ class Settings:
             apns_team_id=os.getenv("APNS_TEAM_ID") or None,
             apns_bundle_id=os.getenv("APNS_BUNDLE_ID", "io.hermesmobile.HermesMobile"),
             apns_environment=os.getenv("APNS_ENVIRONMENT", "development"),
+            gateway_base_url=os.getenv("GATEWAY_BASE_URL", "http://127.0.0.1:8642"),
+            gateway_api_key=os.getenv("GATEWAY_API_KEY") or None,
+            push_watch_poll_seconds=float(os.getenv("PUSH_WATCH_POLL_SECONDS", "3.0")),
+            push_watch_slow_poll_seconds=float(os.getenv("PUSH_WATCH_SLOW_POLL_SECONDS", "10.0")),
+            push_watch_fast_window_seconds=float(os.getenv("PUSH_WATCH_FAST_WINDOW_SECONDS", "120.0")),
+            push_watch_ttl_seconds=float(os.getenv("PUSH_WATCH_TTL_SECONDS", "1800.0")),
             app_presence_stale_seconds=int(os.getenv("APP_PRESENCE_STALE_SECONDS", "120")),
             agent_files_dir=os.getenv("AGENT_FILES_DIR") or None,
         )
