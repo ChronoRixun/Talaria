@@ -89,6 +89,11 @@ enum ThemeOrbStyle: Hashable, Sendable {
     case crtCrosshair
     /// Mechanical reel: sprocket holes + tick ring + inked hub (Paper Tape).
     case paperReel
+    /// Multi-hue black-hole orb: three differently-hued rings around a
+    /// gold→magenta singularity core (Event Horizon). Ring/core hues come
+    /// from the app-side `ThemeArtDirection.orbHues` — this shared case only
+    /// selects the composition.
+    case singularity
 }
 
 /// One stop of the screen's radial background gradient.
@@ -1245,7 +1250,7 @@ enum ThemePaletteCatalog {
         gridLine: .accentTinted(0.08),
         gridCell: 26,
         isLight: false,
-        orbStyle: .arcReactor
+        orbStyle: .singularity
     )
 }
 

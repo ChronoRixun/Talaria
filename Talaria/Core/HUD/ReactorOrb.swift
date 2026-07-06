@@ -11,6 +11,9 @@ import SwiftUI
 ///  • forgeSun     — heavier concentric rings around an ember core.
 ///  • crtCrosshair — thin ring + crosshair ticks, CRT-bloomed core.
 ///  • paperReel    — mechanical reel: sprocket holes + tick ring + inked hub.
+///  • singularity  — three differently-hued rings around a gold→magenta core;
+///                   hues come from `ThemeArtDirection.orbHues` (accent-family
+///                   fallback keeps a missing entry rendering, not blank).
 ///
 /// All motion is reduce-motion-aware (each animated piece checks
 /// `accessibilityReduceMotion`). The orb is decorative — marked accessibilityHidden.
@@ -39,6 +42,7 @@ struct ReactorOrb: View {
             case .forgeSun: forgeSunLayers
             case .crtCrosshair: crtCrosshairLayers
             case .paperReel: paperReelLayers
+            case .singularity: singularityLayers(hues: singularityHues)
             }
         }
         .frame(width: size, height: size)
@@ -185,9 +189,97 @@ struct ReactorOrb: View {
         }
     }
 
+    // MARK: - Singularity (multi-hue rings, gold→magenta core)
+    // Ring stations mirror the handoff (theme-event-horizon.html): rings at
+    // 100% / 74% / 48% of the orb, core at 30%. The dashed mid ring is the
+    // visibly rotating element; the core breathes like the other cores.
+
+    /// Hues from the theme's art direction; the accent-family fallback keeps
+    /// a palette that selects `.singularity` without curated hues rendering
+    /// sanely instead of blank (guarded the other way by
+    /// `ThemeArtDirectionTests.singularityThemesCurateOrbHues`).
+    private var singularityHues: ThemeOrbHues {
+        if let hues = ThemeRuntime.shared.artDirection.orbHues { return hues }
+        let palette = ThemeRuntime.shared.palette
+        return ThemeOrbHues(
+            outerRing: palette.base,
+            midRing: palette.bright,
+            innerRing: palette.forge,
+            coreHighlight: palette.coreHighlight,
+            coreShadow: palette.coreShadow,
+            coreHalo: palette.bright,
+            glow: palette.base
+        )
+    }
+
+    @ViewBuilder private func singularityLayers(hues: ThemeOrbHues) -> some View {
+        switch style {
+        case .minimal:
+            tintedRing(hues.outerRing, inset: 0, opacity: 0.4, lineWidth: lw(0.033))
+            SingularityCore(hues: hues, diameter: size * 0.5,
+                            glowRadius: size * 0.35, glow: glowIntensity)
+
+        case .standard:
+            tintedRing(hues.outerRing, inset: 0, opacity: 0.4, lineWidth: lw(0.033))
+            tintedDashedRing(hues.midRing, inset: size * 0.13, opacity: 0.55, dash: [4, 4])
+                .continuousRotation(12, reverse: true)
+            tintedRing(hues.innerRing, inset: size * 0.26, opacity: 0.7, lineWidth: lw(0.033))
+            SingularityCore(hues: hues, diameter: size * 0.34,
+                            glowRadius: size * 0.32, glow: glowIntensity)
+
+        case .onboarding:
+            tintedRing(hues.outerRing, inset: 0, opacity: 0.35, lineWidth: lw(0.014))
+            tintedDashedRing(hues.midRing, inset: size * 0.13, opacity: 0.5,
+                             dash: [5, 5], lineWidth: lw(0.014))
+                .continuousRotation(16, reverse: true)
+            tintedRing(hues.innerRing, inset: size * 0.26, opacity: 0.65, lineWidth: lw(0.014))
+            SingularityCore(hues: hues, diameter: size * 0.30,
+                            glowRadius: size * 0.36, glow: glowIntensity)
+
+        case .voice:
+            PingHalo(diameter: size)
+            tintedRing(hues.outerRing, inset: size * 0.02, opacity: 0.35, lineWidth: 2)
+            tintedDashedRing(hues.midRing, inset: size * 0.13, opacity: 0.5,
+                             dash: [7, 6], lineWidth: 2)
+                .continuousRotation(22, reverse: true)
+            tintedRing(hues.innerRing, inset: size * 0.26, opacity: 0.6, lineWidth: 2)
+            SingularityCore(hues: hues, diameter: size * 0.30,
+                            glowRadius: size * 0.28, glow: glowIntensity)
+        }
+    }
+
     // MARK: - Shared pieces
 
     private func lw(_ fraction: CGFloat) -> CGFloat { max(1, size * fraction) }
+
+    /// A ring stroked in an explicit hue (multi-hue compositions; the
+    /// accent-tinted helpers below stay untouched for the original orbs).
+    private func tintedRing(
+        _ color: Color,
+        inset: CGFloat,
+        opacity: Double,
+        lineWidth: CGFloat
+    ) -> some View {
+        Circle()
+            .strokeBorder(color.opacity(opacity), lineWidth: lineWidth)
+            .frame(width: size - inset * 2, height: size - inset * 2)
+    }
+
+    /// A dashed ring stroked in an explicit hue.
+    private func tintedDashedRing(
+        _ color: Color,
+        inset: CGFloat,
+        opacity: Double,
+        dash: [CGFloat] = [4, 5],
+        lineWidth: CGFloat = 1
+    ) -> some View {
+        Circle()
+            .strokeBorder(
+                color.opacity(opacity),
+                style: StrokeStyle(lineWidth: lineWidth, dash: dash)
+            )
+            .frame(width: size - inset * 2, height: size - inset * 2)
+    }
 
     private func outerRing(opacity: Double, lineWidth: CGFloat) -> some View {
         Circle()
@@ -307,6 +399,44 @@ private struct VoiceCore: View {
             )
             .scaleEffect(pulse ? 1.05 : 1.0)
             .hudGlow(Design.Brand.accent, radius: glowRadius, strength: 0.7, intensity: glow)
+            .onAppear {
+                guard !reduceMotion else { return }
+                withAnimation(Design.Motion.reactorBreathe) { pulse = true }
+            }
+    }
+}
+
+/// Singularity core — off-center gold→magenta radial with a thin halo ring
+/// hugging it (the handoff's lensed photon ring), breathing like the other
+/// cores. Glow bleeds in the core-shadow hue, not the accent.
+private struct SingularityCore: View {
+    let hues: ThemeOrbHues
+    let diameter: CGFloat
+    let glowRadius: CGFloat
+    let glow: Double
+
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    private var reduceMotion: Bool { systemReduceMotion || ThemeRuntime.shared.appReduceMotion }
+    @State private var pulse = false
+
+    var body: some View {
+        Circle()
+            .fill(
+                RadialGradient(
+                    colors: [hues.coreHighlight, hues.coreShadow],
+                    center: UnitPoint(x: 0.32, y: 0.32),
+                    startRadius: 0,
+                    endRadius: diameter * 0.75
+                )
+            )
+            .frame(width: diameter, height: diameter)
+            .overlay {
+                Circle()
+                    .strokeBorder(hues.coreHalo.opacity(0.5), lineWidth: 1)
+                    .padding(-diameter * 0.12)
+            }
+            .scaleEffect(pulse ? 1.08 : 1.0)
+            .hudGlow(hues.glow, radius: glowRadius, strength: 0.8, intensity: glow)
             .onAppear {
                 guard !reduceMotion else { return }
                 withAnimation(Design.Motion.reactorBreathe) { pulse = true }

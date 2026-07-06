@@ -13,6 +13,7 @@ struct ThemeArtDirectionTests {
         #expect(standard.emberTint == nil)
         #expect(standard.starfield == nil)
         #expect(standard.panelHalo == nil)
+        #expect(standard.orbHues == nil)
     }
 
     @Test func onlyEventHorizonOverridesArtDirection() {
@@ -70,5 +71,21 @@ struct ThemeArtDirectionTests {
 
     @Test func eventHorizonSelectsTheStarfieldTexture() {
         #expect(ThemePalette(theme: .eventHorizon, accent: .cyan).texture == .starfield)
+    }
+
+    @Test func eventHorizonRendersTheSingularityOrb() {
+        #expect(ThemePalette(theme: .eventHorizon, accent: .cyan).orbStyle == .singularity)
+        #expect(ThemeArtDirectionCatalog.artDirection(for: .eventHorizon).orbHues != nil)
+    }
+
+    @Test func singularityThemesCurateOrbHues() {
+        // `.singularity` draws three differently-hued rings — a palette that
+        // selects it must ship art-direction hues (the accent fallback in
+        // ReactorOrb is a fail-soft, not a design).
+        for theme in ThemeID.allCases {
+            if ThemePalette(theme: theme, accent: .cyan).orbStyle == .singularity {
+                #expect(ThemeArtDirectionCatalog.artDirection(for: theme).orbHues != nil)
+            }
+        }
     }
 }

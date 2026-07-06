@@ -50,6 +50,25 @@ struct ThemePanelHalo: Equatable, Sendable {
     var glowRadius: CGFloat = 22
 }
 
+/// Hue set for multi-hue orb compositions (`ThemeOrbStyle.singularity`).
+/// The data supplies *colors only* — ring geometry stays hand-written in
+/// `ReactorOrb` (a parameterized orb DSL was rejected; see the plan doc).
+struct ThemeOrbHues: Equatable, Sendable {
+    /// Outermost ring.
+    let outerRing: Color
+    /// Middle dashed ring (the visibly rotating element).
+    let midRing: Color
+    /// Innermost ring.
+    let innerRing: Color
+    /// Core radial gradient, highlight → shadow (Event Horizon: gold → magenta).
+    let coreHighlight: Color
+    let coreShadow: Color
+    /// Thin halo ring hugging the core (the handoff's `core::after`).
+    let coreHalo: Color
+    /// Outer glow bleed around the core.
+    let glow: Color
+}
+
 /// The art-direction payload for one theme. All fields default to "off";
 /// `.standard` is the identity treatment every un-listed theme resolves to.
 struct ThemeArtDirection: Equatable, Sendable {
@@ -63,6 +82,9 @@ struct ThemeArtDirection: Equatable, Sendable {
     var starfield: ThemeStarfield? = nil
     /// Panel rim + outer glow treatment (`nil` = flat panels, the default).
     var panelHalo: ThemePanelHalo? = nil
+    /// Multi-hue orb colors (required when the palette selects
+    /// `ThemeOrbStyle.singularity`; single-accent compositions ignore it).
+    var orbHues: ThemeOrbHues? = nil
 
     /// The identity treatment: no pools, no tints, no halo.
     static let standard = ThemeArtDirection()
@@ -109,6 +131,15 @@ enum ThemeArtDirectionCatalog {
         panelHalo: ThemePanelHalo(
             ringColor: Color(hex: 0x8A5CFF, opacity: 0.18),
             glowColor: Color(hex: 0x8A5CFF)
+        ),
+        orbHues: ThemeOrbHues(
+            outerRing: Color(hex: 0x8A5CFF),      // accretion violet ring
+            midRing: Color(hex: 0x00F0FF),        // dashed Hawking-cyan ring
+            innerRing: Color(hex: 0xFFDC50),      // supernova-gold ring
+            coreHighlight: Color(hex: 0xFFDC50),  // core: gold →
+            coreShadow: Color(hex: 0xFF2AA8),     //       → singularity magenta
+            coreHalo: Color(hex: 0x00F0FF),
+            glow: Color(hex: 0xFF2AA8)
         )
     )
 }
