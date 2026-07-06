@@ -115,12 +115,23 @@ enum ThemeCatalog {
                         availability: .always, locked: false),
     ]
 
-    /// Seasonal / holiday / special definitions. Empty today: shipping a new
-    /// visual identity needs a curated palette, which is a separate (out-of-scope)
-    /// issue. The availability machinery below and its tests are ready — a real
-    /// holiday theme becomes one entry here (e.g. `.holiday(DateWindow(...))`,
-    /// `locked: true`) with no picker/runtime changes.
-    static let special: [ThemeDefinition] = []
+    /// Seasonal / holiday / special definitions. The four meteorological-season
+    /// themes are listed here; holiday themes become additional entries with
+    /// `.holiday(DateWindow(...))` and `locked: true` as needed (#24).
+    static let special: [ThemeDefinition] = [
+        ThemeDefinition(id: AppearanceTheme.winterFrost.rawValue, displayName: "Winter Frost",
+                        subtitle: "Ice", appearanceTheme: .winterFrost,
+                        availability: .seasonal(.winter), locked: false),
+        ThemeDefinition(id: AppearanceTheme.springSprout.rawValue, displayName: "Spring Sprout",
+                        subtitle: "Blossom", appearanceTheme: .springSprout,
+                        availability: .seasonal(.spring), locked: false),
+        ThemeDefinition(id: AppearanceTheme.summerSolar.rawValue, displayName: "Summer Solar",
+                        subtitle: "Mango", appearanceTheme: .summerSolar,
+                        availability: .seasonal(.summer), locked: false),
+        ThemeDefinition(id: AppearanceTheme.autumnHarvest.rawValue, displayName: "Autumn Harvest",
+                        subtitle: "Pumpkin", appearanceTheme: .autumnHarvest,
+                        availability: .seasonal(.autumn), locked: false),
+    ]
 
     /// Every known definition (order: flagships, then special).
     static var all: [ThemeDefinition] { flagship + special }

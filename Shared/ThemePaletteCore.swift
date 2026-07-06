@@ -21,6 +21,10 @@ enum ThemeID: String, CaseIterable, Codable, Hashable, Sendable {
     case solarForge
     case terminal
     case paperTape
+    case winterFrost
+    case summerSolar
+    case springSprout
+    case autumnHarvest
 }
 
 /// Accent slot identity, decoupled from the app's `AppearanceAccent`
@@ -353,6 +357,10 @@ enum ThemePaletteCatalog {
         .solarForge: solarForge,
         .terminal: terminal,
         .paperTape: paperTape,
+        .winterFrost: winterFrost,
+        .summerSolar: summerSolar,
+        .springSprout: springSprout,
+        .autumnHarvest: autumnHarvest,
     ]
 
     /// Total lookup over the shipped themes (coverage guarded by
@@ -680,6 +688,280 @@ enum ThemePaletteCatalog {
         gridCell: 24,
         isLight: true,
         orbStyle: .paperReel
+    )
+
+    // MARK: Winter — Winter Frost
+
+    static let winterFrost = ThemePaletteDefinition(
+        lockedAccentSlot: nil,
+        background: Color(hex: 0xF4F9FC),
+        screenGradientStops: [
+            ThemeGradientStop(color: Color(hex: 0xE8F3F8), location: 0.0),
+            ThemeGradientStop(color: Color(hex: 0xF4F9FC), location: 0.52),
+            ThemeGradientStop(color: Color(hex: 0xDCEBF3), location: 1.0),
+        ],
+        drawerColors: [Color(hex: 0xE8F3F8), Color(hex: 0xF4F9FC), Color(hex: 0xDCEBF3)],
+        texture: .none,
+        ramp: ThemeForegroundRamp(
+            foreground: Color(hex: 0x0F2330),
+            foregroundBright: Color(hex: 0x0D1E29),
+            secondaryForeground: Color(hex: 0x4A6578),
+            mutedForeground: Color(hex: 0x4A6578),
+            dimForeground: Color(hex: 0x7D96A6),
+            coolForeground: Color(hex: 0x4A6578)
+        ),
+        surface: Color(hex: 0x78D2FF, opacity: 0.18),
+        chips: .fixed(
+            surface: Color(hex: 0x78D2FF, opacity: 0.18),
+            divider: Color(hex: 0xA0DCF0, opacity: 0.18),
+            border: Color(hex: 0xDCF0FF, opacity: 0.14)
+        ),
+        borders: .fixed(
+            hairline: Color(hex: 0x0F2330, opacity: 0.1),
+            strong: Color(hex: 0x0F2330, opacity: 0.22)
+        ),
+        scrim: Color(hex: 0x0F2330, opacity: 0.35),
+        danger: Color(hex: 0xC94545),
+        dangerBright: Color(hex: 0xA13939),
+        accents: ThemeAccentVariants(
+            cyan: ThemeAccentVariant(
+                displayName: "Ice · Winter",
+                base: Color(hex: 0x3AB3F0),
+                bright: Color(hex: 0x6BC6F4),
+                deep: Color(hex: 0x297DA8),
+                coreHighlight: Color(hex: 0x93D5F7),
+                coreShadow: Color(hex: 0x206284),
+                forge: Color(hex: 0xD49020)
+            ),
+            amber: ThemeAccentVariant(
+                displayName: "Snow · Winter",
+                base: Color(hex: 0x8FD4F4),
+                bright: Color(hex: 0xABDFF7),
+                deep: Color(hex: 0x6494AB),
+                coreHighlight: Color(hex: 0xC1E7F9),
+                coreShadow: Color(hex: 0x4F7586),
+                forge: Color(hex: 0xD49020)
+            ),
+            violet: ThemeAccentVariant(
+                displayName: "Berry · Winter",
+                base: Color(hex: 0xC94F6D),
+                bright: Color(hex: 0xD67B92),
+                deep: Color(hex: 0x8D374C),
+                coreHighlight: Color(hex: 0xE19EAF),
+                coreShadow: Color(hex: 0x6F2B3C),
+                forge: Color(hex: 0xD49020)
+            )
+        ),
+        glowScale: 0.15,
+        gridStyle: .lines,
+        gridLine: .fixed(Color(hex: 0x0F2330, opacity: 0.1)),
+        gridCell: 26,
+        isLight: true,
+        orbStyle: .arcReactor
+    )
+
+    // MARK: Summer — Summer Solar
+
+    static let summerSolar = ThemePaletteDefinition(
+        lockedAccentSlot: nil,
+        background: Color(hex: 0x1A1005),
+        screenGradientStops: [
+            ThemeGradientStop(color: Color(hex: 0x281A08), location: 0.0),
+            ThemeGradientStop(color: Color(hex: 0x1A1005), location: 0.52),
+            ThemeGradientStop(color: Color(hex: 0x0F0802), location: 1.0),
+        ],
+        drawerColors: [Color(hex: 0x281A08), Color(hex: 0x1A1005), Color(hex: 0x0F0802)],
+        texture: .embers,
+        ramp: ThemeForegroundRamp(
+            foreground: Color(hex: 0xFFF8E8),
+            foregroundBright: Color(hex: 0xFFF9EA),
+            secondaryForeground: Color(hex: 0xF0D8A8),
+            mutedForeground: Color(hex: 0xF0D8A8),
+            dimForeground: Color(hex: 0xC0A070),
+            coolForeground: Color(hex: 0xF0D8A8)
+        ),
+        surface: Color(hex: 0xFFA028, opacity: 0.08),
+        chips: .fixed(
+            surface: Color(hex: 0xFFA028, opacity: 0.08),
+            divider: Color(hex: 0xFF503C, opacity: 0.08),
+            border: Color(hex: 0x78DCFF, opacity: 0.06)
+        ),
+        borders: .accentTinted(hairline: 0.14, strong: 0.30),
+        scrim: Color(hex: 0x000000, opacity: 0.85),
+        danger: Color(hex: 0xFF3C2A),
+        dangerBright: Color(hex: 0xFF6355),
+        accents: ThemeAccentVariants(
+            cyan: ThemeAccentVariant(
+                displayName: "Mango · Summer",
+                base: Color(hex: 0xFFA028),
+                bright: Color(hex: 0xFFB85E),
+                deep: Color(hex: 0xB2701C),
+                coreHighlight: Color(hex: 0xFFCB89),
+                coreShadow: Color(hex: 0x8C5816),
+                forge: Color(hex: 0xFFCC00)
+            ),
+            amber: ThemeAccentVariant(
+                displayName: "Heatwave · Summer",
+                base: Color(hex: 0xFF503C),
+                bright: Color(hex: 0xFF7C6D),
+                deep: Color(hex: 0xB2382A),
+                coreHighlight: Color(hex: 0xFF9F94),
+                coreShadow: Color(hex: 0x8C2C21),
+                forge: Color(hex: 0xFFCC00)
+            ),
+            violet: ThemeAccentVariant(
+                displayName: "Pool · Summer",
+                base: Color(hex: 0x78DCFF),
+                bright: Color(hex: 0x9AE5FF),
+                deep: Color(hex: 0x549AB2),
+                coreHighlight: Color(hex: 0xB5ECFF),
+                coreShadow: Color(hex: 0x42798C),
+                forge: Color(hex: 0xFFCC00)
+            )
+        ),
+        glowScale: 1.2,
+        gridStyle: .lines,
+        gridLine: .accentTinted(0.08),
+        gridCell: 26,
+        isLight: false,
+        orbStyle: .arcReactor
+    )
+
+    // MARK: Spring — Spring Sprout
+
+    static let springSprout = ThemePaletteDefinition(
+        lockedAccentSlot: nil,
+        background: Color(hex: 0xFFF9F4),
+        screenGradientStops: [
+            ThemeGradientStop(color: Color(hex: 0xFFF0E4), location: 0.0),
+            ThemeGradientStop(color: Color(hex: 0xFFF9F4), location: 0.52),
+            ThemeGradientStop(color: Color(hex: 0xFFE8D8), location: 1.0),
+        ],
+        drawerColors: [Color(hex: 0xFFF0E4), Color(hex: 0xFFF9F4), Color(hex: 0xFFE8D8)],
+        texture: .none,
+        ramp: ThemeForegroundRamp(
+            foreground: Color(hex: 0x2A1F1A),
+            foregroundBright: Color(hex: 0x241A16),
+            secondaryForeground: Color(hex: 0x7A6258),
+            mutedForeground: Color(hex: 0x7A6258),
+            dimForeground: Color(hex: 0xA99088),
+            coolForeground: Color(hex: 0x7A6258)
+        ),
+        surface: Color(hex: 0xFF96AA, opacity: 0.18),
+        chips: .fixed(
+            surface: Color(hex: 0xFF96AA, opacity: 0.18),
+            divider: Color(hex: 0x8CE6A0, opacity: 0.18),
+            border: Color(hex: 0xFFDC78, opacity: 0.14)
+        ),
+        borders: .fixed(
+            hairline: Color(hex: 0x2A1F1A, opacity: 0.1),
+            strong: Color(hex: 0x2A1F1A, opacity: 0.22)
+        ),
+        scrim: Color(hex: 0x2A1F1A, opacity: 0.35),
+        danger: Color(hex: 0xD94A4A),
+        dangerBright: Color(hex: 0xAE3C3C),
+        accents: ThemeAccentVariants(
+            cyan: ThemeAccentVariant(
+                displayName: "Blossom · Spring",
+                base: Color(hex: 0xFF6B8A),
+                bright: Color(hex: 0xFF90A7),
+                deep: Color(hex: 0xB24B61),
+                coreHighlight: Color(hex: 0xFFAEBF),
+                coreShadow: Color(hex: 0x8C3B4C),
+                forge: Color(hex: 0xE89C30)
+            ),
+            amber: ThemeAccentVariant(
+                displayName: "Mint · Spring",
+                base: Color(hex: 0x5ED47A),
+                bright: Color(hex: 0x86DF9B),
+                deep: Color(hex: 0x429455),
+                coreHighlight: Color(hex: 0xA6E7B6),
+                coreShadow: Color(hex: 0x347543),
+                forge: Color(hex: 0xE89C30)
+            ),
+            violet: ThemeAccentVariant(
+                displayName: "Butter · Spring",
+                base: Color(hex: 0xFFD04A),
+                bright: Color(hex: 0xFFDC77),
+                deep: Color(hex: 0xB29234),
+                coreHighlight: Color(hex: 0xFFE59B),
+                coreShadow: Color(hex: 0x8C7229),
+                forge: Color(hex: 0xE89C30)
+            )
+        ),
+        glowScale: 0.15,
+        gridStyle: .lines,
+        gridLine: .fixed(Color(hex: 0x2A1F1A, opacity: 0.1)),
+        gridCell: 26,
+        isLight: true,
+        orbStyle: .arcReactor
+    )
+
+    // MARK: Autumn — Autumn Harvest
+
+    static let autumnHarvest = ThemePaletteDefinition(
+        lockedAccentSlot: nil,
+        background: Color(hex: 0x1A110A),
+        screenGradientStops: [
+            ThemeGradientStop(color: Color(hex: 0x261C12), location: 0.0),
+            ThemeGradientStop(color: Color(hex: 0x1A110A), location: 0.52),
+            ThemeGradientStop(color: Color(hex: 0x0F0906), location: 1.0),
+        ],
+        drawerColors: [Color(hex: 0x261C12), Color(hex: 0x1A110A), Color(hex: 0x0F0906)],
+        texture: .embers,
+        ramp: ThemeForegroundRamp(
+            foreground: Color(hex: 0xFFF5E8),
+            foregroundBright: Color(hex: 0xFFF6EA),
+            secondaryForeground: Color(hex: 0xE0C4A0),
+            mutedForeground: Color(hex: 0xE0C4A0),
+            dimForeground: Color(hex: 0xA08060),
+            coolForeground: Color(hex: 0xE0C4A0)
+        ),
+        surface: Color(hex: 0xFF8C28, opacity: 0.08),
+        chips: .fixed(
+            surface: Color(hex: 0xFF8C28, opacity: 0.08),
+            divider: Color(hex: 0xC85032, opacity: 0.08),
+            border: Color(hex: 0xB4A050, opacity: 0.06)
+        ),
+        borders: .accentTinted(hairline: 0.14, strong: 0.30),
+        scrim: Color(hex: 0x000000, opacity: 0.85),
+        danger: Color(hex: 0xA03020),
+        dangerBright: Color(hex: 0xB3594D),
+        accents: ThemeAccentVariants(
+            cyan: ThemeAccentVariant(
+                displayName: "Pumpkin · Autumn",
+                base: Color(hex: 0xFF8C28),
+                bright: Color(hex: 0xFFA95E),
+                deep: Color(hex: 0xB2621C),
+                coreHighlight: Color(hex: 0xFFC089),
+                coreShadow: Color(hex: 0x8C4D16),
+                forge: Color(hex: 0xD49020)
+            ),
+            amber: ThemeAccentVariant(
+                displayName: "Cranberry · Autumn",
+                base: Color(hex: 0xC85032),
+                bright: Color(hex: 0xD67C65),
+                deep: Color(hex: 0x8C3823),
+                coreHighlight: Color(hex: 0xE19F8E),
+                coreShadow: Color(hex: 0x6E2C1C),
+                forge: Color(hex: 0xD49020)
+            ),
+            violet: ThemeAccentVariant(
+                displayName: "Gourd · Autumn",
+                base: Color(hex: 0xB4A050),
+                bright: Color(hex: 0xC7B87C),
+                deep: Color(hex: 0x7E7038),
+                coreHighlight: Color(hex: 0xD6CB9F),
+                coreShadow: Color(hex: 0x63582C),
+                forge: Color(hex: 0xD49020)
+            )
+        ),
+        glowScale: 1.1,
+        gridStyle: .lines,
+        gridLine: .accentTinted(0.08),
+        gridCell: 26,
+        isLight: false,
+        orbStyle: .arcReactor
     )
 }
 
