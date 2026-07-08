@@ -7,6 +7,10 @@ struct ChatScreen: View {
     @Environment(AppSessionStore.self) private var sessionStore
     @Environment(SettingsStore.self) private var settingsStore
     @Environment(TabRouter.self) private var router
+    // Compact height == iPhone landscape. The workspace was designed
+    // portrait-first; in landscape the ~430pt height budget is what makes it
+    // cramped (#68), so chrome that isn't functional gets out of the way there.
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     @State private var messageText = ""
     @State private var pendingAttachments: [PendingAttachment] = []
@@ -61,7 +65,14 @@ struct ChatScreen: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                agentIdentityStrip
+                // The identity strip is pure telemetry (status + CTX gauge);
+                // every control on it lives in the nav toolbar. In iPhone
+                // landscape it costs ~13% of the height budget — hide it and
+                // give the transcript the room (#68). iPad landscape keeps it
+                // (regular height).
+                if verticalSizeClass != .compact {
+                    agentIdentityStrip
+                }
 
                 if showsConnectionBanner {
                     connectionBanner
