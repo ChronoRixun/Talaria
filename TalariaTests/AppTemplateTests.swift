@@ -28,10 +28,10 @@ struct TalariaTests {
 
     @Test func permissionTypeHasDistinctColorsAndIcons() async throws {
         let types = PermissionType.allCases
-        #expect(types.count == 6)
+        #expect(types.count == 8)
 
         let icons = Set(types.map(\.displayIcon))
-        #expect(icons.count == 6, "Each permission type should have a unique icon")
+        #expect(icons.count == 8, "Each permission type should have a unique icon")
     }
 
     @Test func inboxItemTypeVisualIdentityIsComplete() async throws {
