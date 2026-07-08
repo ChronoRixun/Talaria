@@ -822,9 +822,25 @@ final class ChatStore {
         // vanishes the instant the first poll/refresh returns without it.
         let refreshedIDs = Set(refreshedConversation.messages.map(\.id))
         let refreshedClientIDs = Set(refreshedConversation.messages.compactMap(\.clientMessageID))
+        let localIDs = Set(localConversation.messages.map(\.id))
         let unconfirmedLocals = localConversation.messages.filter { local in
             if refreshedIDs.contains(local.id) { return false }
             if let clientID = local.clientMessageID, refreshedClientIDs.contains(clientID) { return false }
+            // The Sessions API assigns its own message IDs and never echoes
+            // clientMessageID back, so an in-flight optimistic user message can
+            // only ever be confirmed by content: a remote user copy that didn't
+            // identity-match some other local message supersedes it. Without
+            // this, the .sending duplicate outlives every refresh and lands
+            // after the recovered reply (or gets falsely marked failed).
+            if local.sender == .user, local.status == .sending,
+               refreshedConversation.messages.contains(where: { remote in
+                   remote.sender == .user
+                       && remote.clientMessageID == nil
+                       && remote.content == local.content
+                       && !localIDs.contains(remote.id)
+               }) {
+                return false
+            }
             return true
         }
         refreshedConversation.messages.append(contentsOf: unconfirmedLocals)
