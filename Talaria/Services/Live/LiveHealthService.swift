@@ -1,5 +1,8 @@
 import Foundation
 import HealthKit
+import os
+
+private let healthLog = Logger(subsystem: "org.aethyrion.talaria", category: "LiveHealth")
 
 struct HealthSnapshot: Sendable {
     struct Sample: Sendable {
@@ -152,13 +155,24 @@ final class LiveHealthService: HealthServiceProtocol {
 
         let now = Date()
         var samples: [HealthSnapshot.Sample] = []
+        var emptyMetrics: [String] = []
 
         for identifier in changedMetrics.sorted() {
             guard let descriptor = metricDescriptors[identifier] else { continue }
             let startDate = descriptor.startDateProvider()
             if let sample = await descriptor.builder(self, startDate) {
                 samples.append(sample)
+            } else {
+                emptyMetrics.append(identifier)
             }
+        }
+
+        if !emptyMetrics.isEmpty {
+            // The missing complement of SensorUpload's "got N samples" line:
+            // which queried metrics had no HealthKit data in their window. #46
+            // burned days on an observer-registration hypothesis because
+            // nothing distinguished "never queried" from "queried, no data".
+            healthLog.notice("collectSnapshot: no data for \(emptyMetrics.joined(separator: ", "), privacy: .public)")
         }
 
         guard !samples.isEmpty else { return nil }
@@ -501,12 +515,17 @@ final class LiveHealthService: HealthServiceProtocol {
             )
         }
 
-        // Respiratory rate — latest sample in last 24h
+        // Respiratory rate — latest sample in last 7 days. The watch measures
+        // respiratory rate ONLY during tracked sleep, so the newest sample is
+        // routinely a night (or several) old; the previous 24h floor made the
+        // metric vanish whenever a capture ran more than a day after the last
+        // tracked sleep (#46). Same window as body_mass — queryLatestSample
+        // sorts descending with limit 1, so this still surfaces the freshest.
         if let respRate = HKQuantityType.quantityType(forIdentifier: .respiratoryRate) {
             descriptors["respiratory_rate"] = HealthMetricDescriptor(
                 metric: "respiratory_rate",
                 sampleType: respRate,
-                startDateProvider: { Date().addingTimeInterval(-86_400) },
+                startDateProvider: { Date().addingTimeInterval(-7 * 86_400) },
                 builder: { service, startDate in
                     guard let (value, date) = await service.queryLatestSample(
                         .respiratoryRate, unit: .count().unitDivided(by: .minute()), from: startDate
